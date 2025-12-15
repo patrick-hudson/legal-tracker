@@ -834,6 +834,177 @@ export async function createServer(options = {}) {
     return { success: true };
   });
 
+  // List available sample data files
+  fastify.get('/admin/api/data/samples', { preHandler: adminAuthMiddleware }, async (_, reply) => {
+    try {
+      const samplesDir = join(__dirname, 'samples');
+      const { readdirSync, statSync } = await import('fs');
+
+      const files = readdirSync(samplesDir)
+        .filter(file => file.endsWith('.json'))
+        .map(file => {
+          const filePath = join(samplesDir, file);
+          const content = JSON.parse(readFileSync(filePath, 'utf-8'));
+          const stats = statSync(filePath);
+
+          return {
+            id: file.replace('.json', ''),
+            name: content.name || file,
+            description: content.description || 'Sample dataset',
+            matter_count: content.matter_count || content.matters?.length || 0,
+            file_size: stats.size,
+            filename: file
+          };
+        })
+        .sort((a, b) => a.matter_count - b.matter_count);
+
+      return {
+        success: true,
+        samples: files
+      };
+    } catch (error) {
+      return reply.code(500).send({
+        error: 'SERVER_ERROR',
+        message: `Failed to list sample files: ${error.message}`
+      });
+    }
+  });
+
+  // Populate sample data from file or generate new
+  fastify.post('/admin/api/data/populate-sample', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    try {
+      const { source, count } = request.body || {};
+      let sampleMatters = [];
+
+      if (source && source !== 'generate') {
+        // Load from file
+        const samplesDir = join(__dirname, 'samples');
+        const filePath = join(samplesDir, `${source}.json`);
+
+        try {
+          const fileContent = readFileSync(filePath, 'utf-8');
+          const data = JSON.parse(fileContent);
+          sampleMatters = data.matters || [];
+        } catch (err) {
+          return reply.code(404).send({
+            error: 'NOT_FOUND',
+            message: `Sample file '${source}' not found`
+          });
+        }
+      } else {
+        // Generate new sample data
+        const matterCount = count || 25;
+        const now = new Date();
+        const twoYearsAgo = new Date(now);
+        twoYearsAgo.setFullYear(now.getFullYear() - 2);
+
+        const matterTypes = [
+          { note: 'Contract review', cost: 150000 },
+          { note: 'Incorporation paperwork', cost: 250000 },
+          { note: 'Employment dispute consultation', cost: 350000 },
+          { note: 'Trademark filing', cost: 175000 },
+          { note: 'Lease agreement review', cost: 125000 },
+          { note: 'NDA drafting', cost: 75000 },
+          { note: 'Partnership agreement', cost: 450000 },
+          { note: 'IP protection consultation', cost: 300000 },
+          { note: 'Tax compliance advice', cost: 200000 },
+          { note: 'Shareholder agreement', cost: 500000 }
+        ];
+
+        for (let i = 0; i < matterCount; i++) {
+          const randomDate = new Date(
+            twoYearsAgo.getTime() + Math.random() * (now.getTime() - twoYearsAgo.getTime())
+          );
+          const randomMatter = matterTypes[Math.floor(Math.random() * matterTypes.length)];
+
+          sampleMatters.push({
+            matter_date: randomDate.toISOString(),
+            note: randomMatter.note,
+            cost: randomMatter.cost
+          });
+        }
+
+        // Sort by date (oldest first)
+        sampleMatters.sort((a, b) => new Date(a.matter_date) - new Date(b.matter_date));
+      }
+
+      // Add matters to database
+      let totalCost = 0;
+      const initialLastDate = settingsDb.get('last_matter_date');
+      let lastDate = new Date(initialLastDate || sampleMatters[0]?.matter_date || Date.now());
+
+      for (const matter of sampleMatters) {
+        const matterDate = new Date(matter.matter_date);
+        const daysSince = Math.floor((matterDate - lastDate) / (1000 * 60 * 60 * 24));
+
+        mattersDb.add(
+          matter.matter_date,
+          matter.note,
+          Math.max(0, daysSince),
+          matter.cost
+        );
+
+        totalCost += matter.cost;
+        lastDate = matterDate;
+      }
+
+      // Update settings
+      const currentSpent = parseFloat(settingsDb.get('lifetime_spent') || '0');
+      settingsDb.set('lifetime_spent', currentSpent + totalCost);
+      settingsDb.set('last_matter_date', sampleMatters[sampleMatters.length - 1].matter_date);
+
+      return {
+        success: true,
+        message: source ? `Loaded ${sampleMatters.length} matters from ${source}` : `Generated ${sampleMatters.length} sample matters`,
+        matters_added: sampleMatters.length,
+        total_cost_added: totalCost / 100,
+        source: (source === 'generate' || !source) ? 'generated' : source
+      };
+    } catch (error) {
+      return reply.code(500).send({
+        error: 'SERVER_ERROR',
+        message: `Failed to populate sample data: ${error.message}`
+      });
+    }
+  });
+
+  // Wipe all data (requires confirmation)
+  fastify.post('/admin/api/data/wipe', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { confirmation } = request.body || {};
+
+    // Require exact confirmation string
+    if (confirmation !== 'DELETE ALL DATA') {
+      return reply.code(400).send({
+        error: 'BAD_REQUEST',
+        message: 'Confirmation string does not match. Please type "DELETE ALL DATA" to confirm.'
+      });
+    }
+
+    try {
+      // Get all matter IDs and delete them
+      const matters = mattersDb.getAll();
+      for (const matter of matters) {
+        mattersDb.delete(matter.id);
+      }
+
+      // Reset all settings to defaults
+      settingsDb.set('lifetime_spent', '0');
+      settingsDb.set('last_matter_date', new Date().toISOString());
+      settingsDb.set('drain_start_time', new Date().toISOString());
+
+      return {
+        success: true,
+        message: 'All data has been wiped successfully',
+        matters_deleted: matters.length
+      };
+    } catch (error) {
+      return reply.code(500).send({
+        error: 'SERVER_ERROR',
+        message: `Failed to wipe data: ${error.message}`
+      });
+    }
+  });
+
   // Expose database instances for testing
   fastify.db = {
     mattersDb,

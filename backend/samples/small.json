@@ -1,0 +1,32 @@
+{
+  "name": "Small Dataset",
+  "description": "5 sample matters for quick testing",
+  "matter_count": 5,
+  "matters": [
+    {
+      "matter_date": "2024-01-15T14:30:00.000Z",
+      "note": "Contract review for new vendor agreement",
+      "cost": 125000
+    },
+    {
+      "matter_date": "2024-03-22T10:00:00.000Z",
+      "note": "Trademark filing consultation",
+      "cost": 175000
+    },
+    {
+      "matter_date": "2024-06-10T16:45:00.000Z",
+      "note": "NDA drafting for partnership",
+      "cost": 75000
+    },
+    {
+      "matter_date": "2024-09-05T11:20:00.000Z",
+      "note": "Employment dispute consultation",
+      "cost": 350000
+    },
+    {
+      "matter_date": "2024-11-30T09:15:00.000Z",
+      "note": "Lease agreement review",
+      "cost": 125000
+    }
+  ]
+}

@@ -179,6 +179,25 @@ class AdminAPI {
             method: 'DELETE'
         });
     }
+
+    // Data management
+    async listSampleDatasets() {
+        return this.request('/data/samples');
+    }
+
+    async populateSampleData(source, count) {
+        return this.request('/data/populate-sample', {
+            method: 'POST',
+            body: JSON.stringify({ source, count })
+        });
+    }
+
+    async wipeAllData(confirmation) {
+        return this.request('/data/wipe', {
+            method: 'POST',
+            body: JSON.stringify({ confirmation })
+        });
+    }
 }
 
 // Create singleton instance
