@@ -474,8 +474,8 @@ function renderModern() {
         <div style="background: ${theme.cardBg}; backdrop-filter: blur(10px); border-radius: ${theme.borderRadius}; padding: 2rem; margin-bottom: 1.5rem; box-shadow: ${theme.shadow}; border: 1px solid ${theme.cardBorder};">
           <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
             <div>
-              <h1 style="margin: 0; font-size: 1.5rem; font-weight: 600; color: ${theme.primary};">LEGAL MATTER v0.1.0</h1>
-              <p style="margin: 0.5rem 0 0 0; color: ${theme.primaryDim}; font-size: 0.75rem; line-height: 1.5;">
+              <h1 style="margin: 0; font-size: 1.7rem; font-weight: 600; color: ${theme.primary};">LEGAL MATTER v0.1.0</h1>
+              <p style="margin: 0.5rem 0 0 0; color: ${theme.primaryDim}; font-size: 0.9rem; line-height: 1.5;">
                 <span style="font-weight: 600;">L</span>egal
                 <span style="font-weight: 600;">E</span>xpense
                 <span style="font-weight: 600;">G</span>overnance
@@ -490,10 +490,10 @@ function renderModern() {
               </p>
             </div>
             <div style="display: flex; align-items: center; gap: 1rem;">
-              <button onclick="toggleThemePicker()" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); color: ${theme.primary}; padding: 0.6rem 1.2rem; border-radius: 8px; font-size: 0.9rem; cursor: pointer; font-family: inherit; font-weight: 500;">
+              <button onclick="toggleThemePicker()" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); color: ${theme.primary}; padding: 0.6rem 1.2rem; border-radius: 8px; font-size: 1.05rem; cursor: pointer; font-family: inherit; font-weight: 500;">
                 Change Theme
               </button>
-              <span style="color: ${state.isAuthorized ? theme.success : theme.danger}; font-size: 0.9rem;">
+              <span style="color: ${state.isAuthorized ? theme.success : theme.danger}; font-size: 1.05rem;">
                 ${state.isAuthorized ? '● AUTHORIZED' : '● READ-ONLY'}
               </span>
             </div>
@@ -502,7 +502,7 @@ function renderModern() {
 
         ${state.showThemePicker ? `
           <div style="background: ${theme.cardBg}; backdrop-filter: blur(10px); border-radius: ${theme.borderRadius}; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: ${theme.shadow}; border: 1px solid ${theme.cardBorder};">
-            <h3 style="margin: 0 0 1rem 0; font-size: 1.1rem; font-weight: 600; color: ${theme.primary};">Select Theme</h3>
+            <h3 style="margin: 0 0 1rem 0; font-size: 1.25rem; font-weight: 600; color: ${theme.primary};">Select Theme</h3>
             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.75rem;">
               ${Object.entries(THEMES).map(([key, t]) => `
                 <button
@@ -528,19 +528,19 @@ function renderModern() {
 
         <!-- Main Counter Card -->
         <div style="background: ${theme.cardBg}; backdrop-filter: blur(10px); border-radius: ${theme.borderRadius}; padding: 3rem 2rem; margin-bottom: 1.5rem; box-shadow: ${theme.shadow}; border: 1px solid ${theme.cardBorder}; text-align: center;">
-          <div style="font-size: 0.85rem; color: ${state.daysSince < 7 ? theme.danger : theme.primaryDim}; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; font-weight: 600;">
+          <div style="font-size: 1rem; color: ${state.daysSince < 7 ? theme.danger : theme.primaryDim}; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; font-weight: 600;">
             ${getStatusText()}
           </div>
-          <div style="font-size: 0.9rem; color: ${theme.primaryDim}; letter-spacing: 0.05em; margin-bottom: 1rem; font-weight: 400;">
+          <div style="font-size: 1.05rem; color: ${theme.primaryDim}; letter-spacing: 0.05em; margin-bottom: 1rem; font-weight: 400;">
             ${state.labelMessage.replace('&gt;', '').trim()}
           </div>
           <div style="font-size: clamp(5rem, 20vw, 8rem); font-weight: 700; color: ${theme.primary}; line-height: 1; margin: 1rem 0;">
             ${state.daysSince}
           </div>
-          <div data-time-display style="font-size: 1.2rem; color: ${theme.primary}; margin-top: 1rem; font-weight: 500; font-variant-numeric: tabular-nums;">
+          <div data-time-display style="font-size: 1.4rem; color: ${theme.primary}; margin-top: 1rem; font-weight: 500; font-variant-numeric: tabular-nums;">
             ${String(state.timeBreakdown.hours).padStart(2, '0')}:${String(state.timeBreakdown.minutes).padStart(2, '0')}:${String(state.timeBreakdown.seconds).padStart(2, '0')}
           </div>
-          <div style="font-size: 0.95rem; color: ${theme.primaryDim}; margin-top: 0.5rem;">
+          <div style="font-size: 1.1rem; color: ${theme.primaryDim}; margin-top: 0.5rem;">
             Last matter: ${formatDateLong(state.lastMatterDate)}
           </div>
         </div>
@@ -549,19 +549,19 @@ function renderModern() {
         <div style="background: linear-gradient(135deg, rgba(255,71,87,0.05) 0%, rgba(255,107,122,0.05) 100%); backdrop-filter: blur(10px); border-radius: ${theme.borderRadius}; padding: 2rem; margin-bottom: 1.5rem; box-shadow: ${theme.shadow}; border: 1px solid rgba(255,71,87,0.2);">
           <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
             <div>
-              <div style="font-size: 0.85rem; color: ${theme.danger}; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.5rem; font-weight: 600;">
+              <div style="font-size: 1rem; color: ${theme.danger}; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.5rem; font-weight: 600;">
                 Lifetime Legal Fees
               </div>
-              <div data-money-display style="font-size: 2.5rem; font-weight: 700; color: ${theme.danger};">
+              <div data-money-display style="font-size: 2.8rem; font-weight: 700; color: ${theme.danger};">
                 $${state.displayedSpent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              ${state.drainEnabled ? `<div style="font-size: 0.8rem; color: ${theme.dangerDim}; margin-top: 0.5rem;">+$${(state.drainRateCents / 100).toFixed(2)}/sec (${state.moneyMessage})</div>` : `<div style="font-size: 0.8rem; color: ${theme.primaryDim}; margin-top: 0.5rem; font-style: italic;">Auto-drain disabled</div>`}
+              ${state.drainEnabled ? `<div style="font-size: 0.95rem; color: ${theme.dangerDim}; margin-top: 0.5rem;">+$${(state.drainRateCents / 100).toFixed(2)}/sec (${state.moneyMessage})</div>` : `<div style="font-size: 0.95rem; color: ${theme.primaryDim}; margin-top: 0.5rem; font-style: italic;">Auto-drain disabled</div>`}
             </div>
             <div style="display: flex; gap: 0.75rem;">
-              <button onclick="toggleDrainSettings()" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,71,87,0.3); color: ${theme.danger}; padding: 0.6rem 1.2rem; border-radius: 8px; font-size: 0.9rem; cursor: pointer; font-family: inherit; font-weight: 500;">
+              <button onclick="toggleDrainSettings()" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,71,87,0.3); color: ${theme.danger}; padding: 0.6rem 1.2rem; border-radius: 8px; font-size: 1.05rem; cursor: pointer; font-family: inherit; font-weight: 500;">
                 ${state.showDrainSettings ? 'Close' : 'Configure Drain'}
               </button>
-              <button onclick="toggleMoneySettings()" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,71,87,0.3); color: ${theme.danger}; padding: 0.6rem 1.2rem; border-radius: 8px; font-size: 0.9rem; cursor: pointer; font-family: inherit; font-weight: 500;">
+              <button onclick="toggleMoneySettings()" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,71,87,0.3); color: ${theme.danger}; padding: 0.6rem 1.2rem; border-radius: 8px; font-size: 1.05rem; cursor: pointer; font-family: inherit; font-weight: 500;">
                 ${state.showMoneySettings ? 'Close' : 'Edit Amount'}
               </button>
             </div>
@@ -569,32 +569,32 @@ function renderModern() {
 
           ${state.showDrainSettings ? `
             <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,71,87,0.2);">
-              <h4 style="margin: 0 0 1rem 0; font-size: 1rem; color: ${theme.danger}; font-weight: 600;">Auto-Drain Configuration</h4>
+              <h4 style="margin: 0 0 1rem 0; font-size: 1.15rem; color: ${theme.danger}; font-weight: 600;">Auto-Drain Configuration</h4>
               <div style="display: flex; flex-direction: column; gap: 1rem;">
                 <div style="display: flex; align-items: center; gap: 0.75rem;">
                   <input type="checkbox" id="drainEnabled" ${state.drainEnabled ? 'checked' : ''} style="width: 20px; height: 20px; cursor: pointer;">
-                  <label for="drainEnabled" style="color: ${theme.primary}; font-size: 0.95rem; cursor: pointer;">Enable automatic drain</label>
+                  <label for="drainEnabled" style="color: ${theme.primary}; font-size: 1.1rem; cursor: pointer;">Enable automatic drain</label>
                 </div>
                 <div>
-                  <label style="display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: ${theme.primaryDim};">Drain rate (cents per second)</label>
-                  <input type="number" id="drainRateInput" value="${state.drainRateCents}" min="0" step="1" style="width: 100%; padding: 0.75rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); color: ${theme.primary}; border-radius: 8px; font-family: inherit; font-size: 1rem; box-sizing: border-box;">
-                  <p style="font-size: 0.8rem; color: ${theme.primaryDim}; margin: 0.5rem 0 0 0;">Current: $${(state.drainRateCents / 100).toFixed(2)}/sec = $${((state.drainRateCents / 100) * 60).toFixed(2)}/min = $${((state.drainRateCents / 100) * 3600).toFixed(2)}/hour</p>
+                  <label style="display: block; margin-bottom: 0.5rem; font-size: 1.05rem; color: ${theme.primaryDim};">Drain rate (cents per second)</label>
+                  <input type="number" id="drainRateInput" value="${state.drainRateCents}" min="0" step="1" style="width: 100%; padding: 0.75rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); color: ${theme.primary}; border-radius: 8px; font-family: inherit; font-size: 1.15rem; box-sizing: border-box;">
+                  <p style="font-size: 0.95rem; color: ${theme.primaryDim}; margin: 0.5rem 0 0 0;">Current: $${(state.drainRateCents / 100).toFixed(2)}/sec = $${((state.drainRateCents / 100) * 60).toFixed(2)}/min = $${((state.drainRateCents / 100) * 3600).toFixed(2)}/hour</p>
                 </div>
                 <button onclick="saveDrainSettings()" style="padding: 0.75rem; background: ${theme.danger}; border: none; color: white; border-radius: 8px; cursor: pointer; font-family: inherit; font-weight: 500;">Save Drain Settings</button>
-                <p style="font-size: 0.85rem; color: ${theme.dangerDim}; margin: 0; font-style: italic;">⚠️ Changing drain settings will reset the accumulation timer</p>
+                <p style="font-size: 1rem; color: ${theme.dangerDim}; margin: 0; font-style: italic;">⚠️ Changing drain settings will reset the accumulation timer</p>
               </div>
             </div>
           ` : ''}
 
           ${state.showMoneySettings ? `
             <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,71,87,0.2);">
-              <input type="number" id="moneyInput" placeholder="Enter amount" step="0.01" style="width: 100%; padding: 0.75rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); color: ${theme.primary}; border-radius: 8px; font-family: inherit; font-size: 1rem; box-sizing: border-box; margin-bottom: 1rem;">
+              <input type="number" id="moneyInput" placeholder="Enter amount" step="0.01" style="width: 100%; padding: 0.75rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); color: ${theme.primary}; border-radius: 8px; font-family: inherit; font-size: 1.15rem; box-sizing: border-box; margin-bottom: 1rem;">
               <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
                 <button onclick="setMoney()" style="flex: 1; min-width: 120px; padding: 0.75rem; background: ${theme.danger}; border: none; color: white; border-radius: 8px; cursor: pointer; font-family: inherit; font-weight: 500;">Set Total</button>
                 <button onclick="addMoney()" style="flex: 1; min-width: 120px; padding: 0.75rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); color: ${theme.danger}; border-radius: 8px; cursor: pointer; font-family: inherit; font-weight: 500;">Add Amount</button>
                 <button onclick="resetMoney()" style="padding: 0.75rem 1.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); color: ${theme.primaryDim}; border-radius: 8px; cursor: pointer; font-family: inherit;">Reset</button>
               </div>
-              <p style="font-size: 0.85rem; color: ${theme.dangerDim}; margin: 1rem 0 0 0; font-style: italic;">💡 Pro tip: Set this to your actual lifetime legal spend for maximum emotional damage. Or lie to yourself, we won't judge.</p>
+              <p style="font-size: 1rem; color: ${theme.dangerDim}; margin: 1rem 0 0 0; font-style: italic;">💡 Pro tip: Set this to your actual lifetime legal spend for maximum emotional damage. Or lie to yourself, we won't judge.</p>
             </div>
           ` : ''}
         </div>
@@ -602,16 +602,16 @@ function renderModern() {
         <!-- Stats Grid -->
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
           <div style="background: ${theme.cardBg}; backdrop-filter: blur(10px); border-radius: ${theme.borderRadius}; padding: 1.5rem; box-shadow: ${theme.shadow}; border: 1px solid ${theme.cardBorder}; text-align: center;">
-            <div style="font-size: 0.75rem; color: ${theme.primaryDim}; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.5rem;">Record Streak</div>
-            <div style="font-size: 2rem; font-weight: 700; color: ${theme.primary};">${state.stats.max_streak}</div>
+            <div style="font-size: 0.9rem; color: ${theme.primaryDim}; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.5rem;">Record Streak</div>
+            <div style="font-size: 2.3rem; font-weight: 700; color: ${theme.primary};">${state.stats.max_streak}</div>
           </div>
           <div style="background: ${theme.cardBg}; backdrop-filter: blur(10px); border-radius: ${theme.borderRadius}; padding: 1.5rem; box-shadow: ${theme.shadow}; border: 1px solid ${theme.cardBorder}; text-align: center;">
-            <div style="font-size: 0.75rem; color: ${theme.primaryDim}; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.5rem;">This Year</div>
-            <div style="font-size: 2rem; font-weight: 700; color: ${theme.danger};">${state.stats.matters_this_year}</div>
+            <div style="font-size: 0.9rem; color: ${theme.primaryDim}; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.5rem;">This Year</div>
+            <div style="font-size: 2.3rem; font-weight: 700; color: ${theme.danger};">${state.stats.matters_this_year}</div>
           </div>
           <div style="background: ${theme.cardBg}; backdrop-filter: blur(10px); border-radius: ${theme.borderRadius}; padding: 1.5rem; box-shadow: ${theme.shadow}; border: 1px solid ${theme.cardBorder}; text-align: center;">
-            <div style="font-size: 0.75rem; color: ${theme.primaryDim}; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.5rem;">All Time</div>
-            <div style="font-size: 2rem; font-weight: 700; color: ${theme.primary};">${state.stats.total_matters}</div>
+            <div style="font-size: 0.9rem; color: ${theme.primaryDim}; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.5rem;">All Time</div>
+            <div style="font-size: 2.3rem; font-weight: 700; color: ${theme.primary};">${state.stats.total_matters}</div>
           </div>
         </div>
 
@@ -630,19 +630,19 @@ function renderModern() {
 
         ${state.showDatePicker ? `
           <div style="background: ${theme.cardBg}; backdrop-filter: blur(10px); border-radius: ${theme.borderRadius}; padding: 2rem; margin-bottom: 1.5rem; box-shadow: ${theme.shadow}; border: 1px solid ${theme.cardBorder};">
-            <h3 style="margin: 0 0 1.5rem 0; font-size: 1.1rem; font-weight: 600; color: ${theme.primary};">Log Past Matter</h3>
+            <h3 style="margin: 0 0 1.5rem 0; font-size: 1.25rem; font-weight: 600; color: ${theme.primary};">Log Past Matter</h3>
             <div style="display: flex; flex-direction: column; gap: 1rem;">
               <div>
-                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: ${theme.primaryDim}; font-weight: 500;">Date & Time</label>
-                <input type="datetime-local" id="matterDate" max="${new Date().toISOString().slice(0, 16)}" style="width: 100%; padding: 0.75rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); color: ${theme.primary}; border-radius: 8px; font-family: inherit; font-size: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 1.05rem; color: ${theme.primaryDim}; font-weight: 500;">Date & Time</label>
+                <input type="datetime-local" id="matterDate" max="${new Date().toISOString().slice(0, 16)}" style="width: 100%; padding: 0.75rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); color: ${theme.primary}; border-radius: 8px; font-family: inherit; font-size: 1.15rem;">
               </div>
               <div>
-                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: ${theme.primaryDim}; font-weight: 500;">Note (optional)</label>
-                <input type="text" id="matterNote" placeholder="e.g., Estate planning attorney" style="width: 100%; padding: 0.75rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); color: ${theme.primary}; border-radius: 8px; font-family: inherit; font-size: 1rem; box-sizing: border-box;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 1.05rem; color: ${theme.primaryDim}; font-weight: 500;">Note (optional)</label>
+                <input type="text" id="matterNote" placeholder="e.g., Estate planning attorney" style="width: 100%; padding: 0.75rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); color: ${theme.primary}; border-radius: 8px; font-family: inherit; font-size: 1.15rem; box-sizing: border-box;">
               </div>
               <div>
-                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: ${theme.primaryDim}; font-weight: 500;">Cost (optional)</label>
-                <input type="number" id="matterCost" placeholder="e.g., 5000" step="0.01" style="width: 100%; padding: 0.75rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); color: ${theme.primary}; border-radius: 8px; font-family: inherit; font-size: 1rem; box-sizing: border-box;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 1.05rem; color: ${theme.primaryDim}; font-weight: 500;">Cost (optional)</label>
+                <input type="number" id="matterCost" placeholder="e.g., 5000" step="0.01" style="width: 100%; padding: 0.75rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); color: ${theme.primary}; border-radius: 8px; font-family: inherit; font-size: 1.15rem; box-sizing: border-box;">
               </div>
               <button onclick="submitManualMatter()" style="padding: 1rem; background: ${theme.accentGradient}; border: none; color: white; border-radius: 8px; cursor: pointer; font-family: inherit; font-weight: 600; margin-top: 0.5rem;">
                 Save Matter
@@ -653,19 +653,19 @@ function renderModern() {
 
         ${state.showLog ? `
           <div style="background: ${theme.cardBg}; backdrop-filter: blur(10px); border-radius: ${theme.borderRadius}; padding: 2rem; margin-bottom: 1.5rem; box-shadow: ${theme.shadow}; border: 1px solid ${theme.cardBorder};">
-            <h3 style="margin: 0 0 1.5rem 0; font-size: 1.1rem; font-weight: 600; color: ${theme.primary};">Matter History (${state.matters.length} records)</h3>
+            <h3 style="margin: 0 0 1.5rem 0; font-size: 1.25rem; font-weight: 600; color: ${theme.primary};">Matter History (${state.matters.length} records)</h3>
             ${state.matters.length === 0 ? `
-              <p style="font-size: 0.9rem; color: ${theme.primaryDim}; font-style: italic;">No matters recorded. Congratulations, you're winning at life! (For now...)</p>
+              <p style="font-size: 1.05rem; color: ${theme.primaryDim}; font-style: italic;">No matters recorded. Congratulations, you're winning at life! (For now...)</p>
             ` : `
               <div style="display: flex; flex-direction: column; gap: 0.75rem; max-height: 400px; overflow-y: auto;">
                 ${state.matters.map((matter) => `
                   <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 1rem; display: flex; justify-content: space-between; align-items: center;">
                     <div>
                       <div style="font-weight: 600; color: ${theme.primary}; margin-bottom: 0.25rem;">${formatDateTime(matter.matter_date)}</div>
-                      <div style="font-size: 0.9rem; color: ${theme.primaryDim};">${matter.note}</div>
-                      ${matter.cost ? `<div style="font-size: 0.85rem; color: ${theme.danger}; margin-top: 0.25rem;">$${parseFloat(matter.cost).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>` : ''}
+                      <div style="font-size: 1.05rem; color: ${theme.primaryDim};">${matter.note}</div>
+                      ${matter.cost ? `<div style="font-size: 1rem; color: ${theme.danger}; margin-top: 0.25rem;">$${parseFloat(matter.cost).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>` : ''}
                     </div>
-                    <button onclick="deleteMatterById(${matter.id})" style="background: transparent; border: 1px solid rgba(255,71,87,0.3); color: ${theme.danger}; padding: 0.5rem 0.75rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 500;">Delete</button>
+                    <button onclick="deleteMatterById(${matter.id})" style="background: transparent; border: 1px solid rgba(255,71,87,0.3); color: ${theme.danger}; padding: 0.5rem 0.75rem; border-radius: 6px; cursor: pointer; font-size: 1rem; font-weight: 500;">Delete</button>
                   </div>
                 `).join('')}
               </div>
@@ -692,10 +692,10 @@ function renderRetro() {
         <!-- Header -->
         <div style="background: linear-gradient(45deg, ${theme.accent1} 0%, ${theme.accent2} 100%); padding: 1.5rem; border-bottom: 5px ${theme.borderStyle} ${theme.primary};">
           <div style="text-align: center;">
-            <h1 style="margin: 0; font-size: 2.5rem; color: yellow; text-shadow: ${theme.textShadow}; font-weight: bold; letter-spacing: 3px;">
+            <h1 style="margin: 0; font-size: 2.8rem; color: yellow; text-shadow: ${theme.textShadow}; font-weight: bold; letter-spacing: 3px;">
               ⚖️ LEGAL MATTER v0.1.0 ⚖️
             </h1>
-            <p style="margin: 0.5rem 0 0 0; font-size: 0.85rem; color: white; text-shadow: 1px 1px black; font-weight: bold; line-height: 1.4;">
+            <p style="margin: 0.5rem 0 0 0; font-size: 1rem; color: white; text-shadow: 1px 1px black; font-weight: bold; line-height: 1.4;">
               <span style="color: yellow;">L</span>egal
               <span style="color: yellow;">E</span>xpense
               <span style="color: yellow;">G</span>overnance
@@ -708,7 +708,7 @@ function renderRetro() {
               <span style="color: yellow;">E</span>xpenses,
               <span style="color: yellow;">R</span>etainers
             </p>
-            <p style="margin: 0.5rem 0 0 0; font-size: 1rem; color: lime; text-shadow: 1px 1px black; font-weight: bold;">
+            <p style="margin: 0.5rem 0 0 0; font-size: 1.15rem; color: lime; text-shadow: 1px 1px black; font-weight: bold;">
               ${retroHeader}
             </p>
           </div>
@@ -720,10 +720,10 @@ function renderRetro() {
             </div>
 
             <div style="display: flex; gap: 0.75rem; align-items: center;">
-              <span style="color: ${state.isAuthorized ? 'lime' : 'red'}; font-weight: bold; text-shadow: 1px 1px black; font-size: 0.95rem;">
+              <span style="color: ${state.isAuthorized ? 'lime' : 'red'}; font-weight: bold; text-shadow: 1px 1px black; font-size: 1.1rem;">
                 ${state.isAuthorized ? '✅ ADMIN' : '👁️ READ ONLY'}
               </span>
-              <button onclick="toggleThemePicker()" style="padding: 0.6rem 1.2rem; background: yellow; border: 4px outset gray; font-family: inherit; font-size: 0.95rem; font-weight: bold; cursor: pointer; color: black;">
+              <button onclick="toggleThemePicker()" style="padding: 0.6rem 1.2rem; background: yellow; border: 4px outset gray; font-family: inherit; font-size: 1.1rem; font-weight: bold; cursor: pointer; color: black;">
                 🎨 ${state.showThemePicker ? 'CLOSE' : 'THEMES'}
               </button>
             </div>
@@ -736,7 +736,7 @@ function renderRetro() {
           <!-- Theme Picker -->
           ${state.showThemePicker ? `
             <div style="background: yellow; border: 5px double ${theme.primary}; padding: 1.5rem; margin-bottom: 1.5rem;">
-              <h3 style="margin: 0 0 1rem 0; font-size: 1.5rem; color: ${theme.danger}; text-shadow: 1px 1px ${theme.primary};">☆ CHOOSE YOUR THEME! ☆</h3>
+              <h3 style="margin: 0 0 1rem 0; font-size: 1.7rem; color: ${theme.danger}; text-shadow: 1px 1px ${theme.primary};">☆ CHOOSE YOUR THEME! ☆</h3>
               <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1rem;">
                 ${Object.entries(THEMES).map(([key, t]) => `
                   <button onclick="setTheme('${key}')" style="
@@ -760,25 +760,25 @@ function renderRetro() {
 
           <!-- Status Banner -->
           <div style="background: linear-gradient(90deg, ${theme.danger} 0%, ${theme.dangerDim} 50%, ${theme.danger} 100%); border: 4px ${theme.borderStyle} ${theme.primary}; padding: 1rem; margin-bottom: 1.5rem; text-align: center;">
-            <p style="margin: 0; font-size: 1.8rem; color: yellow; text-shadow: ${theme.textShadow}; font-weight: bold; animation: flash 1s infinite;">
+            <p style="margin: 0; font-size: 2.1rem; color: yellow; text-shadow: ${theme.textShadow}; font-weight: bold; animation: flash 1s infinite;">
               ${retroStatus}
             </p>
           </div>
 
           <!-- Main Counter -->
           <div style="background: linear-gradient(135deg, #ffff00 0%, #ffcc00 100%); border: 6px ${theme.borderStyle} ${theme.primary}; padding: 2rem; margin-bottom: 1.5rem; text-align: center; box-shadow: 5px 5px 0 rgba(0,0,0,0.2);">
-            <p style="margin: 0 0 1rem 0; font-size: 1.2rem; color: ${theme.danger}; font-weight: bold; text-shadow: 1px 1px white;">
+            <p style="margin: 0 0 1rem 0; font-size: 1.4rem; color: ${theme.danger}; font-weight: bold; text-shadow: 1px 1px white;">
               ✨ DAYS WITHOUT CALLING 1-800-LAWYERS ✨
             </p>
             <div style="background: black; border: 5px inset gray; padding: 2rem; margin: 1rem 0;">
               <p style="margin: 0; font-size: clamp(5rem, 20vw, 10rem); color: ${theme.success}; text-shadow: 0 0 20px ${theme.success}, 0 0 40px ${theme.success}; font-weight: bold; font-family: 'Courier New', monospace;">
                 ${state.daysSince}
               </p>
-              <p data-time-display style="margin: 1rem 0 0 0; font-size: 1.8rem; color: ${theme.accent2}; font-weight: bold; font-family: 'Courier New', monospace;">
+              <p data-time-display style="margin: 1rem 0 0 0; font-size: 2.1rem; color: ${theme.accent2}; font-weight: bold; font-family: 'Courier New', monospace;">
                 ${String(state.timeBreakdown.hours).padStart(2, '0')}:${String(state.timeBreakdown.minutes).padStart(2, '0')}:${String(state.timeBreakdown.seconds).padStart(2, '0')}
               </p>
             </div>
-            <p style="margin: 1rem 0 0 0; font-size: 1rem; color: ${theme.primary}; font-weight: bold;">
+            <p style="margin: 1rem 0 0 0; font-size: 1.15rem; color: ${theme.primary}; font-weight: bold;">
               Last Matter: ${formatDateLong(state.lastMatterDate)}
             </p>
           </div>
@@ -786,27 +786,27 @@ function renderRetro() {
           <!-- Money Counter -->
           <div style="background: linear-gradient(45deg, #ff0000 0%, #ff6600 100%); border: 6px ${theme.borderStyle} yellow; padding: 1.5rem; margin-bottom: 1.5rem;">
             <div style="text-align: center;">
-              <p style="margin: 0 0 0.5rem 0; font-size: 1.5rem; color: yellow; text-shadow: ${theme.textShadow}; font-weight: bold;">
+              <p style="margin: 0 0 0.5rem 0; font-size: 1.7rem; color: yellow; text-shadow: ${theme.textShadow}; font-weight: bold;">
                 💸 CA-CHING! YOUR LEGAL BILL$ 💸
               </p>
-              <p data-money-display style="margin: 0; font-size: 3rem; color: white; text-shadow: 3px 3px black; font-weight: bold;">
+              <p data-money-display style="margin: 0; font-size: 3.4rem; color: white; text-shadow: 3px 3px black; font-weight: bold;">
                 $${state.displayedSpent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
-              ${state.drainEnabled ? `<p style="margin: 0.5rem 0 0 0; font-size: 0.9rem; color: yellow; font-weight: bold;">+$${(state.drainRateCents / 100).toFixed(2)}/sec (the meter never stops!)</p>` : ''}
-              <button onclick="toggleMoneySettings()" style="margin-top: 1rem; padding: 0.8rem 1.5rem; background: yellow; border: 4px outset gray; font-family: inherit; font-size: 1.1rem; font-weight: bold; cursor: pointer; color: black;">
+              ${state.drainEnabled ? `<p style="margin: 0.5rem 0 0 0; font-size: 1.05rem; color: yellow; font-weight: bold;">+$${(state.drainRateCents / 100).toFixed(2)}/sec (the meter never stops!)</p>` : ''}
+              <button onclick="toggleMoneySettings()" style="margin-top: 1rem; padding: 0.8rem 1.5rem; background: yellow; border: 4px outset gray; font-family: inherit; font-size: 1.25rem; font-weight: bold; cursor: pointer; color: black;">
                 ${state.showMoneySettings ? '✖ CLOSE' : '✎ EDIT TOTAL'}
               </button>
             </div>
 
             ${state.showMoneySettings ? `
               <div style="background: white; border: 4px inset gray; padding: 1.5rem; margin-top: 1rem;">
-                <input type="number" id="moneyInput" placeholder="Enter amount" step="0.01" style="width: 100%; padding: 0.75rem; background: white; border: 3px inset gray; font-family: inherit; font-size: 1.2rem; box-sizing: border-box; margin-bottom: 1rem;">
+                <input type="number" id="moneyInput" placeholder="Enter amount" step="0.01" style="width: 100%; padding: 0.75rem; background: white; border: 3px inset gray; font-family: inherit; font-size: 1.4rem; box-sizing: border-box; margin-bottom: 1rem;">
                 <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
                   <button onclick="setMoney()" style="flex: 1; min-width: 120px; padding: 0.75rem; background: lime; border: 4px outset gray; font-family: inherit; font-weight: bold; cursor: pointer;">SET IT!</button>
                   <button onclick="addMoney()" style="flex: 1; min-width: 120px; padding: 0.75rem; background: aqua; border: 4px outset gray; font-family: inherit; font-weight: bold; cursor: pointer;">ADD MORE</button>
                   <button onclick="resetMoney()" style="padding: 0.75rem 1.5rem; background: #ff6600; border: 4px outset gray; color: white; font-family: inherit; font-weight: bold; cursor: pointer;">RESET</button>
                 </div>
-                <p style="margin: 1rem 0 0 0; font-size: 0.9rem; color: ${theme.primary}; font-weight: bold;">💡 TIP: Enter your real total for maximum guilt trip!</p>
+                <p style="margin: 1rem 0 0 0; font-size: 1.05rem; color: ${theme.primary}; font-weight: bold;">💡 TIP: Enter your real total for maximum guilt trip!</p>
               </div>
             ` : ''}
           </div>
@@ -814,49 +814,49 @@ function renderRetro() {
           <!-- Stats -->
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
             <div style="background: #00ffff; border: 5px ${theme.borderStyle} ${theme.primary}; padding: 1.5rem; text-align: center;">
-              <p style="margin: 0; font-size: 0.9rem; font-weight: bold; color: ${theme.primary};">★ RECORD STREAK ★</p>
-              <p style="margin: 0.5rem 0 0 0; font-size: 3rem; font-weight: bold; color: ${theme.danger}; text-shadow: 2px 2px white;">${state.stats.max_streak}</p>
+              <p style="margin: 0; font-size: 1.05rem; font-weight: bold; color: ${theme.primary};">★ RECORD STREAK ★</p>
+              <p style="margin: 0.5rem 0 0 0; font-size: 3.4rem; font-weight: bold; color: ${theme.danger}; text-shadow: 2px 2px white;">${state.stats.max_streak}</p>
             </div>
             <div style="background: #ff00ff; border: 5px ${theme.borderStyle} ${theme.primary}; padding: 1.5rem; text-align: center;">
-              <p style="margin: 0; font-size: 0.9rem; font-weight: bold; color: white;">★ THIS YEAR ★</p>
-              <p style="margin: 0.5rem 0 0 0; font-size: 3rem; font-weight: bold; color: yellow; text-shadow: ${theme.textShadow};">${state.stats.matters_this_year}</p>
+              <p style="margin: 0; font-size: 1.05rem; font-weight: bold; color: white;">★ THIS YEAR ★</p>
+              <p style="margin: 0.5rem 0 0 0; font-size: 3.4rem; font-weight: bold; color: yellow; text-shadow: ${theme.textShadow};">${state.stats.matters_this_year}</p>
             </div>
             <div style="background: #ffff00; border: 5px ${theme.borderStyle} ${theme.primary}; padding: 1.5rem; text-align: center;">
-              <p style="margin: 0; font-size: 0.9rem; font-weight: bold; color: ${theme.primary};">★ ALL TIME ★</p>
-              <p style="margin: 0.5rem 0 0 0; font-size: 3rem; font-weight: bold; color: ${theme.danger}; text-shadow: 2px 2px white;">${state.stats.total_matters}</p>
+              <p style="margin: 0; font-size: 1.05rem; font-weight: bold; color: ${theme.primary};">★ ALL TIME ★</p>
+              <p style="margin: 0.5rem 0 0 0; font-size: 3.4rem; font-weight: bold; color: ${theme.danger}; text-shadow: 2px 2px white;">${state.stats.total_matters}</p>
             </div>
           </div>
 
           <!-- Action Buttons -->
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-            <button onclick="toggleDatePicker()" style="padding: 1.2rem; background: ${state.showDatePicker ? '#ff6600' : 'lime'}; border: 5px outset gray; font-family: inherit; font-size: 1.1rem; font-weight: bold; cursor: pointer;">
+            <button onclick="toggleDatePicker()" style="padding: 1.2rem; background: ${state.showDatePicker ? '#ff6600' : 'lime'}; border: 5px outset gray; font-family: inherit; font-size: 1.25rem; font-weight: bold; cursor: pointer;">
               ${state.showDatePicker ? '✖ CANCEL' : '📅 LOG PAST'}
             </button>
-            <button onclick="toggleLog()" style="padding: 1.2rem; background: ${state.showLog ? '#ff6600' : 'aqua'}; border: 5px outset gray; font-family: inherit; font-size: 1.1rem; font-weight: bold; cursor: pointer;">
+            <button onclick="toggleLog()" style="padding: 1.2rem; background: ${state.showLog ? '#ff6600' : 'aqua'}; border: 5px outset gray; font-family: inherit; font-size: 1.25rem; font-weight: bold; cursor: pointer;">
               ${state.showLog ? '✖ HIDE' : '📜 VIEW'} LOG (${state.matters.length})
             </button>
-            <button onclick="quickLogMatter()" style="padding: 1.2rem; background: red; color: yellow; border: 5px outset gray; font-family: inherit; font-size: 1.1rem; font-weight: bold; cursor: pointer; text-shadow: 1px 1px black;">
+            <button onclick="quickLogMatter()" style="padding: 1.2rem; background: red; color: yellow; border: 5px outset gray; font-family: inherit; font-size: 1.25rem; font-weight: bold; cursor: pointer; text-shadow: 1px 1px black;">
               🚨 LOG NOW!
             </button>
           </div>
 
           ${state.showDatePicker ? `
             <div style="background: #ffffcc; border: 6px double ${theme.primary}; padding: 2rem; margin-bottom: 1.5rem;">
-              <h3 style="margin: 0 0 1.5rem 0; color: ${theme.danger}; text-shadow: 1px 1px yellow; font-size: 1.5rem;">📝 LOG A PAST MATTER</h3>
+              <h3 style="margin: 0 0 1.5rem 0; color: ${theme.danger}; text-shadow: 1px 1px yellow; font-size: 1.7rem;">📝 LOG A PAST MATTER</h3>
               <div style="display: flex; flex-direction: column; gap: 1rem;">
                 <div>
                   <label style="display: block; margin-bottom: 0.5rem; font-weight: bold; color: ${theme.primary};">Date & Time:</label>
-                  <input type="datetime-local" id="matterDate" max="${new Date().toISOString().slice(0, 16)}" style="width: 100%; padding: 0.75rem; border: 3px inset gray; font-family: inherit; font-size: 1.1rem;">
+                  <input type="datetime-local" id="matterDate" max="${new Date().toISOString().slice(0, 16)}" style="width: 100%; padding: 0.75rem; border: 3px inset gray; font-family: inherit; font-size: 1.25rem;">
                 </div>
                 <div>
                   <label style="display: block; margin-bottom: 0.5rem; font-weight: bold; color: ${theme.primary};">Note:</label>
-                  <input type="text" id="matterNote" placeholder="What happened..." style="width: 100%; padding: 0.75rem; border: 3px inset gray; font-family: inherit; font-size: 1.1rem; box-sizing: border-box;">
+                  <input type="text" id="matterNote" placeholder="What happened..." style="width: 100%; padding: 0.75rem; border: 3px inset gray; font-family: inherit; font-size: 1.25rem; box-sizing: border-box;">
                 </div>
                 <div>
                   <label style="display: block; margin-bottom: 0.5rem; font-weight: bold; color: ${theme.primary};">Cost ($):</label>
-                  <input type="number" id="matterCost" placeholder="How much..." step="0.01" style="width: 100%; padding: 0.75rem; border: 3px inset gray; font-family: inherit; font-size: 1.1rem; box-sizing: border-box;">
+                  <input type="number" id="matterCost" placeholder="How much..." step="0.01" style="width: 100%; padding: 0.75rem; border: 3px inset gray; font-family: inherit; font-size: 1.25rem; box-sizing: border-box;">
                 </div>
-                <button onclick="submitManualMatter()" style="padding: 1rem; background: lime; border: 5px outset gray; font-family: inherit; font-size: 1.2rem; font-weight: bold; cursor: pointer; margin-top: 0.5rem;">
+                <button onclick="submitManualMatter()" style="padding: 1rem; background: lime; border: 5px outset gray; font-family: inherit; font-size: 1.4rem; font-weight: bold; cursor: pointer; margin-top: 0.5rem;">
                   ✔️ SAVE IT!
                 </button>
               </div>
@@ -865,16 +865,16 @@ function renderRetro() {
 
           ${state.showLog ? `
             <div style="background: white; border: 6px ${theme.borderStyle} ${theme.accent2}; padding: 2rem; margin-bottom: 1.5rem;">
-              <h3 style="margin: 0 0 1.5rem 0; color: ${theme.danger}; text-shadow: 1px 1px cyan; font-size: 1.5rem;">📜 MATTER LOG (${state.matters.length} Total)</h3>
+              <h3 style="margin: 0 0 1.5rem 0; color: ${theme.danger}; text-shadow: 1px 1px cyan; font-size: 1.7rem;">📜 MATTER LOG (${state.matters.length} Total)</h3>
               ${state.matters.length === 0 ? `
-                <p style="font-size: 1.2rem; color: ${theme.primary}; font-weight: bold; text-align: center;">🎉 NO MATTERS! YOU'RE WINNING! 🎉</p>
+                <p style="font-size: 1.4rem; color: ${theme.primary}; font-weight: bold; text-align: center;">🎉 NO MATTERS! YOU'RE WINNING! 🎉</p>
               ` : `
                 <div style="display: flex; flex-direction: column; gap: 1rem; max-height: 400px; overflow-y: auto;">
                   ${state.matters.map((matter) => `
                     <div style="background: #f0f0f0; border: 4px ${theme.borderStyle} gray; padding: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
                       <div style="flex: 1;">
-                        <div style="font-weight: bold; color: ${theme.primary}; font-size: 1.1rem; margin-bottom: 0.25rem;">${formatDateTime(matter.matter_date)}</div>
-                        <div style="color: black; font-size: 0.95rem;">${matter.note}</div>
+                        <div style="font-weight: bold; color: ${theme.primary}; font-size: 1.25rem; margin-bottom: 0.25rem;">${formatDateTime(matter.matter_date)}</div>
+                        <div style="color: black; font-size: 1.1rem;">${matter.note}</div>
                         ${matter.cost ? `<div style="color: ${theme.danger}; font-weight: bold; margin-top: 0.25rem;">Cost: $${parseFloat(matter.cost).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>` : ''}
                       </div>
                       <button onclick="deleteMatterById(${matter.id})" style="padding: 0.5rem 1rem; background: red; color: yellow; border: 4px outset gray; cursor: pointer; font-weight: bold; font-family: inherit;">DELETE</button>
@@ -888,10 +888,10 @@ function renderRetro() {
 
         <!-- Footer -->
         <div style="background: linear-gradient(45deg, ${theme.primary} 0%, ${theme.primaryDim} 100%); padding: 1.5rem; border-top: 5px ${theme.borderStyle} ${theme.accent1}; text-align: center;">
-          <p style="margin: 0; color: yellow; font-size: 0.9rem; text-shadow: 1px 1px black; font-weight: bold;">
+          <p style="margin: 0; color: yellow; font-size: 1.05rem; text-shadow: 1px 1px black; font-weight: bold;">
             ${retroFooter}
           </p>
-          <p style="margin: 0.5rem 0 0 0; color: white; font-size: 0.8rem; text-shadow: 1px 1px black;">
+          <p style="margin: 0.5rem 0 0 0; color: white; font-size: 0.95rem; text-shadow: 1px 1px black;">
             © 1996-∞ • Made with &lt;blink&gt; and &lt;marquee&gt; • ${state.isAuthorized ? '✅ ADMIN' : '👁️ READ ONLY'}
           </p>
         </div>
@@ -909,8 +909,8 @@ function render() {
     app.innerHTML = `
       <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; color: ${theme.primary}; background: ${theme.background};">
         <div style="text-align: center;">
-          <p style="font-size: 1.5rem; text-shadow: 0 0 10px ${theme.primaryGlow};">INITIALIZING SYSTEM...</p>
-          <p style="color: ${theme.primaryDim}; font-size: 1rem;">Connecting to backend...</p>
+          <p style="font-size: 1.7rem; text-shadow: 0 0 10px ${theme.primaryGlow};">INITIALIZING SYSTEM...</p>
+          <p style="color: ${theme.primaryDim}; font-size: 1.15rem;">Connecting to backend...</p>
         </div>
       </div>
     `;
@@ -936,9 +936,9 @@ function render() {
     ${state.authError ? `
       <div style="position: fixed; inset: 0; background: rgba(255,0,0,0.2); display: flex; align-items: center; justify-content: center; z-index: 200;">
         <div style="background: ${theme.background}; border: 2px solid ${theme.danger}; padding: 2rem 3rem; text-align: center;">
-          <p style="color: ${theme.danger}; font-size: 1.5rem; margin: 0; text-shadow: 0 0 10px ${theme.danger};">⛔ ACCESS DENIED ⛔</p>
-          <p style="color: ${theme.danger}; font-size: 1rem; margin: 1rem 0 0 0; opacity: 0.8;">UNAUTHORIZED IP ADDRESS</p>
-          <p style="color: ${theme.dangerDim}; font-size: 0.9rem; margin: 0.5rem 0 0 0;">Your IP: ${state.currentIP || 'UNKNOWN'}</p>
+          <p style="color: ${theme.danger}; font-size: 1.7rem; margin: 0; text-shadow: 0 0 10px ${theme.danger};">⛔ ACCESS DENIED ⛔</p>
+          <p style="color: ${theme.danger}; font-size: 1.15rem; margin: 1rem 0 0 0; opacity: 0.8;">UNAUTHORIZED IP ADDRESS</p>
+          <p style="color: ${theme.dangerDim}; font-size: 1.05rem; margin: 0.5rem 0 0 0;">Your IP: ${state.currentIP || 'UNKNOWN'}</p>
         </div>
       </div>
     ` : ''}
@@ -948,10 +948,10 @@ function render() {
       <!-- Header -->
       <div style="border-bottom: 1px solid ${theme.primaryDim}; padding-bottom: 1rem; margin-bottom: 2rem;">
         <div style="background: rgba(0,0,0,0.3); border: 2px solid ${theme.primary}; padding: 1rem 1.5rem;">
-          <div style="text-align: center; color: ${theme.primary}; font-size: 1.3rem; text-shadow: 0 0 15px ${theme.primaryGlow}; letter-spacing: 0.15em; font-weight: bold;">
+          <div style="text-align: center; color: ${theme.primary}; font-size: 1.7rem; text-shadow: 0 0 15px ${theme.primaryGlow}; letter-spacing: 0.15em; font-weight: bold;">
             LEGAL MATTER v0.1.0
           </div>
-          <div style="text-align: center; color: ${theme.primaryDim}; font-size: 0.7rem; margin-top: 0.5rem; text-shadow: 0 0 8px ${theme.primaryGlow}; line-height: 1.6; font-family: monospace;">
+          <div style="text-align: center; color: ${theme.primaryDim}; font-size: 1rem; margin-top: 0.5rem; text-shadow: 0 0 8px ${theme.primaryGlow}; line-height: 1.6; font-family: monospace;">
             <span style="color: ${theme.primary}; font-weight: bold;">L</span>egal
             <span style="color: ${theme.primary}; font-weight: bold;">E</span>xpense
             <span style="color: ${theme.primary}; font-weight: bold;">G</span>overnance
@@ -964,19 +964,19 @@ function render() {
             <span style="color: ${theme.primary}; font-weight: bold;">E</span>xpenses,
             <span style="color: ${theme.primary}; font-weight: bold;">R</span>etainers
           </div>
-          <div style="text-align: center; color: ${theme.primaryDim}; font-size: 0.8rem; margin-top: 0.5rem; text-shadow: 0 0 8px ${theme.primaryGlow};">
+          <div style="text-align: center; color: ${theme.primaryDim}; font-size: 1.1rem; margin-top: 0.5rem; text-shadow: 0 0 8px ${theme.primaryGlow};">
             ${theme.name}
           </div>
         </div>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
-          <span style="color: ${theme.primaryDim}; font-size: 1rem; letter-spacing: 0.05em; text-shadow: 0 0 8px ${theme.primaryGlow};">
+          <span style="color: ${theme.primaryDim}; font-size: 1.25rem; letter-spacing: 0.05em; text-shadow: 0 0 8px ${theme.primaryGlow};">
             ${state.sessionMessage}
           </span>
           <div style="display: flex; align-items: center; gap: 1rem;">
-            <button onclick="toggleThemePicker()" style="background: transparent; border: 1px solid ${theme.primaryDim}; color: ${theme.primaryDim}; padding: 0.4rem 0.8rem; font-size: 0.9rem; cursor: pointer; font-family: inherit;">
+            <button onclick="toggleThemePicker()" style="background: transparent; border: 1px solid ${theme.primaryDim}; color: ${theme.primaryDim}; padding: 0.5rem 1rem; font-size: 1.15rem; cursor: pointer; font-family: inherit;">
               THEME
             </button>
-            <span style="color: ${state.isAuthorized ? theme.success : theme.danger}; font-size: 1rem; text-shadow: 0 0 8px ${state.isAuthorized ? theme.success : theme.danger};">
+            <span style="color: ${state.isAuthorized ? theme.success : theme.danger}; font-size: 1.25rem; text-shadow: 0 0 8px ${state.isAuthorized ? theme.success : theme.danger};">
               ${state.isAuthorized ? '● AUTHORIZED' : '● READ-ONLY MODE'}
             </span>
           </div>
@@ -986,11 +986,11 @@ function render() {
       <!-- Theme Picker -->
       ${state.showThemePicker ? `
         <div style="background: rgba(0,0,0,0.4); border: 1px solid ${theme.primary}; padding: 1.5rem; margin-bottom: 2rem;">
-          <p style="color: ${theme.primary}; font-size: 0.9rem; margin: 0 0 1rem 0; text-shadow: 0 0 10px ${theme.primaryGlow};">&gt; SELECT DISPLAY THEME:</p>
+          <p style="color: ${theme.primary}; font-size: 1.05rem; margin: 0 0 1rem 0; text-shadow: 0 0 10px ${theme.primaryGlow};">&gt; SELECT DISPLAY THEME:</p>
           <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.75rem;">
             ${Object.entries(THEMES).map(([key, t]) => `
-              <button 
-                onclick="setTheme('${key}')" 
+              <button
+                onclick="setTheme('${key}')"
                 style="
                   padding: 0.75rem;
                   background: ${key === currentThemeKey ? t.primary + '22' : 'rgba(0,0,0,0.3)'};
@@ -1005,12 +1005,12 @@ function render() {
                   <div style="width: 12px; height: 12px; background: ${t.primary}; border-radius: 2px; box-shadow: 0 0 8px ${t.primaryGlow};"></div>
                   <div style="width: 12px; height: 12px; background: ${t.danger}; border-radius: 2px;"></div>
                 </div>
-                <p style="color: ${t.primary}; font-size: 0.8rem; margin: 0; text-shadow: 0 0 8px ${t.primaryGlow};">${t.name}</p>
-                <p style="color: ${t.primaryDim}; font-size: 0.65rem; margin: 0.25rem 0 0 0;">${key === currentThemeKey ? '● ACTIVE' : ''}</p>
+                <p style="color: ${t.primary}; font-size: 0.95rem; margin: 0; text-shadow: 0 0 8px ${t.primaryGlow};">${t.name}</p>
+                <p style="color: ${t.primaryDim}; font-size: 0.8rem; margin: 0.25rem 0 0 0;">${key === currentThemeKey ? '● ACTIVE' : ''}</p>
               </button>
             `).join('')}
           </div>
-          <p style="color: ${theme.primaryDim}; font-size: 0.7rem; margin: 1rem 0 0 0;">
+          <p style="color: ${theme.primaryDim}; font-size: 0.85rem; margin: 1rem 0 0 0;">
             Theme preference is saved to your browser.
           </p>
         </div>
@@ -1018,15 +1018,15 @@ function render() {
 
       <!-- Status Line -->
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; padding: 0.75rem 1rem; background: ${theme.primary}11; border: 1px solid ${theme.primaryDim};">
-        <span style="color: ${theme.primaryDim}; font-size: 1.1rem; text-shadow: 0 0 8px ${theme.primaryGlow};">STATUS:</span>
-        <span class="${state.daysSince < 7 ? 'blink' : ''}" style="color: ${statusColor}; font-size: 1.1rem; text-shadow: 0 0 15px ${statusGlow};">
+        <span style="color: ${theme.primaryDim}; font-size: 1.25rem; text-shadow: 0 0 8px ${theme.primaryGlow};">STATUS:</span>
+        <span class="${state.daysSince < 7 ? 'blink' : ''}" style="color: ${statusColor}; font-size: 1.25rem; text-shadow: 0 0 15px ${statusGlow};">
           [${getStatusText()}]
         </span>
       </div>
 
       <!-- Main Display -->
       <div style="background: rgba(0,0,0,0.4); border: 2px solid ${theme.primary}; padding: 2rem; margin-bottom: 2rem; box-shadow: 0 0 30px ${theme.primary}22, inset 0 0 60px rgba(0,0,0,0.5);">
-        <p style="color: ${theme.primaryDim}; font-size: 1.3rem; margin: 0 0 1.5rem 0; letter-spacing: 0.1em; text-shadow: 0 0 10px ${theme.primaryGlow};">
+        <p style="color: ${theme.primaryDim}; font-size: 1.5rem; margin: 0 0 1.5rem 0; letter-spacing: 0.1em; text-shadow: 0 0 10px ${theme.primaryGlow};">
           ${state.labelMessage}
         </p>
         <div style="text-align: center; padding: 2rem 0;">
@@ -1034,10 +1034,10 @@ function render() {
             ${String(state.daysSince).padStart(2, '0')}
           </span>
         </div>
-        <p data-time-display style="color: ${theme.primary}; font-size: 2rem; margin: 1rem 0 0 0; text-align: center; text-shadow: 0 0 15px ${theme.primaryGlow}; letter-spacing: 0.15em; font-variant-numeric: tabular-nums;">
+        <p data-time-display style="color: ${theme.primary}; font-size: 2.3rem; margin: 1rem 0 0 0; text-align: center; text-shadow: 0 0 15px ${theme.primaryGlow}; letter-spacing: 0.15em; font-variant-numeric: tabular-nums;">
           ${String(state.timeBreakdown.hours).padStart(2, '0')}:${String(state.timeBreakdown.minutes).padStart(2, '0')}:${String(state.timeBreakdown.seconds).padStart(2, '0')}
         </p>
-        <p style="color: ${theme.primaryDim}; font-size: 1.1rem; margin: 0.5rem 0 0 0; text-align: center; text-shadow: 0 0 10px ${theme.primaryGlow};">
+        <p style="color: ${theme.primaryDim}; font-size: 1.25rem; margin: 0.5rem 0 0 0; text-align: center; text-shadow: 0 0 10px ${theme.primaryGlow};">
           LAST MATTER: ${formatDateLong(state.lastMatterDate)}
         </p>
       </div>
@@ -1045,13 +1045,13 @@ function render() {
       <!-- Money Counter -->
       <div style="background: ${theme.dangerBg}; border: 1px solid ${theme.dangerDim}; padding: 1.25rem 1.5rem; margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
         <div>
-          <p style="color: ${theme.danger}; font-size: 0.95rem; margin: 0; letter-spacing: 0.15em; text-shadow: 0 0 10px ${theme.danger};">LIFETIME_LEGAL_FEES:</p>
-          <p data-money-display style="color: ${theme.danger}; font-size: 3rem; margin: 0.25rem 0 0 0; text-shadow: 0 0 25px ${theme.danger}, 0 0 40px ${theme.danger}77; letter-spacing: 0.05em;">
+          <p style="color: ${theme.danger}; font-size: 1.1rem; margin: 0; letter-spacing: 0.15em; text-shadow: 0 0 10px ${theme.danger};">LIFETIME_LEGAL_FEES:</p>
+          <p data-money-display style="color: ${theme.danger}; font-size: 3.4rem; margin: 0.25rem 0 0 0; text-shadow: 0 0 25px ${theme.danger}, 0 0 40px ${theme.danger}77; letter-spacing: 0.05em;">
             $${state.displayedSpent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
-          ${state.drainEnabled ? `<p style="color: ${theme.dangerDim}; font-size: 0.9rem; margin: 0.25rem 0 0 0; text-shadow: 0 0 8px ${theme.danger};">+$${(state.drainRateCents / 100).toFixed(2)}/sec (${state.moneyMessage})</p>` : ''}
+          ${state.drainEnabled ? `<p style="color: ${theme.dangerDim}; font-size: 1.05rem; margin: 0.25rem 0 0 0; text-shadow: 0 0 8px ${theme.danger};">+$${(state.drainRateCents / 100).toFixed(2)}/sec (${state.moneyMessage})</p>` : ''}
         </div>
-        <button onclick="toggleMoneySettings()" style="background: transparent; border: 1px solid ${theme.dangerDim}; color: ${theme.danger}; padding: 0.6rem 1.2rem; font-size: 1rem; cursor: pointer; font-family: inherit; text-shadow: 0 0 8px ${theme.danger};">
+        <button onclick="toggleMoneySettings()" style="background: transparent; border: 1px solid ${theme.dangerDim}; color: ${theme.danger}; padding: 0.6rem 1.2rem; font-size: 1.15rem; cursor: pointer; font-family: inherit; text-shadow: 0 0 8px ${theme.danger};">
           ${state.showMoneySettings ? 'CLOSE' : 'EDIT'}
         </button>
       </div>
@@ -1059,18 +1059,18 @@ function render() {
       <!-- Money Settings Panel -->
       ${state.showMoneySettings ? `
         <div style="background: rgba(0,0,0,0.4); border: 1px solid ${theme.dangerDim}; padding: 1.5rem; margin-bottom: 1.5rem;">
-          <p style="color: ${theme.danger}; font-size: 0.9rem; margin: 0 0 1rem 0; text-shadow: 0 0 10px ${theme.danger};">&gt; FINANCIAL DAMAGE CONFIGURATION:</p>
+          <p style="color: ${theme.danger}; font-size: 1.05rem; margin: 0 0 1rem 0; text-shadow: 0 0 10px ${theme.danger};">&gt; FINANCIAL DAMAGE CONFIGURATION:</p>
           <div style="display: flex; flex-direction: column; gap: 1rem;">
             <div>
-              <label style="color: ${theme.dangerDim}; font-size: 0.8rem; display: block; margin-bottom: 0.5rem; text-shadow: 0 0 8px ${theme.danger};">ENTER AMOUNT ($):</label>
-              <input type="number" id="moneyInput" placeholder="e.g., 15000" step="0.01" style="width: 100%; padding: 0.75rem; background: #0a0a0a; border: 1px solid ${theme.dangerDim}; color: ${theme.danger}; font-family: inherit; font-size: 1rem; box-sizing: border-box;">
+              <label style="color: ${theme.dangerDim}; font-size: 0.95rem; display: block; margin-bottom: 0.5rem; text-shadow: 0 0 8px ${theme.danger};">ENTER AMOUNT ($):</label>
+              <input type="number" id="moneyInput" placeholder="e.g., 15000" step="0.01" style="width: 100%; padding: 0.75rem; background: #0a0a0a; border: 1px solid ${theme.dangerDim}; color: ${theme.danger}; font-family: inherit; font-size: 1.15rem; box-sizing: border-box;">
             </div>
             <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-              <button onclick="setMoney()" style="flex: 1; min-width: 120px; padding: 0.75rem 1rem; background: ${theme.dangerBg}; border: 1px solid ${theme.danger}; color: ${theme.danger}; font-size: 0.85rem; cursor: pointer; font-family: inherit;">SET_TOTAL</button>
-              <button onclick="addMoney()" style="flex: 1; min-width: 120px; padding: 0.75rem 1rem; background: ${theme.dangerBg}; border: 1px solid ${theme.danger}; color: ${theme.danger}; font-size: 0.85rem; cursor: pointer; font-family: inherit;">ADD_TO_TOTAL</button>
-              <button onclick="resetMoney()" style="padding: 0.75rem 1rem; background: transparent; border: 1px solid ${theme.dangerDim}; color: ${theme.dangerDim}; font-size: 0.85rem; cursor: pointer; font-family: inherit;">RESET</button>
+              <button onclick="setMoney()" style="flex: 1; min-width: 120px; padding: 0.75rem 1rem; background: ${theme.dangerBg}; border: 1px solid ${theme.danger}; color: ${theme.danger}; font-size: 1rem; cursor: pointer; font-family: inherit;">SET_TOTAL</button>
+              <button onclick="addMoney()" style="flex: 1; min-width: 120px; padding: 0.75rem 1rem; background: ${theme.dangerBg}; border: 1px solid ${theme.danger}; color: ${theme.danger}; font-size: 1rem; cursor: pointer; font-family: inherit;">ADD_TO_TOTAL</button>
+              <button onclick="resetMoney()" style="padding: 0.75rem 1rem; background: transparent; border: 1px solid ${theme.dangerDim}; color: ${theme.dangerDim}; font-size: 1rem; cursor: pointer; font-family: inherit;">RESET</button>
             </div>
-            <p style="color: ${theme.dangerDim}; font-size: 0.75rem; margin: 0;">💡 PRO TIP: Set this to your actual lifetime legal spend for maximum emotional damage. Or lie to yourself, we won't judge.</p>
+            <p style="color: ${theme.dangerDim}; font-size: 0.9rem; margin: 0;">💡 PRO TIP: Set this to your actual lifetime legal spend for maximum emotional damage. Or lie to yourself, we won't judge.</p>
           </div>
         </div>
       ` : ''}
@@ -1078,28 +1078,28 @@ function render() {
       <!-- Stats -->
       <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 2rem;">
         <div style="background: rgba(0,0,0,0.3); border: 1px solid ${theme.primaryDim}; padding: 1rem; text-align: center;">
-          <p style="color: ${theme.primaryDim}; font-size: 0.9rem; margin: 0; text-shadow: 0 0 8px ${theme.primaryGlow};">RECORD_MAX</p>
-          <p style="color: ${theme.primary}; font-size: 2.2rem; margin: 0.5rem 0 0 0; text-shadow: 0 0 15px ${theme.primaryGlow}, 0 0 30px ${theme.primary}44;">${state.stats.max_streak}</p>
+          <p style="color: ${theme.primaryDim}; font-size: 1.05rem; margin: 0; text-shadow: 0 0 8px ${theme.primaryGlow};">RECORD_MAX</p>
+          <p style="color: ${theme.primary}; font-size: 2.5rem; margin: 0.5rem 0 0 0; text-shadow: 0 0 15px ${theme.primaryGlow}, 0 0 30px ${theme.primary}44;">${state.stats.max_streak}</p>
         </div>
         <div style="background: rgba(0,0,0,0.3); border: 1px solid ${theme.primaryDim}; padding: 1rem; text-align: center;">
-          <p style="color: ${theme.primaryDim}; font-size: 0.9rem; margin: 0; text-shadow: 0 0 8px ${theme.primaryGlow};">COUNT_YTD</p>
-          <p style="color: ${theme.danger}; font-size: 2.2rem; margin: 0.5rem 0 0 0; text-shadow: 0 0 15px ${theme.danger}, 0 0 30px ${theme.danger}77;">${String(state.stats.matters_this_year).padStart(2, '0')}</p>
+          <p style="color: ${theme.primaryDim}; font-size: 1.05rem; margin: 0; text-shadow: 0 0 8px ${theme.primaryGlow};">COUNT_YTD</p>
+          <p style="color: ${theme.danger}; font-size: 2.5rem; margin: 0.5rem 0 0 0; text-shadow: 0 0 15px ${theme.danger}, 0 0 30px ${theme.danger}77;">${String(state.stats.matters_this_year).padStart(2, '0')}</p>
         </div>
         <div style="background: rgba(0,0,0,0.3); border: 1px solid ${theme.primaryDim}; padding: 1rem; text-align: center;">
-          <p style="color: ${theme.primaryDim}; font-size: 0.9rem; margin: 0; text-shadow: 0 0 8px ${theme.primaryGlow};">LIFETIME</p>
-          <p style="color: ${theme.primary}; font-size: 2.2rem; margin: 0.5rem 0 0 0; text-shadow: 0 0 12px ${theme.primaryGlow}, 0 0 25px ${theme.primary}44;">${String(state.stats.total_matters).padStart(2, '0')}</p>
+          <p style="color: ${theme.primaryDim}; font-size: 1.05rem; margin: 0; text-shadow: 0 0 8px ${theme.primaryGlow};">LIFETIME</p>
+          <p style="color: ${theme.primary}; font-size: 2.5rem; margin: 0.5rem 0 0 0; text-shadow: 0 0 12px ${theme.primaryGlow}, 0 0 25px ${theme.primary}44;">${String(state.stats.total_matters).padStart(2, '0')}</p>
         </div>
       </div>
 
       <!-- Action Buttons -->
       <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
-        <button onclick="toggleDatePicker()" style="flex: 1; min-width: 150px; padding: 0.9rem 1.5rem; background: transparent; border: 1px solid ${theme.primaryDim}; color: ${theme.primaryDim}; font-size: 1.05rem; cursor: pointer; font-family: inherit; text-shadow: 0 0 8px ${theme.primaryGlow};">
+        <button onclick="toggleDatePicker()" style="flex: 1; min-width: 150px; padding: 0.9rem 1.5rem; background: transparent; border: 1px solid ${theme.primaryDim}; color: ${theme.primaryDim}; font-size: 1.2rem; cursor: pointer; font-family: inherit; text-shadow: 0 0 8px ${theme.primaryGlow};">
           &gt; ${state.showDatePicker ? 'CANCEL' : 'SET_DATE_MANUAL'}
         </button>
-        <button onclick="toggleLog()" style="flex: 1; min-width: 150px; padding: 0.9rem 1.5rem; background: transparent; border: 1px solid ${theme.primaryDim}; color: ${theme.primaryDim}; font-size: 1.05rem; cursor: pointer; font-family: inherit; text-shadow: 0 0 8px ${theme.primaryGlow};">
+        <button onclick="toggleLog()" style="flex: 1; min-width: 150px; padding: 0.9rem 1.5rem; background: transparent; border: 1px solid ${theme.primaryDim}; color: ${theme.primaryDim}; font-size: 1.2rem; cursor: pointer; font-family: inherit; text-shadow: 0 0 8px ${theme.primaryGlow};">
           &gt; ${state.showLog ? 'HIDE_LOG' : 'VIEW_LOG'} (${state.matters.length})
         </button>
-        <button onclick="quickLogMatter()" style="flex: 1; min-width: 200px; padding: 0.9rem 1.5rem; background: ${theme.dangerBg}; border: 1px solid ${theme.danger}; color: ${theme.danger}; font-size: 1.05rem; cursor: pointer; font-family: inherit; text-shadow: 0 0 12px ${theme.danger};">
+        <button onclick="quickLogMatter()" style="flex: 1; min-width: 200px; padding: 0.9rem 1.5rem; background: ${theme.dangerBg}; border: 1px solid ${theme.danger}; color: ${theme.danger}; font-size: 1.2rem; cursor: pointer; font-family: inherit; text-shadow: 0 0 12px ${theme.danger};">
           &gt; LOG_MATTER_NOW
         </button>
       </div>
@@ -1107,21 +1107,21 @@ function render() {
       <!-- Date Picker Panel -->
       ${state.showDatePicker ? `
         <div style="background: rgba(0,0,0,0.4); border: 1px solid ${theme.primary}; padding: 1.5rem; margin-bottom: 1.5rem;">
-          <p style="color: ${theme.primary}; font-size: 0.9rem; margin: 0 0 1rem 0; text-shadow: 0 0 10px ${theme.primaryGlow};">&gt; MANUAL MATTER ENTRY:</p>
+          <p style="color: ${theme.primary}; font-size: 1.05rem; margin: 0 0 1rem 0; text-shadow: 0 0 10px ${theme.primaryGlow};">&gt; MANUAL MATTER ENTRY:</p>
           <div style="display: flex; flex-direction: column; gap: 1rem;">
             <div>
-              <label style="color: ${theme.primaryDim}; font-size: 0.8rem; display: block; margin-bottom: 0.5rem; text-shadow: 0 0 8px ${theme.primaryGlow};">MATTER_DATE_TIME:</label>
-              <input type="datetime-local" id="matterDate" max="${new Date().toISOString().slice(0, 16)}" style="width: 100%; padding: 0.75rem; background: #0a0a0a; border: 1px solid ${theme.primaryDim}; color: ${theme.primary}; font-family: inherit; font-size: 1rem;">
+              <label style="color: ${theme.primaryDim}; font-size: 0.95rem; display: block; margin-bottom: 0.5rem; text-shadow: 0 0 8px ${theme.primaryGlow};">MATTER_DATE_TIME:</label>
+              <input type="datetime-local" id="matterDate" max="${new Date().toISOString().slice(0, 16)}" style="width: 100%; padding: 0.75rem; background: #0a0a0a; border: 1px solid ${theme.primaryDim}; color: ${theme.primary}; font-family: inherit; font-size: 1.15rem;">
             </div>
             <div>
-              <label style="color: ${theme.primaryDim}; font-size: 0.8rem; display: block; margin-bottom: 0.5rem; text-shadow: 0 0 8px ${theme.primaryGlow};">NOTE (optional):</label>
-              <input type="text" id="matterNote" placeholder="e.g., Estate planning attorney" style="width: 100%; padding: 0.75rem; background: #0a0a0a; border: 1px solid ${theme.primaryDim}; color: ${theme.primary}; font-family: inherit; font-size: 1rem; box-sizing: border-box;">
+              <label style="color: ${theme.primaryDim}; font-size: 0.95rem; display: block; margin-bottom: 0.5rem; text-shadow: 0 0 8px ${theme.primaryGlow};">NOTE (optional):</label>
+              <input type="text" id="matterNote" placeholder="e.g., Estate planning attorney" style="width: 100%; padding: 0.75rem; background: #0a0a0a; border: 1px solid ${theme.primaryDim}; color: ${theme.primary}; font-family: inherit; font-size: 1.15rem; box-sizing: border-box;">
             </div>
             <div>
-              <label style="color: ${theme.primaryDim}; font-size: 0.8rem; display: block; margin-bottom: 0.5rem; text-shadow: 0 0 8px ${theme.primaryGlow};">COST ($, optional):</label>
-              <input type="number" id="matterCost" placeholder="e.g., 5000" step="0.01" style="width: 100%; padding: 0.75rem; background: #0a0a0a; border: 1px solid ${theme.primaryDim}; color: ${theme.primary}; font-family: inherit; font-size: 1rem; box-sizing: border-box;">
+              <label style="color: ${theme.primaryDim}; font-size: 0.95rem; display: block; margin-bottom: 0.5rem; text-shadow: 0 0 8px ${theme.primaryGlow};">COST ($, optional):</label>
+              <input type="number" id="matterCost" placeholder="e.g., 5000" step="0.01" style="width: 100%; padding: 0.75rem; background: #0a0a0a; border: 1px solid ${theme.primaryDim}; color: ${theme.primary}; font-family: inherit; font-size: 1.15rem; box-sizing: border-box;">
             </div>
-            <button onclick="submitManualMatter()" style="padding: 0.75rem 1.5rem; background: ${theme.primary}22; border: 1px solid ${theme.primary}; color: ${theme.primary}; font-size: 0.9rem; cursor: pointer; font-family: inherit;">
+            <button onclick="submitManualMatter()" style="padding: 0.75rem 1.5rem; background: ${theme.primary}22; border: 1px solid ${theme.primary}; color: ${theme.primary}; font-size: 1.05rem; cursor: pointer; font-family: inherit;">
               &gt; CONFIRM_ENTRY
             </button>
           </div>
@@ -1131,22 +1131,22 @@ function render() {
       <!-- Matter Log -->
       ${state.showLog ? `
         <div style="background: rgba(0,0,0,0.4); border: 1px solid ${theme.primary}; padding: 1.5rem; margin-bottom: 1.5rem; max-height: 400px; overflow-y: auto;">
-          <p style="color: ${theme.primary}; font-size: 0.9rem; margin: 0 0 1rem 0; text-shadow: 0 0 10px ${theme.primaryGlow};">&gt; MATTER LOG (${state.matters.length} records):</p>
+          <p style="color: ${theme.primary}; font-size: 1.05rem; margin: 0 0 1rem 0; text-shadow: 0 0 10px ${theme.primaryGlow};">&gt; MATTER LOG (${state.matters.length} records):</p>
           ${state.matters.length === 0 ? `
-            <p style="color: ${theme.primaryDim}; font-size: 0.85rem; font-style: italic;">No matters recorded. Congratulations, you're winning at life! (For now...)</p>
+            <p style="color: ${theme.primaryDim}; font-size: 1rem; font-style: italic;">No matters recorded. Congratulations, you're winning at life! (For now...)</p>
           ` : `
             <div style="display: flex; flex-direction: column; gap: 0.75rem;">
               ${state.matters.map((matter, idx) => `
                 <div style="padding: 0.75rem 1rem; background: rgba(0,0,0,0.3); border: 1px solid ${theme.primaryDim}; display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
                   <div style="flex: 1;">
-                    <p style="color: ${theme.primary}; font-size: 0.85rem; margin: 0;">
+                    <p style="color: ${theme.primary}; font-size: 1rem; margin: 0;">
                       [${String(state.matters.length - idx).padStart(3, '0')}] ${formatDateTime(matter.matter_date)}
                     </p>
-                    <p style="color: ${theme.primaryDim}; font-size: 0.8rem; margin: 0.25rem 0 0 0;">${matter.note}</p>
-                    ${matter.days_since !== undefined ? `<p style="color: #666; font-size: 0.75rem; margin: 0.25rem 0 0 0;">Streak broken: ${matter.days_since} days</p>` : ''}
-                    ${matter.cost ? `<p style="color: ${theme.danger}; font-size: 0.75rem; margin: 0.25rem 0 0 0;">Cost: $${parseFloat(matter.cost).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>` : ''}
+                    <p style="color: ${theme.primaryDim}; font-size: 0.95rem; margin: 0.25rem 0 0 0;">${matter.note}</p>
+                    ${matter.days_since !== undefined ? `<p style="color: #666; font-size: 0.9rem; margin: 0.25rem 0 0 0;">Streak broken: ${matter.days_since} days</p>` : ''}
+                    ${matter.cost ? `<p style="color: ${theme.danger}; font-size: 0.9rem; margin: 0.25rem 0 0 0;">Cost: $${parseFloat(matter.cost).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>` : ''}
                   </div>
-                  <button onclick="deleteMatterById(${matter.id})" style="background: transparent; border: 1px solid ${theme.dangerDim}; color: ${theme.danger}; padding: 0.25rem 0.5rem; font-size: 0.75rem; cursor: pointer; font-family: inherit;">DEL</button>
+                  <button onclick="deleteMatterById(${matter.id})" style="background: transparent; border: 1px solid ${theme.dangerDim}; color: ${theme.danger}; padding: 0.25rem 0.5rem; font-size: 0.9rem; cursor: pointer; font-family: inherit;">DEL</button>
                 </div>
               `).join('')}
             </div>
@@ -1155,12 +1155,12 @@ function render() {
       ` : ''}
 
       <!-- Terminal Prompt -->
-      <div style="margin-top: 2rem; color: ${theme.primary}; font-size: 0.85rem; text-shadow: 0 0 8px ${theme.primaryGlow};">
+      <div style="margin-top: 2rem; color: ${theme.primary}; font-size: 1rem; text-shadow: 0 0 8px ${theme.primaryGlow};">
         <span style="color: ${theme.primaryDim}; text-shadow: 0 0 8px ${theme.primaryGlow};">user@legal-tracker:~$</span> status --watch<span id="cursor" style="margin-left: 2px;">▋</span>
       </div>
 
       <!-- Footer -->
-      <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid ${theme.primaryDim}; color: ${theme.primaryDim}; font-size: 0.7rem;">
+      <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid ${theme.primaryDim}; color: ${theme.primaryDim}; font-size: 0.85rem;">
         <p style="margin: 0; text-shadow: 0 0 8px ${theme.primaryGlow};">YOUR_IP: ${state.currentIP || 'DETECTING...'} • STATUS: ${state.isAuthorized ? 'READ/WRITE' : 'READ_ONLY'}</p>
       </div>
     </div>
