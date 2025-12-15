@@ -108,6 +108,30 @@ const DEFAULT_THEME = 'amber';
 let currentThemeKey = localStorage.getItem('legal-tracker-theme') || DEFAULT_THEME;
 let theme = THEMES[currentThemeKey] || THEMES[DEFAULT_THEME];
 
+// Funny sarcastic session messages
+const SESSION_MESSAGES = [
+  'TERMINAL: /dev/billable-hours • SESSION: EXPENSIVE',
+  'TERMINAL: /dev/null/wallet • SESSION: RETAINER-ACTIVE',
+  'TERMINAL: /usr/bin/broke • SESSION: LITIGIOUS',
+  'TERMINAL: /opt/out/money • SESSION: DISCOVERY-PHASE',
+  'TERMINAL: /home/less • SESSION: MOTION-PENDING',
+  'TERMINAL: /var/empty/bank • SESSION: DEPOSITIONS-R-US',
+  'TERMINAL: /etc/poverty • SESSION: LEGAL-EAGLE',
+  'TERMINAL: /dev/bankruptcy • SESSION: OBJECTION',
+  'TERMINAL: /proc/wallet/empty • SESSION: SUSTAINED',
+  'TERMINAL: /tmp/savings • SESSION: CASE-CLOSED-WALLET',
+  'TERMINAL: /bin/cash/gone • SESSION: ATTORNEY-FEES',
+  'TERMINAL: /dev/zero/dollars • SESSION: COUNSEL-REQUIRED',
+  'TERMINAL: /mnt/debt • SESSION: HEARSAY-EXPENSIVE',
+  'TERMINAL: /sys/tem/broke • SESSION: LEGAL-COUNSEL',
+  'TERMINAL: /root/of/evil • SESSION: BILLABLE-HOURS',
+  'TERMINAL: /lost/wages • SESSION: MOTION-GRANTED',
+  'TERMINAL: /dev/oid/bank • SESSION: JURY-DUTY-PAY',
+  'TERMINAL: /usr/share/poverty • SESSION: PRECEDENT',
+  'TERMINAL: /var/log/expenses • SESSION: BRIEF-EXPENSIVE',
+  'TERMINAL: /etc/legal/fees • SESSION: SUBPOENA',
+];
+
 // State
 let state = {
   daysSince: 0,
@@ -123,7 +147,8 @@ let state = {
   showLog: false,
   showMoneySettings: false,
   showThemePicker: false,
-  authError: false
+  authError: false,
+  sessionMessage: SESSION_MESSAGES[Math.floor(Math.random() * SESSION_MESSAGES.length)]
 };
 
 // Colors (from current theme)
@@ -327,7 +352,7 @@ function render() {
         </div>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
           <span style="color: ${theme.primaryDim}; font-size: 0.8rem; letter-spacing: 0.05em;">
-            TERMINAL: /dev/billable-hours • SESSION: EXPENSIVE
+            ${state.sessionMessage}
           </span>
           <div style="display: flex; align-items: center; gap: 1rem;">
             <button onclick="toggleThemePicker()" style="background: transparent; border: 1px solid ${theme.primaryDim}; color: ${theme.primaryDim}; padding: 0.25rem 0.5rem; font-size: 0.7rem; cursor: pointer; font-family: inherit;">
