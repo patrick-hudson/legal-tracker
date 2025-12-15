@@ -194,6 +194,27 @@ ALLOWED_IPS=123.45.67.89,98.76.54.32,111.222.333.444
 - Check `backend/data/` directory exists and is writable
 - Check server logs: `pm2 logs legal-tracker`
 
+## Development
+
+### Running Tests
+
+```bash
+cd backend
+npm test
+
+# Or run in watch mode
+npm run test:watch
+```
+
+### CI/CD
+
+This project uses GitHub Actions for continuous integration. The workflow:
+- Runs tests on Node.js 18.x, 20.x, and 22.x
+- Validates frontend files
+- Automatically runs on all pushes and PRs to `main`/`master`
+
+See [`.github/workflows/README.md`](.github/workflows/README.md) for details.
+
 ## License
 
 MIT - Do whatever you want with it. Maybe use the savings on something other than lawyers.

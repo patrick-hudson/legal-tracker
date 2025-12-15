@@ -1,2 +1,8 @@
 .DS_Store
 .env
+node_modules/
+*.log
+backend/data/*.db
+backend/data/*.db-journal
+coverage/
+.nyc_output/
