@@ -155,9 +155,14 @@ export async function renderSettings(container) {
                         </div>
                     </div>
 
-                    <button id="populate-sample-btn" class="w-full text-white bg-green-600 hover:bg-green-700 rounded-lg px-4 py-2 text-sm">
-                        Populate Sample Data
-                    </button>
+                    <div class="space-y-2">
+                        <button id="populate-sample-btn" class="w-full text-white bg-green-600 hover:bg-green-700 rounded-lg px-4 py-2 text-sm">
+                            Populate Sample Data
+                        </button>
+                        <button id="regenerate-samples-btn" class="w-full text-gray-700 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 rounded-lg px-4 py-2 text-sm">
+                            Regenerate All Sample Files
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Data Management - Wipe Database -->
@@ -316,9 +321,52 @@ function setupEventListeners(currentSettings) {
     (async () => {
         try {
             const { samples } = await api.listSampleDatasets();
+            const loadingEl = document.getElementById('sample-datasets-loading');
+            const containerEl = document.getElementById('sample-datasets-container');
+
+            // If no samples exist, show "Generate Samples First" message
+            if (samples.length === 0) {
+                loadingEl.innerHTML = `
+                    <div class="text-center p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                        <p class="text-sm text-yellow-800 dark:text-yellow-200 mb-3">
+                            No sample datasets found. Generate sample files first.
+                        </p>
+                        <button id="generate-samples-first-btn" class="text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-4 py-2 text-sm">
+                            Generate Sample Files
+                        </button>
+                    </div>
+                `;
+
+                // Add click handler for the generate button
+                document.getElementById('generate-samples-first-btn')?.addEventListener('click', async () => {
+                    const btn = document.getElementById('generate-samples-first-btn');
+                    btn.disabled = true;
+                    btn.textContent = 'Generating...';
+
+                    try {
+                        const response = await api.regenerateSampleFiles();
+                        showToast(`Successfully generated ${response.files_regenerated} sample files`, 'success');
+
+                        // Reload the page to show the new samples
+                        location.reload();
+                    } catch (error) {
+                        showToast(`Error: ${error.message}`, 'error');
+                        btn.disabled = false;
+                        btn.textContent = 'Generate Sample Files';
+                    }
+                });
+
+                return;
+            }
+
             const select = document.getElementById('sample-dataset-select');
             const info = document.getElementById('sample-dataset-info');
             const customContainer = document.getElementById('custom-count-container');
+
+            // Clear existing options except "Generate New"
+            while (select.options.length > 1) {
+                select.remove(1);
+            }
 
             // Add sample files to select
             samples.forEach(sample => {
@@ -345,8 +393,8 @@ function setupEventListeners(currentSettings) {
             });
 
             // Hide loading, show container
-            document.getElementById('sample-datasets-loading').classList.add('hidden');
-            document.getElementById('sample-datasets-container').classList.remove('hidden');
+            loadingEl.classList.add('hidden');
+            containerEl.classList.remove('hidden');
         } catch (error) {
             document.getElementById('sample-datasets-loading').textContent = 'Failed to load datasets';
             console.error('Failed to load sample datasets:', error);
@@ -386,6 +434,45 @@ function setupEventListeners(currentSettings) {
             const btn = document.getElementById('populate-sample-btn');
             btn.disabled = false;
             btn.textContent = 'Populate Sample Data';
+        }
+    });
+
+    // Regenerate sample files
+    document.getElementById('regenerate-samples-btn')?.addEventListener('click', async () => {
+        if (!confirm('This will regenerate all sample JSON files with new random data. The database will not be affected. Continue?')) {
+            return;
+        }
+
+        try {
+            const btn = document.getElementById('regenerate-samples-btn');
+            btn.disabled = true;
+            btn.textContent = 'Regenerating...';
+
+            const response = await api.regenerateSampleFiles();
+            showToast(`Successfully regenerated ${response.files_regenerated} sample files`, 'success');
+
+            // Reload the datasets dropdown
+            const { samples } = await api.listSampleDatasets();
+            const select = document.getElementById('sample-dataset-select');
+            while (select.options.length > 1) {
+                select.remove(1);
+            }
+            samples.forEach(sample => {
+                const option = document.createElement('option');
+                option.value = sample.id;
+                option.textContent = `${sample.name} (${sample.matter_count} matters)`;
+                option.dataset.description = sample.description;
+                option.dataset.count = sample.matter_count;
+                select.appendChild(option);
+            });
+
+            btn.disabled = false;
+            btn.textContent = 'Regenerate All Sample Files';
+        } catch (error) {
+            showToast(`Error: ${error.message}`, 'error');
+            const btn = document.getElementById('regenerate-samples-btn');
+            btn.disabled = false;
+            btn.textContent = 'Regenerate All Sample Files';
         }
     });
 

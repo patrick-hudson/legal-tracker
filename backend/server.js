@@ -838,7 +838,15 @@ export async function createServer(options = {}) {
   fastify.get('/admin/api/data/samples', { preHandler: adminAuthMiddleware }, async (_, reply) => {
     try {
       const samplesDir = join(__dirname, 'samples');
-      const { readdirSync, statSync } = await import('fs');
+      const { readdirSync, statSync, existsSync } = await import('fs');
+
+      // If samples directory doesn't exist or is empty, return empty array
+      if (!existsSync(samplesDir)) {
+        return {
+          success: true,
+          samples: []
+        };
+      }
 
       const files = readdirSync(samplesDir)
         .filter(file => file.endsWith('.json'))
@@ -863,6 +871,13 @@ export async function createServer(options = {}) {
         samples: files
       };
     } catch (error) {
+      // If error is just "no such file or directory", return empty array
+      if (error.code === 'ENOENT') {
+        return {
+          success: true,
+          samples: []
+        };
+      }
       return reply.code(500).send({
         error: 'SERVER_ERROR',
         message: `Failed to list sample files: ${error.message}`
@@ -964,6 +979,91 @@ export async function createServer(options = {}) {
       return reply.code(500).send({
         error: 'SERVER_ERROR',
         message: `Failed to populate sample data: ${error.message}`
+      });
+    }
+  });
+
+  // Regenerate all sample JSON files
+  fastify.post('/admin/api/data/regenerate-samples', { preHandler: adminAuthMiddleware }, async (_, reply) => {
+    try {
+      const samplesDir = join(__dirname, 'samples');
+      const { writeFileSync, mkdirSync, existsSync } = await import('fs');
+
+      // Ensure samples directory exists
+      if (!existsSync(samplesDir)) {
+        mkdirSync(samplesDir, { recursive: true });
+      }
+
+      const sampleConfigs = [
+        { filename: 'small.json', name: 'Small Dataset', description: '5 sample matters for quick testing', count: 5, yearsBack: 1 },
+        { filename: 'medium.json', name: 'Medium Dataset', description: '25 sample matters spanning 2 years', count: 25, yearsBack: 2 },
+        { filename: 'large.json', name: 'Large Dataset', description: '100 sample matters spanning 5 years - tests pagination and performance', count: 100, yearsBack: 5 },
+        { filename: 'extra-large.json', name: 'Extra-Large Dataset', description: '500 sample matters spanning 10 years - stress test', count: 500, yearsBack: 10 }
+      ];
+
+      const matterTypes = [
+        { note: 'Contract review', cost: 150000 },
+        { note: 'Incorporation paperwork', cost: 250000 },
+        { note: 'Employment dispute consultation', cost: 350000 },
+        { note: 'Trademark filing', cost: 175000 },
+        { note: 'Lease agreement review', cost: 125000 },
+        { note: 'NDA drafting', cost: 75000 },
+        { note: 'Partnership agreement', cost: 450000 },
+        { note: 'IP protection consultation', cost: 300000 },
+        { note: 'Tax compliance advice', cost: 200000 },
+        { note: 'Shareholder agreement', cost: 500000 },
+        { note: 'Real estate transaction', cost: 375000 },
+        { note: 'Litigation consultation', cost: 650000 },
+        { note: 'Patent application', cost: 425000 },
+        { note: 'Merger consultation', cost: 750000 },
+        { note: 'Estate planning', cost: 275000 }
+      ];
+
+      let filesGenerated = 0;
+
+      for (const config of sampleConfigs) {
+        const matters = [];
+        const now = new Date();
+        const startDate = new Date(now);
+        startDate.setFullYear(now.getFullYear() - config.yearsBack);
+
+        for (let i = 0; i < config.count; i++) {
+          const randomDate = new Date(
+            startDate.getTime() + Math.random() * (now.getTime() - startDate.getTime())
+          );
+          const randomMatter = matterTypes[Math.floor(Math.random() * matterTypes.length)];
+
+          matters.push({
+            matter_date: randomDate.toISOString(),
+            note: randomMatter.note,
+            cost: randomMatter.cost
+          });
+        }
+
+        // Sort by date (oldest first)
+        matters.sort((a, b) => new Date(a.matter_date) - new Date(b.matter_date));
+
+        const sampleData = {
+          name: config.name,
+          description: config.description,
+          matter_count: config.count,
+          matters: matters
+        };
+
+        const filePath = join(samplesDir, config.filename);
+        writeFileSync(filePath, JSON.stringify(sampleData, null, 2));
+        filesGenerated++;
+      }
+
+      return {
+        success: true,
+        message: `Regenerated ${filesGenerated} sample files`,
+        files_regenerated: filesGenerated
+      };
+    } catch (error) {
+      return reply.code(500).send({
+        error: 'SERVER_ERROR',
+        message: `Failed to regenerate sample files: ${error.message}`
       });
     }
   });

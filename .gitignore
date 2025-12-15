@@ -25,6 +25,9 @@ backend/data/*.db-journal
 backend/data/*.sqlite
 backend/data/*.sqlite3
 
+# Sample data files (generated)
+backend/samples/*.json
+
 # Test output
 coverage/
 .nyc_output/

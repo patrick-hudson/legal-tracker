@@ -192,6 +192,13 @@ class AdminAPI {
         });
     }
 
+    async regenerateSampleFiles() {
+        return this.request('/data/regenerate-samples', {
+            method: 'POST',
+            body: JSON.stringify({})
+        });
+    }
+
     async wipeAllData(confirmation) {
         return this.request('/data/wipe', {
             method: 'POST',
