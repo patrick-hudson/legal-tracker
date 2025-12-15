@@ -1,80 +1,54 @@
-# Testing
-
-This directory contains tests for the Legal Tracker backend.
-
-## Running Tests
-
-```bash
-# Run all tests (unit + integration)
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Run only unit tests
-node --test test/unit.test.js
-
-# Run only integration tests
-node --test test/api.test.js
-```
+# Test Suite
 
 ## Test Files
 
-- **`unit.test.js`** - Unit tests for utility functions and business logic (8 tests)
-- **`api.test.js`** - Full API integration tests (10 tests)
+- `api.test.js` - API endpoint tests
+- `admin.test.js` - Admin portal and authentication tests
+- `comprehensive.test.js` - End-to-end integration tests
+- `unit.test.js` - Unit tests for utility functions
+- `validation-report.test.js` - Generates detailed validation report
 
-## Current Status
+## Validation Report
 
-✅ **Unit tests** - Fully functional, test core logic
-✅ **API integration tests** - Fully functional, test all endpoints
+The validation report (`test-validation-report.json`) is automatically generated on each CI run and provides detailed evidence of test execution.
 
-## Test Coverage
+### Viewing the Report
 
-### Unit Tests (8 tests)
-- Date calculations
-- Cost calculations
-- String parsing (floats, IP addresses)
-- Environment variable handling
+The report is available in two ways:
 
-### Integration Tests (10 tests)
-- Health check endpoint
-- Status endpoint
-- Incidents list endpoint
-- Create incident
-- Update incident
-- Delete incident
-- 404 error handling
-- Settings: update lifetime spent
-- Settings: add to lifetime spent
-- Settings: set last incident date
+1. **In Repository**: [backend/test-validation-report.json](../test-validation-report.json)
+   - Updated automatically on each push to main/master
+   - Shows the most recent validation run
 
-## How It Works
+2. **GitHub Actions Artifacts**
+   - Go to Actions tab → select a workflow run
+   - Download "validation-report" artifact
+   - Contains report for that specific run
 
-The integration tests use an in-memory SQLite database and create a fresh server instance for each test run:
+### Report Contents
 
-```javascript
-// test/api.test.js
-import { createServer } from '../server.js';
+Each validation entry includes:
+- Full HTTP request (method, URL, headers, body)
+- Full HTTP response (status, headers, body, timing)
+- Database state before and after operations
+- Step-by-step execution log with timestamps
+- Expected vs actual comparisons for all assertions
+- Individual verification for bulk operations
 
-before(async () => {
-  // Create test server with in-memory database
-  server = await createServer({
-    logger: false,           // Suppress logs
-    dbPath: ':memory:',      // Use RAM instead of disk
-    requireAuth: false       // Disable auth for tests
-  });
+### Running Locally
 
-  // Start on random port
-  await server.listen({ port: 0, host: '127.0.0.1' });
-});
-
-after(async () => {
-  await server.close();
-});
+Generate the validation report:
+```bash
+npm test -- test/validation-report.test.js
 ```
 
-This provides:
-- **Isolation** - Each test run uses a fresh database
-- **Speed** - In-memory database is very fast
-- **No side effects** - Tests don't affect production data
-- **Reliability** - No shared state between runs
+The report will be written to `backend/test-validation-report.json`.
+
+### Report Format
+
+The JSON report is log-ingest ready and includes:
+- `report_metadata` - Generation timestamp, duration, test count
+- `summary` - Pass/fail statistics
+- `validations` - Array of test results with full execution details
+
+See [VALIDATION_REPORT_SUMMARY.md](../VALIDATION_REPORT_SUMMARY.md) for detailed examples.

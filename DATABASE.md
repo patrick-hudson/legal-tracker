@@ -32,7 +32,7 @@ We switched from `better-sqlite3` to `sql.js` for these reasons:
 When using a file path, the database is loaded into memory and saved after each write operation:
 
 ```javascript
-const { settingsDb, incidentsDb } = await createDatabase('./data/tracker.db');
+const { settingsDb, mattersDb } = await createDatabase('./data/tracker.db');
 
 settingsDb.set('key', 'value');  // Automatically saves to disk
 ```
@@ -42,7 +42,7 @@ settingsDb.set('key', 'value');  // Automatically saves to disk
 For testing, use `:memory:` which never touches the disk:
 
 ```javascript
-const { settingsDb, incidentsDb } = await createDatabase(':memory:');
+const { settingsDb, mattersDb } = await createDatabase(':memory:');
 ```
 
 ## API
@@ -60,7 +60,7 @@ Creates or loads a database instance.
 {
   db,           // Raw sql.js Database instance
   settingsDb,   // Settings helper object
-  incidentsDb,  // Incidents helper object
+  mattersDb,    // Matters helper object
   saveDatabase  // Manual save function
 }
 ```
@@ -70,19 +70,19 @@ Creates or loads a database instance.
 import { createDatabase } from './db.js';
 
 // File-based
-const { settingsDb, incidentsDb } = await createDatabase('./my-data.db');
+const { settingsDb, mattersDb } = await createDatabase('./my-data.db');
 
 // In-memory
-const { settingsDb, incidentsDb } = await createDatabase(':memory:');
+const { settingsDb, mattersDb } = await createDatabase(':memory:');
 ```
 
 ## Persistence
 
 The database automatically saves to disk after every write operation:
 - `settingsDb.set()`
-- `incidentsDb.add()`
-- `incidentsDb.update()`
-- `incidentsDb.delete()`
+- `mattersDb.add()`
+- `mattersDb.update()`
+- `mattersDb.delete()`
 
 You can also manually save:
 ```javascript
@@ -118,11 +118,11 @@ CREATE TABLE settings (
 );
 ```
 
-### incidents table
+### matters table
 ```sql
-CREATE TABLE incidents (
+CREATE TABLE matters (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  incident_date DATETIME NOT NULL,
+  matter_date DATETIME NOT NULL,
   note TEXT,
   days_since INTEGER,
   cost REAL DEFAULT 0,

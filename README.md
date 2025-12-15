@@ -1,17 +1,17 @@
-# Legal Incident Tracker
+# Legal Matter Tracker
 
 A self-hosted "days since" counter for tracking how long you've gone without hiring another lawyer. Features a retro amber CRT terminal aesthetic.
 
 ```
 ╔════════════════════════════════════════════════════════════════╗
-║  LEGAL INCIDENT MONITORING SYSTEM v3.2.1                       ║
+║  LEGAL MATTER MONITORING SYSTEM v3.2.1                         ║
 ╚════════════════════════════════════════════════════════════════╝
 ```
 
 ## Features
 
 - **Day Counter** - Track days since your last legal representation agreement
-- **Incident Log** - Full history with dates, notes, and costs
+- **Matter Log** - Full history with dates, notes, and costs
 - **Money Counter** - Track lifetime legal fees (with a slowly creeping counter for emotional damage)
 - **IP-Based Auth** - Lock down write operations to your IP address
 - **Retro CRT Aesthetic** - Amber monochrome terminal vibes
@@ -178,22 +178,22 @@ sudo certbot --nginx -d lawyerfree.today
 |--------|----------|-------------|
 | GET | `/api/health` | Health check |
 | GET | `/api/status` | Current counter status, stats, and settings |
-| GET | `/api/incidents` | List all incidents |
+| GET | `/api/matters` | List all matters |
 
 ### Protected (Requires Auth)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/incidents` | Log a new incident |
-| PUT | `/api/incidents/:id` | Update an incident |
-| DELETE | `/api/incidents/:id` | Delete an incident |
+| POST | `/api/matters` | Log a new matter |
+| PUT | `/api/matters/:id` | Update a matter |
+| DELETE | `/api/matters/:id` | Delete a matter |
 | POST | `/api/settings/lifetime-spent` | Set or add to lifetime spent |
-| POST | `/api/settings/last-incident-date` | Manually set last incident date |
+| POST | `/api/settings/last-matter-date` | Manually set last matter date |
 
-### Example: Log an incident via API
+### Example: Log a matter via API
 
 ```bash
-curl -X POST http://localhost:3000/api/incidents \
+curl -X POST http://localhost:3000/api/matters \
   -H "Content-Type: application/json" \
   -H "X-API-Key: your-api-key" \
   -d '{"note": "Tax attorney", "cost": 2500}'

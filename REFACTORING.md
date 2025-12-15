@@ -20,12 +20,12 @@ This document describes the refactoring work done to enable integration testing.
 ```javascript
 // New: Configurable database creation
 export function createDatabase(dbPath = join(__dirname, 'data', 'tracker.db')) {
-  // ... creates and returns { db, settingsDb, incidentsDb }
+  // ... creates and returns { db, settingsDb, mattersDb }
 }
 
 // Backwards compatible: Default instance
 const defaultDb = createDatabase();
-export const { settingsDb, incidentsDb } = defaultDb;
+export const { settingsDb, mattersDb } = defaultDb;
 ```
 
 ### 2. Server Module ([backend/server.js](backend/server.js))
@@ -55,7 +55,7 @@ export async function createServer(options = {}) {
   } = options;
 
   // Create database instance with custom path
-  const { settingsDb, incidentsDb } = createDatabase(dbPath);
+  const { settingsDb, mattersDb } = createDatabase(dbPath);
 
   // ... setup routes ...
 
@@ -113,7 +113,7 @@ after(async () => {
 ### Integration Tests (10 tests) ✅
 - Health check endpoint
 - Status endpoint
-- Incidents CRUD operations
+- Matters CRUD operations
 - Settings updates
 - Error handling (404s)
 
@@ -146,7 +146,7 @@ npm run test:watch
 
 All changes are backwards compatible:
 
-- ✅ Existing code using `import { settingsDb, incidentsDb } from './db.js'` still works
+- ✅ Existing code using `import { settingsDb, mattersDb } from './db.js'` still works
 - ✅ Running `npm start` still starts the server normally
 - ✅ Environment variables still work as before
 - ✅ Production deployment unchanged

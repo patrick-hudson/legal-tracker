@@ -32,7 +32,7 @@ All tests are located in `backend/test/`:
 2. **API Integration Tests** (`api.test.js`) ⚠️
    - Health check endpoint
    - Status endpoint
-   - Incidents endpoint
+   - Matters endpoint
    - **Status**: Skipped by default (requires server refactoring)
 
 ### Running Integration Tests
