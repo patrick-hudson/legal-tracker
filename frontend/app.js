@@ -926,8 +926,18 @@ function render() {
           <div style="text-align: center; color: ${theme.primary}; font-size: 1.3rem; text-shadow: 0 0 15px ${theme.primaryGlow}; letter-spacing: 0.15em; font-weight: bold;">
             LEGAL MATTER v0.1.0
           </div>
-          <div style="text-align: center; color: ${theme.primaryDim}; font-size: 0.75rem; margin-top: 0.25rem; text-shadow: 0 0 8px ${theme.primaryGlow}; line-height: 1.4;">
-            Legal Expense Governance Allocation Ledger<br>Management Application for Tracking<br>Time, Expenses, Retainers
+          <div style="text-align: center; color: ${theme.primaryDim}; font-size: 0.7rem; margin-top: 0.5rem; text-shadow: 0 0 8px ${theme.primaryGlow}; line-height: 1.6; font-family: monospace;">
+            <span style="color: ${theme.primary}; font-weight: bold;">L</span>egal
+            <span style="color: ${theme.primary}; font-weight: bold;">E</span>xpense
+            <span style="color: ${theme.primary}; font-weight: bold;">G</span>overnance
+            <span style="color: ${theme.primary}; font-weight: bold;">A</span>llocation
+            <span style="color: ${theme.primary}; font-weight: bold;">L</span>edger<br>
+            <span style="color: ${theme.primary}; font-weight: bold;">M</span>anagement
+            <span style="color: ${theme.primary}; font-weight: bold;">A</span>pplication for
+            <span style="color: ${theme.primary}; font-weight: bold;">T</span>racking
+            <span style="color: ${theme.primary}; font-weight: bold;">T</span>ime,
+            <span style="color: ${theme.primary}; font-weight: bold;">E</span>xpenses,
+            <span style="color: ${theme.primary}; font-weight: bold;">R</span>etainers
           </div>
           <div style="text-align: center; color: ${theme.primaryDim}; font-size: 0.8rem; margin-top: 0.5rem; text-shadow: 0 0 8px ${theme.primaryGlow};">
             ${theme.name}
