@@ -37,6 +37,45 @@ jobs:
       working-directory: ./backend
       run: npm test
 
+    - name: Generate validation report
+      if: matrix.node-version == '20.x'
+      working-directory: ./backend
+      run: npm test -- test/validation-report.test.js
+
+    - name: Archive validation report with timestamp and commit hash
+      if: matrix.node-version == '20.x' && github.event_name == 'push'
+      run: |
+        mkdir -p backend/test/validation-reports
+        TIMESTAMP=$(date -u +"%Y%m%d-%H%M%S")
+        COMMIT_HASH=$(git rev-parse --short HEAD)
+        FILENAME="validation-report-${TIMESTAMP}-${COMMIT_HASH}.json"
+        cp backend/test-validation-report.json "backend/test/validation-reports/${FILENAME}"
+        echo "Generated report: ${FILENAME}"
+        ls -lh backend/test/validation-reports/
+
+    - name: Commit validation report
+      if: matrix.node-version == '20.x' && github.event_name == 'push'
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git add backend/test/validation-reports/
+        git diff --staged --quiet || git commit -m "Add validation report for commit $(git rev-parse --short HEAD) [skip ci]"
+
+    - name: Push validation report
+      if: matrix.node-version == '20.x' && github.event_name == 'push'
+      uses: ad-m/github-push-action@master
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        branch: ${{ github.ref }}
+
+    - name: Upload validation report as artifact
+      if: matrix.node-version == '20.x'
+      uses: actions/upload-artifact@v4
+      with:
+        name: validation-report-${{ github.sha }}
+        path: backend/test-validation-report.json
+        retention-days: 30
+
     - name: Build check
       working-directory: ./backend
       run: npm run build --if-present
