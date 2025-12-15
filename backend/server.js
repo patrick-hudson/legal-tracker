@@ -861,9 +861,19 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const API_KEY = process.env.API_KEY || null;
     const REQUIRE_AUTH = process.env.REQUIRE_AUTH === 'true';
 
-    console.log(`
+    // Read version from VERSION file
+  const versionPath = join(__dirname, '..', 'VERSION');
+  let version = '0.1.0';
+  try {
+    version = readFileSync(versionPath, 'utf8').trim();
+  } catch (err) {
+    // Ignore if VERSION file doesn't exist
+  }
+
+  console.log(`
 ╔════════════════════════════════════════════════════════════════╗
-║  LEGAL MATTER TRACKER - SERVER ONLINE                          ║
+║  LEGAL MATTER v${version.padEnd(48)} ║
+║  SERVER ONLINE                                                 ║
 ╚════════════════════════════════════════════════════════════════╝
 
   → Local:    http://localhost:${PORT}
