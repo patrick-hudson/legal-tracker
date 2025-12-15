@@ -58,20 +58,52 @@ jobs:
         echo "Generated reports: ${JSON_FILENAME} and ${MD_FILENAME}"
         ls -lh backend/test/validation-reports/
 
-    - name: Commit validation report
+    - name: Determine version bump type
+      if: matrix.node-version == '20.x' && github.event_name == 'push'
+      id: version_type
+      run: |
+        COMMIT_MSG=$(git log -1 --pretty=%B)
+        if echo "$COMMIT_MSG" | grep -qi "\[MAJOR\]"; then
+          echo "type=major" >> $GITHUB_OUTPUT
+        elif echo "$COMMIT_MSG" | grep -qi "\[MINOR\]"; then
+          echo "type=minor" >> $GITHUB_OUTPUT
+        else
+          echo "type=patch" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Update version
+      if: matrix.node-version == '20.x' && github.event_name == 'push'
+      working-directory: ./backend
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        node scripts/update-version.js ${{ steps.version_type.outputs.type }}
+        NEW_VERSION=$(cat ../VERSION)
+        echo "Updated to version $NEW_VERSION"
+
+    - name: Commit validation report and version bump
       if: matrix.node-version == '20.x' && github.event_name == 'push'
       run: |
         git config --local user.email "github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions[bot]"
         git add -f backend/test/validation-reports/
-        git diff --staged --quiet || git commit -m "Add validation report for commit $(git rev-parse --short HEAD) [skip ci]"
+        git add VERSION README.md backend/package.json frontend/app.js
+        NEW_VERSION=$(cat VERSION)
+        git diff --staged --quiet || git commit -m "Release version $NEW_VERSION and add validation report [skip ci]"
 
-    - name: Push validation report
+    - name: Create version tag
+      if: matrix.node-version == '20.x' && github.event_name == 'push'
+      run: |
+        NEW_VERSION=$(cat VERSION)
+        git tag "v$NEW_VERSION" || echo "Tag already exists"
+
+    - name: Push changes and tags
       if: matrix.node-version == '20.x' && github.event_name == 'push'
       uses: ad-m/github-push-action@master
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         branch: ${{ github.ref }}
+        tags: true
 
     - name: Upload validation report as artifact
       if: matrix.node-version == '20.x'

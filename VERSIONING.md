@@ -8,9 +8,35 @@ LEGAL MATTER uses semantic versioning (MAJOR.MINOR.PATCH) to track releases.
 - **MINOR** (0.X.0) - New features, backwards-compatible functionality
 - **PATCH** (0.0.X) - Bug fixes, backwards-compatible fixes
 
-## How to Update Version
+## Automated Versioning via CI
 
-Use the npm scripts to update version numbers across all files automatically:
+The CI workflow automatically increments the version on every push to main:
+
+- **Default**: PATCH version is incremented (0.1.0 → 0.1.1)
+- **MINOR**: Include `[MINOR]` in commit message (0.1.0 → 0.2.0)
+- **MAJOR**: Include `[MAJOR]` in commit message (0.1.0 → 1.0.0)
+
+Examples:
+```bash
+git commit -m "Fix authentication bug"
+# Results in patch increment: 0.1.0 → 0.1.1
+
+git commit -m "[MINOR] Add new dashboard analytics"
+# Results in minor increment: 0.1.0 → 0.2.0
+
+git commit -m "[MAJOR] Redesign API endpoints"
+# Results in major increment: 0.1.0 → 1.0.0
+```
+
+The CI workflow will:
+1. Detect the version bump type from the commit message
+2. Update VERSION file and all references
+3. Create a git tag (e.g., v0.1.1)
+4. Commit and push the changes with `[skip ci]` to prevent loops
+
+## Manual Version Updates (Optional)
+
+If you need to manually update the version without CI:
 
 ```bash
 cd backend
@@ -25,6 +51,14 @@ npm run version:minor    # 0.1.0 -> 0.2.0
 npm run version:major    # 0.1.0 -> 1.0.0
 ```
 
+Then commit and push:
+```bash
+git add -A
+git commit -m "Release version X.Y.Z [skip ci]"
+git tag vX.Y.Z
+git push && git push --tags
+```
+
 ## What Gets Updated
 
 The version script automatically updates:
@@ -33,22 +67,6 @@ The version script automatically updates:
 2. `backend/package.json` version field
 3. `README.md` header banner
 4. `frontend/app.js` display version
-
-## Release Process
-
-1. Make your changes and test thoroughly
-2. Update version based on change type:
-   ```bash
-   npm run version:patch  # or minor/major
-   ```
-3. Review the changes
-4. Commit and tag:
-   ```bash
-   git add -A
-   git commit -m "Release version X.Y.Z"
-   git tag vX.Y.Z
-   git push && git push --tags
-   ```
 
 ## Current Version
 
