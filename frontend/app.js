@@ -341,24 +341,24 @@ function render() {
       
       <!-- Header -->
       <div style="border-bottom: 1px solid ${theme.primaryDim}; padding-bottom: 1rem; margin-bottom: 2rem;">
-        <div style="color: ${theme.primary}; font-size: 0.9rem; letter-spacing: 0.1em; text-shadow: 0 0 10px ${theme.primaryGlow};">
+        <div style="color: ${theme.primary}; font-size: 1.2rem; letter-spacing: 0.1em; text-shadow: 0 0 10px ${theme.primaryGlow};">
           ╔════════════════════════════════════════════════════════════════╗
         </div>
-        <div style="color: ${theme.primary}; font-size: 0.9rem; padding: 0.5rem 0; text-shadow: 0 0 10px ${theme.primaryGlow}; letter-spacing: 0.1em;">
+        <div style="color: ${theme.primary}; font-size: 1.2rem; padding: 0.5rem 0; text-shadow: 0 0 10px ${theme.primaryGlow}; letter-spacing: 0.1em;">
           ║  LEGAL INCIDENT MONITORING SYSTEM v3.2.1 • ${theme.name}              ║
         </div>
-        <div style="color: ${theme.primary}; font-size: 0.9rem; letter-spacing: 0.1em; text-shadow: 0 0 10px ${theme.primaryGlow};">
+        <div style="color: ${theme.primary}; font-size: 1.2rem; letter-spacing: 0.1em; text-shadow: 0 0 10px ${theme.primaryGlow};">
           ╚════════════════════════════════════════════════════════════════╝
         </div>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
-          <span style="color: ${theme.primaryDim}; font-size: 0.8rem; letter-spacing: 0.05em;">
+          <span style="color: ${theme.primaryDim}; font-size: 1rem; letter-spacing: 0.05em;">
             ${state.sessionMessage}
           </span>
           <div style="display: flex; align-items: center; gap: 1rem;">
-            <button onclick="toggleThemePicker()" style="background: transparent; border: 1px solid ${theme.primaryDim}; color: ${theme.primaryDim}; padding: 0.25rem 0.5rem; font-size: 0.7rem; cursor: pointer; font-family: inherit;">
+            <button onclick="toggleThemePicker()" style="background: transparent; border: 1px solid ${theme.primaryDim}; color: ${theme.primaryDim}; padding: 0.4rem 0.8rem; font-size: 0.9rem; cursor: pointer; font-family: inherit;">
               THEME
             </button>
-            <span style="color: ${state.isAuthorized ? theme.success : theme.danger}; font-size: 0.8rem; text-shadow: 0 0 8px ${state.isAuthorized ? theme.success : theme.danger};">
+            <span style="color: ${state.isAuthorized ? theme.success : theme.danger}; font-size: 1rem; text-shadow: 0 0 8px ${state.isAuthorized ? theme.success : theme.danger};">
               ${state.isAuthorized ? '● AUTHORIZED' : '● READ-ONLY MODE'}
             </span>
           </div>
@@ -400,15 +400,15 @@ function render() {
 
       <!-- Status Line -->
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; padding: 0.75rem 1rem; background: ${theme.primary}11; border: 1px solid ${theme.primaryDim};">
-        <span style="color: ${theme.primaryDim}; font-size: 0.85rem;">STATUS:</span>
-        <span class="${state.daysSince < 7 ? 'blink' : ''}" style="color: ${statusColor}; font-size: 0.85rem; text-shadow: 0 0 10px ${statusGlow};">
+        <span style="color: ${theme.primaryDim}; font-size: 1.1rem;">STATUS:</span>
+        <span class="${state.daysSince < 7 ? 'blink' : ''}" style="color: ${statusColor}; font-size: 1.1rem; text-shadow: 0 0 10px ${statusGlow};">
           [${getStatusText()}]
         </span>
       </div>
 
       <!-- Main Display -->
       <div style="background: rgba(0,0,0,0.4); border: 2px solid ${theme.primary}; padding: 2rem; margin-bottom: 2rem; box-shadow: 0 0 30px ${theme.primary}22, inset 0 0 60px rgba(0,0,0,0.5);">
-        <p style="color: ${theme.primaryDim}; font-size: 1rem; margin: 0 0 1.5rem 0; letter-spacing: 0.1em;">
+        <p style="color: ${theme.primaryDim}; font-size: 1.3rem; margin: 0 0 1.5rem 0; letter-spacing: 0.1em;">
           &gt; DAYS SINCE LAST LEGAL REPRESENTATION AGREEMENT:
         </p>
         <div style="text-align: center; padding: 2rem 0;">
@@ -416,7 +416,7 @@ function render() {
             ${String(state.daysSince).padStart(2, '0')}
           </span>
         </div>
-        <p style="color: ${theme.primaryDim}; font-size: 0.9rem; margin: 1rem 0 0 0; text-align: center;">
+        <p style="color: ${theme.primaryDim}; font-size: 1.1rem; margin: 1rem 0 0 0; text-align: center;">
           LAST INCIDENT: ${formatDateLong(state.lastIncidentDate)}
         </p>
       </div>
@@ -424,13 +424,13 @@ function render() {
       <!-- Money Counter -->
       <div style="background: ${theme.dangerBg}; border: 1px solid ${theme.dangerDim}; padding: 1.25rem 1.5rem; margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
         <div>
-          <p style="color: ${theme.danger}; font-size: 0.7rem; margin: 0; letter-spacing: 0.15em;">LIFETIME_LEGAL_FEES:</p>
-          <p style="color: ${theme.danger}; font-size: 2.5rem; margin: 0.25rem 0 0 0; text-shadow: 0 0 20px ${theme.danger}; letter-spacing: 0.05em;">
+          <p style="color: ${theme.danger}; font-size: 0.95rem; margin: 0; letter-spacing: 0.15em;">LIFETIME_LEGAL_FEES:</p>
+          <p style="color: ${theme.danger}; font-size: 3rem; margin: 0.25rem 0 0 0; text-shadow: 0 0 20px ${theme.danger}; letter-spacing: 0.05em;">
             $${state.displayedSpent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
-          ${DRAIN_ENABLED ? `<p style="color: ${theme.dangerDim}; font-size: 0.7rem; margin: 0.25rem 0 0 0;">+$${DRAIN_RATE.toFixed(2)}/sec (it never really stops)</p>` : ''}
+          ${DRAIN_ENABLED ? `<p style="color: ${theme.dangerDim}; font-size: 0.9rem; margin: 0.25rem 0 0 0;">+$${DRAIN_RATE.toFixed(2)}/sec (it never really stops)</p>` : ''}
         </div>
-        <button onclick="toggleMoneySettings()" style="background: transparent; border: 1px solid ${theme.dangerDim}; color: ${theme.danger}; padding: 0.5rem 1rem; font-size: 0.8rem; cursor: pointer; font-family: inherit;">
+        <button onclick="toggleMoneySettings()" style="background: transparent; border: 1px solid ${theme.dangerDim}; color: ${theme.danger}; padding: 0.6rem 1.2rem; font-size: 1rem; cursor: pointer; font-family: inherit;">
           ${state.showMoneySettings ? 'CLOSE' : 'EDIT'}
         </button>
       </div>
@@ -457,28 +457,28 @@ function render() {
       <!-- Stats -->
       <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 2rem;">
         <div style="background: rgba(0,0,0,0.3); border: 1px solid ${theme.primaryDim}; padding: 1rem; text-align: center;">
-          <p style="color: ${theme.primaryDim}; font-size: 0.7rem; margin: 0;">RECORD_MAX</p>
-          <p style="color: ${theme.primary}; font-size: 1.8rem; margin: 0.5rem 0 0 0; text-shadow: 0 0 10px ${theme.primaryGlow};">${state.stats.max_streak}</p>
+          <p style="color: ${theme.primaryDim}; font-size: 0.9rem; margin: 0;">RECORD_MAX</p>
+          <p style="color: ${theme.primary}; font-size: 2.2rem; margin: 0.5rem 0 0 0; text-shadow: 0 0 10px ${theme.primaryGlow};">${state.stats.max_streak}</p>
         </div>
         <div style="background: rgba(0,0,0,0.3); border: 1px solid ${theme.primaryDim}; padding: 1rem; text-align: center;">
-          <p style="color: ${theme.primaryDim}; font-size: 0.7rem; margin: 0;">COUNT_YTD</p>
-          <p style="color: ${theme.danger}; font-size: 1.8rem; margin: 0.5rem 0 0 0; text-shadow: 0 0 10px ${theme.danger};">${String(state.stats.incidents_this_year).padStart(2, '0')}</p>
+          <p style="color: ${theme.primaryDim}; font-size: 0.9rem; margin: 0;">COUNT_YTD</p>
+          <p style="color: ${theme.danger}; font-size: 2.2rem; margin: 0.5rem 0 0 0; text-shadow: 0 0 10px ${theme.danger};">${String(state.stats.incidents_this_year).padStart(2, '0')}</p>
         </div>
         <div style="background: rgba(0,0,0,0.3); border: 1px solid ${theme.primaryDim}; padding: 1rem; text-align: center;">
-          <p style="color: ${theme.primaryDim}; font-size: 0.7rem; margin: 0;">LIFETIME</p>
-          <p style="color: ${theme.primary}; font-size: 1.8rem; margin: 0.5rem 0 0 0; opacity: 0.7;">${String(state.stats.total_incidents).padStart(2, '0')}</p>
+          <p style="color: ${theme.primaryDim}; font-size: 0.9rem; margin: 0;">LIFETIME</p>
+          <p style="color: ${theme.primary}; font-size: 2.2rem; margin: 0.5rem 0 0 0; opacity: 0.7;">${String(state.stats.total_incidents).padStart(2, '0')}</p>
         </div>
       </div>
 
       <!-- Action Buttons -->
       <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
-        <button onclick="toggleDatePicker()" style="flex: 1; min-width: 150px; padding: 0.75rem 1.5rem; background: transparent; border: 1px solid ${theme.primaryDim}; color: ${theme.primaryDim}; font-size: 0.9rem; cursor: pointer; font-family: inherit;">
+        <button onclick="toggleDatePicker()" style="flex: 1; min-width: 150px; padding: 0.9rem 1.5rem; background: transparent; border: 1px solid ${theme.primaryDim}; color: ${theme.primaryDim}; font-size: 1.05rem; cursor: pointer; font-family: inherit;">
           &gt; ${state.showDatePicker ? 'CANCEL' : 'SET_DATE_MANUAL'}
         </button>
-        <button onclick="toggleLog()" style="flex: 1; min-width: 150px; padding: 0.75rem 1.5rem; background: transparent; border: 1px solid ${theme.primaryDim}; color: ${theme.primaryDim}; font-size: 0.9rem; cursor: pointer; font-family: inherit;">
+        <button onclick="toggleLog()" style="flex: 1; min-width: 150px; padding: 0.9rem 1.5rem; background: transparent; border: 1px solid ${theme.primaryDim}; color: ${theme.primaryDim}; font-size: 1.05rem; cursor: pointer; font-family: inherit;">
           &gt; ${state.showLog ? 'HIDE_LOG' : 'VIEW_LOG'} (${state.incidents.length})
         </button>
-        <button onclick="quickLogIncident()" style="flex: 1; min-width: 200px; padding: 0.75rem 1.5rem; background: ${theme.dangerBg}; border: 1px solid ${theme.danger}; color: ${theme.danger}; font-size: 0.9rem; cursor: pointer; font-family: inherit; text-shadow: 0 0 10px ${theme.danger};">
+        <button onclick="quickLogIncident()" style="flex: 1; min-width: 200px; padding: 0.9rem 1.5rem; background: ${theme.dangerBg}; border: 1px solid ${theme.danger}; color: ${theme.danger}; font-size: 1.05rem; cursor: pointer; font-family: inherit; text-shadow: 0 0 10px ${theme.danger};">
           &gt; LOG_INCIDENT_NOW
         </button>
       </div>
