@@ -34,6 +34,34 @@ describe('Unit Tests', () => {
 
       assert.strictEqual(total, 0);
     });
+
+    it('should convert dollars to cents correctly', () => {
+      const dollars = 123.45;
+      const cents = Math.round(dollars * 100);
+
+      assert.strictEqual(cents, 12345);
+    });
+
+    it('should convert cents to dollars correctly', () => {
+      const cents = 12345;
+      const dollars = cents / 100;
+
+      assert.strictEqual(dollars, 123.45);
+    });
+
+    it('should handle decimal precision', () => {
+      const testCases = [
+        { dollars: 200.50, cents: 20050 },
+        { dollars: 2300.00, cents: 230000 },
+        { dollars: 99.99, cents: 9999 },
+        { dollars: 2327.87, cents: 232787 }
+      ];
+
+      testCases.forEach(({ dollars, cents }) => {
+        assert.strictEqual(Math.round(dollars * 100), cents);
+        assert.strictEqual(cents / 100, dollars);
+      });
+    });
   });
 
   describe('String parsing', () => {

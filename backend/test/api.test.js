@@ -44,28 +44,28 @@ describe('Legal Tracker API Integration Tests', () => {
       assert.ok(typeof data.days_since === 'number');
       assert.ok(typeof data.lifetime_spent === 'number');
       assert.ok(data.stats);
-      assert.ok(typeof data.stats.total_incidents === 'number');
+      assert.ok(typeof data.stats.total_matters === 'number');
       assert.strictEqual(data.auth_required, false);
     });
   });
 
-  describe('Incidents Endpoint', () => {
-    it('should return incidents list', async () => {
-      const response = await fetch(`${baseURL}/api/incidents`);
+  describe('Matters Endpoint', () => {
+    it('should return matters list', async () => {
+      const response = await fetch(`${baseURL}/api/matters`);
       const data = await response.json();
 
       assert.strictEqual(response.status, 200);
       assert.ok(Array.isArray(data));
     });
 
-    it('should create a new incident', async () => {
-      const response = await fetch(`${baseURL}/api/incidents`, {
+    it('should create a new matter', async () => {
+      const response = await fetch(`${baseURL}/api/matters`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          note: 'Test incident',
+          note: 'Test matter',
           cost: 100
         })
       });
@@ -76,31 +76,31 @@ describe('Legal Tracker API Integration Tests', () => {
       assert.ok(data.id);
     });
 
-    it('should retrieve created incident', async () => {
-      const response = await fetch(`${baseURL}/api/incidents`);
+    it('should retrieve created matter', async () => {
+      const response = await fetch(`${baseURL}/api/matters`);
       const data = await response.json();
 
       assert.strictEqual(response.status, 200);
       assert.ok(Array.isArray(data));
       assert.ok(data.length > 0);
-      assert.strictEqual(data[0].note, 'Test incident');
+      assert.strictEqual(data[0].note, 'Test matter');
       assert.strictEqual(data[0].cost, 100);
     });
 
-    it('should update an incident', async () => {
-      // Get the first incident
-      const listResponse = await fetch(`${baseURL}/api/incidents`);
-      const incidents = await listResponse.json();
-      const incidentId = incidents[0].id;
+    it('should update a matter', async () => {
+      // Get the first matter
+      const listResponse = await fetch(`${baseURL}/api/matters`);
+      const matters = await listResponse.json();
+      const matterId = matters[0].id;
 
       // Update it
-      const response = await fetch(`${baseURL}/api/incidents/${incidentId}`, {
+      const response = await fetch(`${baseURL}/api/matters/${matterId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          note: 'Updated incident',
+          note: 'Updated matter',
           cost: 200
         })
       });
@@ -110,14 +110,14 @@ describe('Legal Tracker API Integration Tests', () => {
       assert.strictEqual(data.success, true);
     });
 
-    it('should delete an incident', async () => {
-      // Get the first incident
-      const listResponse = await fetch(`${baseURL}/api/incidents`);
-      const incidents = await listResponse.json();
-      const incidentId = incidents[0].id;
+    it('should delete a matter', async () => {
+      // Get the first matter
+      const listResponse = await fetch(`${baseURL}/api/matters`);
+      const matters = await listResponse.json();
+      const matterId = matters[0].id;
 
       // Delete it
-      const response = await fetch(`${baseURL}/api/incidents/${incidentId}`, {
+      const response = await fetch(`${baseURL}/api/matters/${matterId}`, {
         method: 'DELETE'
       });
       const data = await response.json();
@@ -126,8 +126,8 @@ describe('Legal Tracker API Integration Tests', () => {
       assert.strictEqual(data.success, true);
     });
 
-    it('should return 404 for non-existent incident', async () => {
-      const response = await fetch(`${baseURL}/api/incidents/99999`, {
+    it('should return 404 for non-existent matter', async () => {
+      const response = await fetch(`${baseURL}/api/matters/99999`, {
         method: 'DELETE'
       });
       const data = await response.json();
@@ -173,9 +173,9 @@ describe('Legal Tracker API Integration Tests', () => {
       assert.strictEqual(data.lifetime_spent, 1500);
     });
 
-    it('should set last incident date', async () => {
+    it('should set last matter date', async () => {
       const testDate = '2024-01-01T00:00:00.000Z';
-      const response = await fetch(`${baseURL}/api/settings/last-incident-date`, {
+      const response = await fetch(`${baseURL}/api/settings/last-matter-date`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -188,7 +188,61 @@ describe('Legal Tracker API Integration Tests', () => {
 
       assert.strictEqual(response.status, 200);
       assert.strictEqual(data.success, true);
-      assert.ok(data.last_incident_date.includes('2024-01-01'));
+      assert.ok(data.last_matter_date.includes('2024-01-01'));
+    });
+  });
+
+  describe('Dollar/Cent Conversion', () => {
+    it('should handle decimal cents correctly (200.50)', async () => {
+      // Create matter with $200.50
+      const createResponse = await fetch(`${baseURL}/api/matters`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: 'Decimal test', cost: 200.50 })
+      });
+      const createData = await createResponse.json();
+      assert.strictEqual(createResponse.status, 201);
+
+      // Verify it returns exactly 200.50
+      const listResponse = await fetch(`${baseURL}/api/matters`);
+      const matters = await listResponse.json();
+      const matter = matters.find(i => i.id === createData.id);
+
+      assert.strictEqual(matter.cost, 200.50);
+    });
+
+    it('should handle whole dollars correctly (2300.00)', async () => {
+      // Create matter with $2300.00
+      const createResponse = await fetch(`${baseURL}/api/matters`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: 'Whole dollars test', cost: 2300 })
+      });
+      const createData = await createResponse.json();
+
+      // Verify it returns exactly 2300.00
+      const listResponse = await fetch(`${baseURL}/api/matters`);
+      const matters = await listResponse.json();
+      const matter = matters.find(i => i.id === createData.id);
+
+      assert.strictEqual(matter.cost, 2300);
+    });
+
+    it('should handle complex decimals (2327.87)', async () => {
+      // Create matter with $2327.87
+      const createResponse = await fetch(`${baseURL}/api/matters`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: 'Complex decimal test', cost: 2327.87 })
+      });
+      const createData = await createResponse.json();
+
+      // Verify exact precision
+      const listResponse = await fetch(`${baseURL}/api/matters`);
+      const matters = await listResponse.json();
+      const matter = matters.find(i => i.id === createData.id);
+
+      assert.strictEqual(matter.cost, 2327.87);
     });
   });
 });
