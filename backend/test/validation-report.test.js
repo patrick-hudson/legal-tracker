@@ -4,6 +4,11 @@ import { createServer } from '../server.js';
 import crypto from 'crypto';
 import { hashPassword } from '../auth.js';
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * Test Validation Report Generator
@@ -856,7 +861,7 @@ describe('Validation Report Generator', () => {
     };
 
     // Write to file
-    const reportPath = '/Users/patrick/work/random/legal-tracker/backend/test-validation-report.json';
+    const reportPath = path.join(__dirname, '..', 'test-validation-report.json');
     fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
 
     console.log('\n' + '='.repeat(80));
