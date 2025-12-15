@@ -1,13 +1,21 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
+import fastifyJWT from '@fastify/jwt';
+import fastifyCookie from '@fastify/cookie';
 import { createDatabase } from './db.js';
+import { hashPassword, verifyPassword, generateTokenId, generateApiKey, createAdminAuthMiddleware, getTokenExpiration } from './auth.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import 'dotenv/config';
+import { readFileSync } from 'fs';
+import dotenv from 'dotenv';
 
+// Initialize __filename and __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Load environment variables from .env file in backend directory
+dotenv.config({ path: join(__dirname, '.env') });
 
 /**
  * Create and configure a Fastify server instance
@@ -30,7 +38,7 @@ export async function createServer(options = {}) {
   } = options;
 
   // Create database instance
-  const { settingsDb, incidentsDb } = await createDatabase(dbPath);
+  const { settingsDb, mattersDb, adminUsersDb, adminSessionsDb } = await createDatabase(dbPath);
 
   const fastify = Fastify({
     logger,
@@ -41,17 +49,34 @@ export async function createServer(options = {}) {
   const ALLOWED_IPS = allowedIPs;
   const API_KEY = apiKey;
   const REQUIRE_AUTH = requireAuth;
+  const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret-in-production-' + Math.random();
+  const PASSWORD_SALT = process.env.PASSWORD_SALT || 'legal-tracker-default-CHANGE-THIS';
+  const COOKIE_SECURE = process.env.NODE_ENV === 'production' && process.env.COOKIE_SECURE !== 'false';
+
+  // JWT authentication
+  await fastify.register(fastifyJWT, {
+    secret: JWT_SECRET,
+    cookie: {
+      cookieName: 'admin_token',
+      signed: false
+    }
+  });
+
+  // Cookie support
+  await fastify.register(fastifyCookie);
 
   // CORS setup
   await fastify.register(cors, {
     origin: corsOrigin,
+    credentials: true, // Important for cookies
     methods: ['GET', 'POST', 'PUT', 'DELETE']
   });
 
   // Serve frontend static files
   await fastify.register(fastifyStatic, {
     root: join(__dirname, '..', 'frontend'),
-    prefix: '/'
+    prefix: '/',
+    decorateReply: false
   });
 
   // Helper to get client IP
@@ -107,23 +132,48 @@ export async function createServer(options = {}) {
     return { status: 'ok', timestamp: new Date().toISOString() };
   });
 
+  // Get client configuration (including password salt for hashing)
+  fastify.get('/api/config', async () => {
+    return {
+      passwordSalt: PASSWORD_SALT,
+      requireAuth: REQUIRE_AUTH
+    };
+  });
+
   // Get current status (main dashboard data)
   fastify.get('/api/status', async (request) => {
     const settings = settingsDb.getAll();
-    const stats = incidentsDb.getStats();
-    const incidents = incidentsDb.getAll();
+    const stats = mattersDb.getStats();
+    const matters = mattersDb.getAll();
 
-    const lastIncidentDate = new Date(settings.last_incident_date || Date.now());
+    const lastMatterDate = new Date(settings.last_matter_date || Date.now());
     const now = new Date();
-    const daysSince = Math.floor((now - lastIncidentDate) / (1000 * 60 * 60 * 24));
+    const daysSince = Math.floor((now - lastMatterDate) / (1000 * 60 * 60 * 24));
+
+    // Calculate accumulated drain since drain_start_time
+    const drainEnabled = settings.drain_enabled === 'true';
+    const drainRateCents = parseInt(settings.drain_rate_cents || '50');
+    const drainRateDollars = drainRateCents / 100; // Convert cents to dollars
+    // lifetime_spent is stored in cents, convert to dollars
+    const baseSpentCents = parseFloat(settings.lifetime_spent || '0');
+    const baseSpent = baseSpentCents / 100; // Convert to dollars
+    const drainStartTime = new Date(settings.drain_start_time || Date.now());
+    const secondsElapsed = Math.floor((now - drainStartTime) / 1000);
+    const accumulatedDrain = drainEnabled ? secondsElapsed * drainRateDollars : 0;
+    const totalSpent = baseSpent + accumulatedDrain;
 
     return {
       days_since: daysSince,
-      last_incident_date: settings.last_incident_date,
-      lifetime_spent: parseFloat(settings.lifetime_spent || '0'),
+      last_matter_date: settings.last_matter_date,
+      lifetime_spent: baseSpent,
+      accumulated_drain: accumulatedDrain,
+      total_spent: totalSpent,
+      drain_start_time: settings.drain_start_time,
+      drain_enabled: drainEnabled,
+      drain_rate_cents: drainRateCents,
       stats: {
-        total_incidents: stats.total,
-        incidents_this_year: stats.thisYear,
+        total_matters: stats.total,
+        matters_this_year: stats.thisYear,
         max_streak: Math.max(stats.maxStreak, daysSince)
       },
       your_ip: getClientIP(request),
@@ -131,88 +181,104 @@ export async function createServer(options = {}) {
     };
   });
 
-  // Get all incidents
-  fastify.get('/api/incidents', async () => {
-    return incidentsDb.getAll();
+  // Get all matters
+  fastify.get('/api/matters', async () => {
+    const matters = mattersDb.getAll();
+    // Convert cost from cents to dollars for output
+    return matters.map(inc => ({
+      ...inc,
+      cost: inc.cost / 100 // Convert cents to dollars
+    }));
   });
 
   // ============ PROTECTED ROUTES (Write operations) ============
 
-  // Log new incident (reset counter)
-  fastify.post('/api/incidents', { preHandler: authMiddleware }, async (request, reply) => {
-    const { incident_date, note, cost } = request.body || {};
+  // Log new matter (reset counter)
+  fastify.post('/api/matters', { preHandler: authMiddleware }, async (request, reply) => {
+    const { matter_date, note, cost } = request.body || {};
 
-    // Calculate days since last incident
+    // Calculate days since last matter
     const settings = settingsDb.getAll();
-    const lastIncidentDate = new Date(settings.last_incident_date || Date.now());
-    const incidentDateObj = new Date(incident_date || Date.now());
-    const daysSince = Math.floor((incidentDateObj - lastIncidentDate) / (1000 * 60 * 60 * 24));
+    const lastMatterDate = new Date(settings.last_matter_date || Date.now());
+    const matterDateObj = new Date(matter_date || Date.now());
+    const daysSince = Math.floor((matterDateObj - lastMatterDate) / (1000 * 60 * 60 * 24));
 
-    // Add incident to log
-    const result = incidentsDb.add(
-      incidentDateObj.toISOString(),
+    // Cost comes in as dollars - convert to cents for storage
+    const costDollars = parseFloat(cost) || 0;
+    const costCents = Math.round(costDollars * 100);
+
+    // Add matter to log
+    const result = mattersDb.add(
+      matterDateObj.toISOString(),
       note || 'No details provided',
       Math.max(0, daysSince),
-      parseFloat(cost) || 0
+      costCents
     );
 
-    // Update last incident date
-    settingsDb.set('last_incident_date', incidentDateObj.toISOString());
+    // Update last matter date
+    settingsDb.set('last_matter_date', matterDateObj.toISOString());
 
-    // Add cost to lifetime spent if provided
-    if (cost) {
-      const currentSpent = parseFloat(settings.lifetime_spent || '0');
-      settingsDb.set('lifetime_spent', currentSpent + parseFloat(cost));
+    // Add cost to lifetime spent if provided (stored in cents)
+    if (costCents) {
+      const currentSpentCents = parseFloat(settings.lifetime_spent || '0');
+      settingsDb.set('lifetime_spent', currentSpentCents + costCents);
     }
 
     reply.code(201);
     return {
       success: true,
       id: result.id,
-      message: 'Incident logged. The counter has been reset. We believe in you.'
+      message: 'Matter logged. The counter has been reset. We believe in you.'
     };
   });
 
-  // Update an incident
-  fastify.put('/api/incidents/:id', { preHandler: authMiddleware }, async (request, reply) => {
+  // Update a matter
+  fastify.put('/api/matters/:id', { preHandler: authMiddleware }, async (request, reply) => {
     const { id } = request.params;
-    const { incident_date, note, cost } = request.body || {};
+    const { matter_date, note, cost } = request.body || {};
 
-    const existing = incidentsDb.getById(id);
+    const existing = mattersDb.getById(id);
     if (!existing) {
       reply.code(404);
-      return { error: 'NOT_FOUND', message: 'Incident not found' };
+      return { error: 'NOT_FOUND', message: 'Matter not found' };
     }
 
-    incidentsDb.update(
+    // Cost comes in as dollars - convert to cents for storage
+    let costCents = existing.cost;
+    if (cost !== undefined) {
+      const costDollars = parseFloat(cost);
+      costCents = Math.round(costDollars * 100);
+    }
+
+    mattersDb.update(
       id,
-      incident_date || existing.incident_date,
+      matter_date || existing.matter_date,
       note || existing.note,
-      cost !== undefined ? parseFloat(cost) : existing.cost
+      costCents
     );
 
-    return { success: true, message: 'Incident updated' };
+    return { success: true, message: 'Matter updated' };
   });
 
-  // Delete an incident
-  fastify.delete('/api/incidents/:id', { preHandler: authMiddleware }, async (request, reply) => {
+  // Delete a matter
+  fastify.delete('/api/matters/:id', { preHandler: authMiddleware }, async (request, reply) => {
     const { id } = request.params;
 
-    const existing = incidentsDb.getById(id);
+    const existing = mattersDb.getById(id);
     if (!existing) {
       reply.code(404);
-      return { error: 'NOT_FOUND', message: 'Incident not found' };
+      return { error: 'NOT_FOUND', message: 'Matter not found' };
     }
 
-    incidentsDb.delete(id);
+    mattersDb.delete(id);
 
-    // Recalculate last incident date from remaining incidents
-    const incidents = incidentsDb.getAll();
-    if (incidents.length > 0) {
-      settingsDb.set('last_incident_date', incidents[0].incident_date);
+    // Recalculate last matter date from remaining matters
+    const matters = mattersDb.getAll();
+    if (matters.length > 0) {
+      settingsDb.set('last_matter_date', matters[0].matter_date);
     }
 
-    return { success: true, message: 'Incident deleted' };
+    return { success: true, message: 'Matter deleted' };
   });
 
   // Update lifetime spent
@@ -226,24 +292,555 @@ export async function createServer(options = {}) {
       settingsDb.set('lifetime_spent', parseFloat(amount) || 0);
     }
 
+    // Reset drain start time when manually updating the amount
+    settingsDb.set('drain_start_time', new Date().toISOString());
+
     return {
       success: true,
       lifetime_spent: parseFloat(settingsDb.get('lifetime_spent'))
     };
   });
 
-  // Set last incident date manually
-  fastify.post('/api/settings/last-incident-date', { preHandler: authMiddleware }, async (request) => {
+  // Set last matter date manually
+  fastify.post('/api/settings/last-matter-date', { preHandler: authMiddleware }, async (request) => {
     const { date } = request.body || {};
 
     if (!date) {
       return { error: 'BAD_REQUEST', message: 'Date is required' };
     }
 
-    settingsDb.set('last_incident_date', new Date(date).toISOString());
+    settingsDb.set('last_matter_date', new Date(date).toISOString());
 
-    return { success: true, last_incident_date: settingsDb.get('last_incident_date') };
+    return { success: true, last_matter_date: settingsDb.get('last_matter_date') };
   });
+
+  // Update drain configuration
+  fastify.post('/api/settings/drain', { preHandler: authMiddleware }, async (request) => {
+    const { enabled, rate_cents } = request.body || {};
+
+    if (enabled !== undefined) {
+      settingsDb.set('drain_enabled', enabled ? 'true' : 'false');
+    }
+
+    if (rate_cents !== undefined) {
+      const cents = parseInt(rate_cents);
+      if (isNaN(cents) || cents < 0) {
+        return { error: 'BAD_REQUEST', message: 'Invalid rate_cents value' };
+      }
+      settingsDb.set('drain_rate_cents', String(cents));
+    }
+
+    // Reset drain start time when changing drain settings
+    settingsDb.set('drain_start_time', new Date().toISOString());
+
+    return {
+      success: true,
+      drain_enabled: settingsDb.get('drain_enabled') === 'true',
+      drain_rate_cents: parseInt(settingsDb.get('drain_rate_cents'))
+    };
+  });
+
+  // ============ ADMIN PORTAL ROUTES ============
+
+  // Serve admin portal files
+  fastify.get('/admin', async (request, reply) => {
+    const html = readFileSync(join(__dirname, '..', 'admin', 'index.html'), 'utf-8');
+    return reply.type('text/html').send(html);
+  });
+
+  fastify.get('/admin/css/:file', async (request, reply) => {
+    const css = readFileSync(join(__dirname, '..', 'admin', 'css', request.params.file), 'utf-8');
+    return reply.type('text/css').send(css);
+  });
+
+  fastify.get('/admin/js/:file', async (request, reply) => {
+    const js = readFileSync(join(__dirname, '..', 'admin', 'js', request.params.file), 'utf-8');
+    return reply.type('application/javascript').send(js);
+  });
+
+  fastify.get('/admin/js/components/:file', async (request, reply) => {
+    const js = readFileSync(join(__dirname, '..', 'admin', 'js', 'components', request.params.file), 'utf-8');
+    return reply.type('application/javascript').send(js);
+  });
+
+  // Create admin auth middleware
+  const adminAuthMiddleware = createAdminAuthMiddleware(adminSessionsDb, adminUsersDb);
+
+  // Admin login
+  fastify.post('/admin/api/auth/login', async (request, reply) => {
+    const { username, hashedPassword } = request.body || {};
+
+    if (!username || !hashedPassword) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: 'Username and hashed password required' });
+    }
+
+    // Get user
+    const user = adminUsersDb.getByUsername(username);
+    if (!user) {
+      return reply.code(401).send({ error: 'INVALID_CREDENTIALS', message: 'Invalid username or password' });
+    }
+
+    // Check if user is active
+    if (!user.is_active) {
+      return reply.code(401).send({ error: 'USER_INACTIVE', message: 'User account is not active' });
+    }
+
+    // Verify hashed password (server stores bcrypt(hashedPassword))
+    const validPassword = await verifyPassword(hashedPassword, user.password_hash);
+    if (!validPassword) {
+      return reply.code(401).send({ error: 'INVALID_CREDENTIALS', message: 'Invalid username or password' });
+    }
+
+    // Create session
+    const jti = generateTokenId();
+    const expiration = getTokenExpiration(7); // 7 days
+    const clientIP = getClientIP(request);
+    const userAgent = request.headers['user-agent'] || null;
+
+    adminSessionsDb.create(user.id, jti, expiration.toISOString(), clientIP, userAgent);
+    adminUsersDb.updateLastLogin(user.id);
+
+    // Generate JWT
+    const token = fastify.jwt.sign(
+      { userId: user.id, username: user.username, jti },
+      { expiresIn: '7d' }
+    );
+
+    // Set HTTP-only cookie
+    reply.setCookie('admin_token', token, {
+      path: '/',
+      httpOnly: true,
+      secure: COOKIE_SECURE,
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 // 7 days in seconds
+    });
+
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email
+      }
+    };
+  });
+
+  // Admin logout
+  fastify.post('/admin/api/auth/logout', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const jti = request.user.jti;
+    adminSessionsDb.invalidate(jti);
+
+    reply.clearCookie('admin_token', { path: '/' });
+
+    return { success: true, message: 'Logged out successfully' };
+  });
+
+  // Get current admin user
+  fastify.get('/admin/api/auth/me', { preHandler: adminAuthMiddleware }, async (request) => {
+    return {
+      user: request.adminUser
+    };
+  });
+
+  // Change password
+  fastify.post('/admin/api/auth/change-password', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { currentPassword, newPassword } = request.body || {};
+
+    if (!currentPassword || !newPassword) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: 'Current and new password required' });
+    }
+
+    if (newPassword.length < 8) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: 'Password must be at least 8 characters' });
+    }
+
+    const user = adminUsersDb.getById(request.adminUser.id);
+    const validPassword = await verifyPassword(currentPassword, user.password_hash);
+
+    if (!validPassword) {
+      return reply.code(401).send({ error: 'INVALID_PASSWORD', message: 'Current password is incorrect' });
+    }
+
+    const newHash = await hashPassword(newPassword);
+    adminUsersDb.updatePassword(request.adminUser.id, newHash);
+
+    return { success: true, message: 'Password changed successfully' };
+  });
+
+  // Dashboard stats
+  fastify.get('/admin/api/dashboard', { preHandler: adminAuthMiddleware }, async () => {
+    const settings = settingsDb.getAll();
+    const stats = mattersDb.getStats();
+    const matters = mattersDb.getAll();
+
+    const lastMatterDate = new Date(settings.last_matter_date || Date.now());
+    const now = new Date();
+    const daysSince = Math.floor((now - lastMatterDate) / (1000 * 60 * 60 * 24));
+
+    const drainEnabled = settings.drain_enabled === 'true';
+    const drainRateCents = parseInt(settings.drain_rate_cents || '50');
+    const baseSpent = parseFloat(settings.lifetime_spent || '0');
+
+    return {
+      days_since: daysSince,
+      last_matter_date: settings.last_matter_date,
+      lifetime_spent: baseSpent,
+      drain_enabled: drainEnabled,
+      drain_rate_cents: drainRateCents,
+      stats: {
+        total_matters: stats.total,
+        matters_this_year: stats.thisYear,
+        max_streak: Math.max(stats.maxStreak, daysSince)
+      },
+      recent_matters: matters.slice(0, 10)
+    };
+  });
+
+  // Get all matters with pagination
+  fastify.get('/admin/api/matters', { preHandler: adminAuthMiddleware }, async (request) => {
+    const { page = 1, limit = 50, search = '', sortBy = 'matter_date', sortOrder = 'DESC' } = request.query;
+
+    let matters = mattersDb.getAll();
+
+    // Search filter
+    if (search) {
+      const searchLower = search.toLowerCase();
+      matters = matters.filter(inc =>
+        (inc.note && inc.note.toLowerCase().includes(searchLower)) ||
+        inc.matter_date.includes(search)
+      );
+    }
+
+    // Sort
+    matters.sort((a, b) => {
+      let comparison = 0;
+      if (sortBy === 'cost') {
+        comparison = (a.cost || 0) - (b.cost || 0);
+      } else if (sortBy === 'days_since') {
+        comparison = (a.days_since || 0) - (b.days_since || 0);
+      } else {
+        comparison = new Date(a.matter_date) - new Date(b.matter_date);
+      }
+      return sortOrder === 'ASC' ? comparison : -comparison;
+    });
+
+    // Pagination
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + parseInt(limit);
+    const paginatedMatters = matters.slice(startIndex, endIndex);
+
+    // Convert costs from cents to dollars for output
+    const mattersInDollars = paginatedMatters.map(inc => ({
+      ...inc,
+      cost: inc.cost / 100 // Convert cents to dollars
+    }));
+
+    return {
+      matters: mattersInDollars,
+      total: matters.length,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(matters.length / limit)
+    };
+  });
+
+  // Add single matter
+  fastify.post('/admin/api/matters', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { matter_date, note, cost } = request.body || {};
+
+    if (!matter_date) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: 'matter_date required' });
+    }
+
+    try {
+      const matterDate = new Date(matter_date);
+      const lastMatterDate = new Date(settingsDb.get('last_matter_date') || Date.now());
+      const daysSince = Math.floor((matterDate - lastMatterDate) / (1000 * 60 * 60 * 24));
+
+      // Cost comes in as dollars from admin form - convert to cents for storage
+      const costDollars = parseFloat(cost) || 0;
+      const costCents = Math.round(costDollars * 100);
+
+      const result = mattersDb.add(
+        matterDate.toISOString(),
+        note || 'Matter',
+        Math.max(0, daysSince),
+        costCents
+      );
+
+      // Update last matter date
+      settingsDb.set('last_matter_date', matterDate.toISOString());
+
+      // Update lifetime spent (stored in cents)
+      if (costCents) {
+        const currentSpentCents = parseFloat(settingsDb.get('lifetime_spent') || '0');
+        settingsDb.set('lifetime_spent', currentSpentCents + costCents);
+      }
+
+      reply.code(201);
+      return {
+        success: true,
+        matter: result
+      };
+    } catch (error) {
+      return reply.code(500).send({ error: 'SERVER_ERROR', message: error.message });
+    }
+  });
+
+  // Bulk add matters
+  fastify.post('/admin/api/matters/bulk', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { matters: mattersArray } = request.body || {};
+
+    if (!Array.isArray(mattersArray) || mattersArray.length === 0) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: 'Matters array required' });
+    }
+
+    const results = [];
+    const errors = [];
+    let totalCost = 0;
+
+    for (let i = 0; i < mattersArray.length; i++) {
+      const { matter_date, note, cost } = mattersArray[i];
+
+      try {
+        if (!matter_date) {
+          errors.push({ index: i, error: 'Missing matter_date' });
+          continue;
+        }
+
+        const matterDate = new Date(matter_date);
+        const lastMatterDate = new Date(settingsDb.get('last_matter_date') || Date.now());
+        const daysSince = Math.floor((matterDate - lastMatterDate) / (1000 * 60 * 60 * 24));
+
+        // Cost comes in as dollars from admin form - convert to cents for storage
+        const costDollars = parseFloat(cost) || 0;
+        const costCents = Math.round(costDollars * 100);
+
+        const result = mattersDb.add(
+          matterDate.toISOString(),
+          note || 'Matter',
+          Math.max(0, daysSince),
+          costCents
+        );
+
+        // Track total cost for lifetime_spent update (in cents)
+        totalCost += costCents;
+
+        // Update last matter date to this one for next iteration
+        settingsDb.set('last_matter_date', matterDate.toISOString());
+
+        results.push({ index: i, id: result.id });
+      } catch (error) {
+        errors.push({ index: i, error: error.message });
+      }
+    }
+
+    // Update lifetime spent with total from all matters (stored in cents)
+    if (totalCost > 0) {
+      const currentSpentCents = parseFloat(settingsDb.get('lifetime_spent') || '0');
+      settingsDb.set('lifetime_spent', currentSpentCents + totalCost);
+    }
+
+    return {
+      success: true,
+      created: results.length,
+      errors: errors.length,
+      results,
+      errors
+    };
+  });
+
+  // Bulk delete matters
+  fastify.delete('/admin/api/matters/bulk', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { ids } = request.body || {};
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: 'IDs array required' });
+    }
+
+    let deleted = 0;
+    for (const id of ids) {
+      try {
+        mattersDb.delete(id);
+        deleted++;
+      } catch (error) {
+        // Continue deleting others
+      }
+    }
+
+    return { success: true, deleted };
+  });
+
+  // Export matters as CSV
+  fastify.get('/admin/api/matters/export', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const matters = mattersDb.getAll();
+
+    let csv = 'id,matter_date,note,days_since,cost,created_at\n';
+    for (const matter of matters) {
+      csv += `${matter.id},"${matter.matter_date}","${(matter.note || '').replace(/"/g, '""')}",${matter.days_since || 0},${matter.cost || 0},"${matter.created_at}"\n`;
+    }
+
+    reply.header('Content-Type', 'text/csv');
+    reply.header('Content-Disposition', `attachment; filename="matters-${new Date().toISOString().split('T')[0]}.csv"`);
+
+    return csv;
+  });
+
+  // Get all settings
+  fastify.get('/admin/api/settings', { preHandler: adminAuthMiddleware }, async () => {
+    const settings = settingsDb.getAll();
+    return { settings };
+  });
+
+  // Update setting
+  fastify.put('/admin/api/settings/:key', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { key } = request.params;
+    const { value } = request.body || {};
+
+    if (value === undefined) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: 'Value required' });
+    }
+
+    settingsDb.set(key, value);
+
+    return { success: true, key, value };
+  });
+
+  // Generate new API key
+  fastify.post('/admin/api/settings/api-key/generate', { preHandler: adminAuthMiddleware }, async () => {
+    const newApiKey = generateApiKey();
+    settingsDb.set('api_key', newApiKey);
+
+    return { success: true, api_key: newApiKey };
+  });
+
+  // Analytics data
+  fastify.get('/admin/api/analytics', { preHandler: adminAuthMiddleware }, async () => {
+    const matters = mattersDb.getAll();
+    const stats = mattersDb.getStats();
+
+    // Group by month
+    const byMonth = {};
+    const byYear = {};
+
+    for (const matter of matters) {
+      const date = new Date(matter.matter_date);
+      const yearMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const year = date.getFullYear();
+
+      byMonth[yearMonth] = (byMonth[yearMonth] || 0) + 1;
+      byYear[year] = (byYear[year] || 0) + 1;
+    }
+
+    return {
+      total: stats.total,
+      this_year: stats.thisYear,
+      max_streak: stats.maxStreak,
+      by_month: byMonth,
+      by_year: byYear,
+      matters
+    };
+  });
+
+  // List admin users
+  fastify.get('/admin/api/users', { preHandler: adminAuthMiddleware }, async () => {
+    const users = adminUsersDb.getAll();
+    return { users };
+  });
+
+  // Create admin user
+  fastify.post('/admin/api/users', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { username, password, email } = request.body || {};
+
+    if (!username || !password) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: 'Username and password required' });
+    }
+
+    if (password.length < 8) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: 'Password must be at least 8 characters' });
+    }
+
+    // Check if username exists
+    const existingUser = adminUsersDb.getByUsername(username);
+    if (existingUser) {
+      return reply.code(409).send({ error: 'CONFLICT', message: 'Username already exists' });
+    }
+
+    const passwordHash = await hashPassword(password);
+    const result = adminUsersDb.create(username, passwordHash, email || null);
+
+    return {
+      success: true,
+      user: {
+        id: result.id,
+        username,
+        email: email || null
+      }
+    };
+  });
+
+  // Update admin user
+  fastify.put('/admin/api/users/:id', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { id } = request.params;
+    const { email, is_active } = request.body || {};
+
+    const user = adminUsersDb.getById(id);
+    if (!user) {
+      return reply.code(404).send({ error: 'NOT_FOUND', message: 'User not found' });
+    }
+
+    if (email !== undefined) {
+      adminUsersDb.updateEmail(id, email);
+    }
+
+    if (is_active !== undefined) {
+      adminUsersDb.setActive(id, is_active);
+    }
+
+    return { success: true };
+  });
+
+  // Deactivate admin user
+  fastify.delete('/admin/api/users/:id', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { id } = request.params;
+
+    // Don't allow deleting yourself
+    if (parseInt(id) === request.adminUser.id) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: 'Cannot deactivate your own account' });
+    }
+
+    adminUsersDb.setActive(id, false);
+
+    return { success: true };
+  });
+
+  // List sessions
+  fastify.get('/admin/api/sessions', { preHandler: adminAuthMiddleware }, async () => {
+    const sessions = adminSessionsDb.getAll();
+    return { sessions };
+  });
+
+  // Invalidate session
+  fastify.delete('/admin/api/sessions/:id', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { id } = request.params;
+
+    const session = adminSessionsDb.getByJti(id);
+    if (!session) {
+      return reply.code(404).send({ error: 'NOT_FOUND', message: 'Session not found' });
+    }
+
+    adminSessionsDb.invalidate(id);
+
+    return { success: true };
+  });
+
+  // Expose database instances for testing
+  fastify.db = {
+    mattersDb,
+    settingsDb,
+    adminUsersDb,
+    adminSessionsDb
+  };
 
   return fastify;
 }
@@ -266,7 +863,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
     console.log(`
 ╔════════════════════════════════════════════════════════════════╗
-║  LEGAL INCIDENT TRACKER - SERVER ONLINE                        ║
+║  LEGAL MATTER TRACKER - SERVER ONLINE                          ║
 ╚════════════════════════════════════════════════════════════════╝
 
   → Local:    http://localhost:${PORT}

@@ -55,19 +55,59 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
-    CREATE TABLE IF NOT EXISTS incidents (
+    CREATE TABLE IF NOT EXISTS matters (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      incident_date DATETIME NOT NULL,
+      matter_date DATETIME NOT NULL,
       note TEXT,
       days_since INTEGER,
       cost REAL DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS admin_users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      email TEXT UNIQUE,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_login DATETIME,
+      is_active INTEGER DEFAULT 1
+    );
+
+    CREATE TABLE IF NOT EXISTS admin_sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      token_jti TEXT UNIQUE NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      expires_at DATETIME NOT NULL,
+      ip_address TEXT,
+      user_agent TEXT,
+      FOREIGN KEY (user_id) REFERENCES admin_users(id)
+    );
+
     -- Initialize default settings if they don't exist
     INSERT OR IGNORE INTO settings (key, value) VALUES ('lifetime_spent', '0');
-    INSERT OR IGNORE INTO settings (key, value) VALUES ('last_incident_date', datetime('now'));
+    INSERT OR IGNORE INTO settings (key, value) VALUES ('last_matter_date', datetime('now'));
   `);
+
+  // Initialize drain_start_time with current JavaScript Date if not exists
+  const drainStartExists = db.exec('SELECT value FROM settings WHERE key = ?', ['drain_start_time']);
+  if (!drainStartExists.length || !drainStartExists[0].values.length) {
+    db.run(`
+      INSERT INTO settings (key, value) VALUES ('drain_start_time', ?)
+    `, [new Date().toISOString()]);
+  }
+
+  // Initialize drain configuration settings
+  const drainRateExists = db.exec('SELECT value FROM settings WHERE key = ?', ['drain_rate_cents']);
+  if (!drainRateExists.length || !drainRateExists[0].values.length) {
+    db.run(`INSERT INTO settings (key, value) VALUES ('drain_rate_cents', '50')`); // 50 cents per second default
+  }
+
+  const drainEnabledExists = db.exec('SELECT value FROM settings WHERE key = ?', ['drain_enabled']);
+  if (!drainEnabledExists.length || !drainEnabledExists[0].values.length) {
+    db.run(`INSERT INTO settings (key, value) VALUES ('drain_enabled', 'true')`);
+  }
 
   // Helper to save database to disk
   function saveDatabase() {
@@ -104,9 +144,9 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
     }
   };
 
-  const incidentsDb = {
+  const mattersDb = {
     getAll() {
-      const result = db.exec('SELECT * FROM incidents ORDER BY incident_date DESC');
+      const result = db.exec('SELECT * FROM matters ORDER BY matter_date DESC');
       if (result.length > 0) {
         const columns = result[0].columns;
         return result[0].values.map(row => {
@@ -121,7 +161,7 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
     },
 
     getById(id) {
-      const result = db.exec('SELECT * FROM incidents WHERE id = ?', [id]);
+      const result = db.exec('SELECT * FROM matters WHERE id = ?', [id]);
       if (result.length > 0 && result[0].values.length > 0) {
         const columns = result[0].columns;
         const row = result[0].values[0];
@@ -134,11 +174,11 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
       return null;
     },
 
-    add(incidentDate, note, daysSince, cost = 0) {
+    add(matterDate, note, daysSince, cost = 0) {
       db.run(`
-        INSERT INTO incidents (incident_date, note, days_since, cost)
+        INSERT INTO matters (matter_date, note, days_since, cost)
         VALUES (?, ?, ?, ?)
-      `, [incidentDate, note, daysSince, cost]);
+      `, [matterDate, note, daysSince, cost]);
 
       // Get last insert ID
       const result = db.exec('SELECT last_insert_rowid() as id');
@@ -148,25 +188,25 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
       return { id };
     },
 
-    update(id, incidentDate, note, cost) {
+    update(id, matterDate, note, cost) {
       db.run(`
-        UPDATE incidents SET incident_date = ?, note = ?, cost = ? WHERE id = ?
-      `, [incidentDate, note, cost, id]);
+        UPDATE matters SET matter_date = ?, note = ?, cost = ? WHERE id = ?
+      `, [matterDate, note, cost, id]);
       saveDatabase();
     },
 
     delete(id) {
-      db.run('DELETE FROM incidents WHERE id = ?', [id]);
+      db.run('DELETE FROM matters WHERE id = ?', [id]);
       saveDatabase();
     },
 
     getStats() {
-      const countResult = db.exec('SELECT COUNT(*) as count FROM incidents');
+      const countResult = db.exec('SELECT COUNT(*) as count FROM matters');
       const thisYearResult = db.exec(`
-        SELECT COUNT(*) as count FROM incidents
-        WHERE strftime('%Y', incident_date) = strftime('%Y', 'now')
+        SELECT COUNT(*) as count FROM matters
+        WHERE strftime('%Y', matter_date) = strftime('%Y', 'now')
       `);
-      const maxStreakResult = db.exec('SELECT MAX(days_since) as max_streak FROM incidents');
+      const maxStreakResult = db.exec('SELECT MAX(days_since) as max_streak FROM matters');
 
       return {
         total: countResult[0]?.values[0]?.[0] || 0,
@@ -176,12 +216,178 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
     }
   };
 
-  return { db, settingsDb, incidentsDb, saveDatabase };
+  const adminUsersDb = {
+    create(username, passwordHash, email = null) {
+      db.run(`
+        INSERT INTO admin_users (username, password_hash, email, created_at)
+        VALUES (?, ?, ?, ?)
+      `, [username, passwordHash, email, new Date().toISOString()]);
+
+      const result = db.exec('SELECT last_insert_rowid() as id');
+      const id = result[0].values[0][0];
+
+      saveDatabase();
+      return { id };
+    },
+
+    getByUsername(username) {
+      const result = db.exec('SELECT * FROM admin_users WHERE username = ?', [username]);
+      if (result.length > 0 && result[0].values.length > 0) {
+        const columns = result[0].columns;
+        const row = result[0].values[0];
+        const obj = {};
+        columns.forEach((col, i) => {
+          obj[col] = row[i];
+        });
+        return obj;
+      }
+      return null;
+    },
+
+    getById(id) {
+      const result = db.exec('SELECT * FROM admin_users WHERE id = ?', [id]);
+      if (result.length > 0 && result[0].values.length > 0) {
+        const columns = result[0].columns;
+        const row = result[0].values[0];
+        const obj = {};
+        columns.forEach((col, i) => {
+          obj[col] = row[i];
+        });
+        return obj;
+      }
+      return null;
+    },
+
+    updateLastLogin(id) {
+      db.run(`
+        UPDATE admin_users SET last_login = ? WHERE id = ?
+      `, [new Date().toISOString(), id]);
+      saveDatabase();
+    },
+
+    setActive(id, isActive) {
+      db.run(`
+        UPDATE admin_users SET is_active = ? WHERE id = ?
+      `, [isActive ? 1 : 0, id]);
+      saveDatabase();
+    },
+
+    updatePassword(id, passwordHash) {
+      db.run(`
+        UPDATE admin_users SET password_hash = ? WHERE id = ?
+      `, [passwordHash, id]);
+      saveDatabase();
+    },
+
+    updateEmail(id, email) {
+      db.run(`
+        UPDATE admin_users SET email = ? WHERE id = ?
+      `, [email, id]);
+      saveDatabase();
+    },
+
+    getAll() {
+      const result = db.exec('SELECT id, username, email, created_at, last_login, is_active FROM admin_users ORDER BY created_at DESC');
+      if (result.length > 0) {
+        const columns = result[0].columns;
+        return result[0].values.map(row => {
+          const obj = {};
+          columns.forEach((col, i) => {
+            obj[col] = row[i];
+          });
+          return obj;
+        });
+      }
+      return [];
+    }
+  };
+
+  const adminSessionsDb = {
+    create(userId, tokenJti, expiresAt, ip = null, userAgent = null) {
+      db.run(`
+        INSERT INTO admin_sessions (user_id, token_jti, created_at, expires_at, ip_address, user_agent)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `, [userId, tokenJti, new Date().toISOString(), expiresAt, ip, userAgent]);
+
+      const result = db.exec('SELECT last_insert_rowid() as id');
+      const id = result[0].values[0][0];
+
+      saveDatabase();
+      return { id };
+    },
+
+    getByJti(jti) {
+      const result = db.exec('SELECT * FROM admin_sessions WHERE token_jti = ?', [jti]);
+      if (result.length > 0 && result[0].values.length > 0) {
+        const columns = result[0].columns;
+        const row = result[0].values[0];
+        const obj = {};
+        columns.forEach((col, i) => {
+          obj[col] = row[i];
+        });
+        return obj;
+      }
+      return null;
+    },
+
+    invalidate(jti) {
+      db.run('DELETE FROM admin_sessions WHERE token_jti = ?', [jti]);
+      saveDatabase();
+    },
+
+    invalidateAllForUser(userId) {
+      db.run('DELETE FROM admin_sessions WHERE user_id = ?', [userId]);
+      saveDatabase();
+    },
+
+    cleanupExpired() {
+      const now = new Date().toISOString();
+      db.run('DELETE FROM admin_sessions WHERE expires_at < ?', [now]);
+      saveDatabase();
+    },
+
+    getAllForUser(userId) {
+      const result = db.exec('SELECT * FROM admin_sessions WHERE user_id = ? ORDER BY created_at DESC', [userId]);
+      if (result.length > 0) {
+        const columns = result[0].columns;
+        return result[0].values.map(row => {
+          const obj = {};
+          columns.forEach((col, i) => {
+            obj[col] = row[i];
+          });
+          return obj;
+        });
+      }
+      return [];
+    },
+
+    getAll() {
+      const result = db.exec(`
+        SELECT s.*, u.username
+        FROM admin_sessions s
+        JOIN admin_users u ON s.user_id = u.id
+        ORDER BY s.created_at DESC
+      `);
+      if (result.length > 0) {
+        const columns = result[0].columns;
+        return result[0].values.map(row => {
+          const obj = {};
+          columns.forEach((col, i) => {
+            obj[col] = row[i];
+          });
+          return obj;
+        });
+      }
+      return [];
+    }
+  };
+
+  return { db, settingsDb, mattersDb, adminUsersDb, adminSessionsDb, saveDatabase };
 }
 
 // Create default database instance for backwards compatibility
 const defaultDbPromise = createDatabase();
 const defaultDb = await defaultDbPromise;
 
-export const { settingsDb, incidentsDb } = defaultDb;
+export const { settingsDb, mattersDb } = defaultDb;
 export default defaultDb.db;
