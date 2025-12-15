@@ -924,10 +924,13 @@ function render() {
       <div style="border-bottom: 1px solid ${theme.primaryDim}; padding-bottom: 1rem; margin-bottom: 2rem;">
         <div style="background: rgba(0,0,0,0.3); border: 2px solid ${theme.primary}; padding: 1rem 1.5rem;">
           <div style="text-align: center; color: ${theme.primary}; font-size: 1.3rem; text-shadow: 0 0 15px ${theme.primaryGlow}; letter-spacing: 0.15em; font-weight: bold;">
-            LEGAL MATTER MONITORING SYSTEM
+            LEGAL MATTER v0.1.0
           </div>
-          <div style="text-align: center; color: ${theme.primaryDim}; font-size: 0.9rem; margin-top: 0.25rem; text-shadow: 0 0 8px ${theme.primaryGlow};">
-            v3.2.1 • ${theme.name}
+          <div style="text-align: center; color: ${theme.primaryDim}; font-size: 0.75rem; margin-top: 0.25rem; text-shadow: 0 0 8px ${theme.primaryGlow}; line-height: 1.4;">
+            Legal Expense Governance Allocation Ledger<br>Management Application for Tracking<br>Time, Expenses, Retainers
+          </div>
+          <div style="text-align: center; color: ${theme.primaryDim}; font-size: 0.8rem; margin-top: 0.5rem; text-shadow: 0 0 8px ${theme.primaryGlow};">
+            ${theme.name}
           </div>
         </div>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">

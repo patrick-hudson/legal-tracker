@@ -1,10 +1,14 @@
-# Legal Matter Tracker
+# LEGAL MATTER
+
+**Legal Expense Governance Allocation Ledger Management Application for Tracking Time, Expenses, Retainers**
 
 A self-hosted "days since" counter for tracking how long you've gone without hiring another lawyer. Features a retro amber CRT terminal aesthetic.
 
 ```
 ╔════════════════════════════════════════════════════════════════╗
-║  LEGAL MATTER MONITORING SYSTEM v3.2.1                         ║
+║  LEGAL MATTER v0.1.0                                           ║
+║  Legal Expense Governance Allocation Ledger Management         ║
+║  Application for Tracking Time, Expenses, Retainers            ║
 ╚════════════════════════════════════════════════════════════════╝
 ```
 
