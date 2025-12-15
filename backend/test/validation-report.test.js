@@ -860,22 +860,146 @@ describe('Validation Report Generator', () => {
       validations: validationLog
     };
 
-    // Write to file
-    const reportPath = path.join(__dirname, '..', 'test-validation-report.json');
-    fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+    // Generate Markdown report
+    const generateMarkdown = (report) => {
+      const { summary, validations, report_metadata } = report;
+      const passed = summary.passed;
+      const failed = summary.failed;
+      const passIcon = '✅';
+      const failIcon = '❌';
+      const statusBadge = failed === 0 ? '🟢 **ALL TESTS PASSING**' : '🔴 **SOME TESTS FAILING**';
+
+      let md = `# Validation Test Report\n\n`;
+      md += `${statusBadge}\n\n`;
+      md += `**Generated:** ${new Date(report_metadata.generated_at).toLocaleString()}\n\n`;
+
+      // Summary table
+      md += `## Summary\n\n`;
+      md += `| Metric | Value |\n`;
+      md += `|--------|-------|\n`;
+      md += `| Total Tests | ${summary.total_tests} |\n`;
+      md += `| ${passIcon} Passed | ${passed} |\n`;
+      md += `| ${failIcon} Failed | ${failed} |\n`;
+      md += `| Pass Rate | ${summary.pass_rate} |\n`;
+      md += `| Duration | ${report_metadata.total_duration_ms}ms |\n\n`;
+
+      // Test results
+      md += `## Test Results\n\n`;
+
+      validations.forEach((test, idx) => {
+        const status = test.status === 'PASS' ? passIcon : failIcon;
+        const statusText = test.status === 'PASS' ? 'PASS' : 'FAIL';
+        const suite = test.test_suite || test.suite || 'Unknown Suite';
+        const name = test.test_name || test.name || 'Unknown Test';
+
+        md += `### ${idx + 1}. ${suite} - ${name}\n\n`;
+        md += `**Status:** ${status} ${statusText} | **Duration:** ${test.duration_ms}ms\n\n`;
+
+        // Request details
+        if (test.request) {
+          md += `<details>\n<summary>Request Details</summary>\n\n`;
+          if (test.request.method) {
+            md += `**Method:** \`${test.request.method}\`\n\n`;
+          }
+          if (test.request.url) {
+            md += `**URL:** \`${test.request.url}\`\n\n`;
+          }
+          if (test.request.description) {
+            md += `**Description:** ${test.request.description}\n\n`;
+          }
+
+          if (test.request.body_raw_json) {
+            md += `**Body:**\n\`\`\`json\n${test.request.body_raw_json}\n\`\`\`\n\n`;
+          } else if (test.request.body) {
+            md += `**Body:**\n\`\`\`json\n${JSON.stringify(test.request.body, null, 2)}\n\`\`\`\n\n`;
+          }
+          md += `</details>\n\n`;
+        }
+
+        // Response details
+        if (test.response) {
+          md += `<details>\n<summary>Response Details</summary>\n\n`;
+          md += `**Status:** ${test.response.status} ${test.response.status_text || ''}\n\n`;
+          md += `**Duration:** ${test.response.duration_ms}ms\n\n`;
+          if (test.response.body) {
+            md += `**Body:**\n\`\`\`json\n${JSON.stringify(test.response.body, null, 2)}\n\`\`\`\n\n`;
+          }
+          md += `</details>\n\n`;
+        }
+
+        // Assertions
+        md += `**Assertions:**\n\n`;
+        md += `| # | Type | Description | Result |\n`;
+        md += `|---|------|-------------|--------|\n`;
+        test.assertions.forEach((assertion, aIdx) => {
+          const aStatus = assertion.passed ? passIcon : failIcon;
+          md += `| ${aIdx + 1} | ${assertion.type} | ${assertion.description} | ${aStatus} |\n`;
+        });
+        md += `\n`;
+
+        // Assertion details in collapsible sections
+        test.assertions.forEach((assertion, aIdx) => {
+          md += `<details>\n<summary>Assertion ${aIdx + 1}: ${assertion.description}</summary>\n\n`;
+          md += `**Type:** ${assertion.type}\n\n`;
+          md += `**Severity:** ${assertion.severity || 'medium'}\n\n`;
+          md += `**Result:** ${assertion.passed ? passIcon + ' PASS' : failIcon + ' FAIL'}\n\n`;
+
+          // Show expected vs actual
+          if (assertion.expected !== undefined && assertion.actual !== undefined) {
+            md += `**Expected:** \`${JSON.stringify(assertion.expected)}\`\n\n`;
+            md += `**Actual:** \`${JSON.stringify(assertion.actual)}\`\n\n`;
+          }
+
+          // Additional details
+          const detailKeys = Object.keys(assertion).filter(k =>
+            !['type', 'description', 'passed', 'severity', 'expected', 'actual'].includes(k)
+          );
+          if (detailKeys.length > 0) {
+            md += `**Details:**\n\`\`\`json\n${JSON.stringify(
+              detailKeys.reduce((obj, key) => ({ ...obj, [key]: assertion[key] }), {}),
+              null,
+              2
+            )}\n\`\`\`\n\n`;
+          }
+
+          md += `</details>\n\n`;
+        });
+
+        // Database state changes
+        if (test.database_state) {
+          md += `<details>\n<summary>Database State Changes</summary>\n\n`;
+          md += `\`\`\`json\n${JSON.stringify(test.database_state, null, 2)}\n\`\`\`\n\n`;
+          md += `</details>\n\n`;
+        }
+
+        md += `---\n\n`;
+      });
+
+      return md;
+    };
+
+    // Write JSON report
+    const jsonPath = path.join(__dirname, '..', 'test-validation-report.json');
+    fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2));
+
+    // Write Markdown report
+    const mdPath = path.join(__dirname, '..', 'test-validation-report.md');
+    fs.writeFileSync(mdPath, generateMarkdown(report));
 
     console.log('\n' + '='.repeat(80));
-    console.log('VALIDATION REPORT GENERATED');
+    console.log('VALIDATION REPORTS GENERATED');
     console.log('='.repeat(80));
-    console.log(`Location: ${reportPath}`);
+    console.log(`JSON: ${jsonPath}`);
+    console.log(`Markdown: ${mdPath}`);
     console.log(`Total Validations: ${report.summary.total_tests}`);
     console.log(`Passed: ${report.summary.passed}`);
     console.log(`Failed: ${report.summary.failed}`);
     console.log(`Pass Rate: ${report.summary.pass_rate}`);
     console.log('='.repeat(80) + '\n');
 
-    // Assert report was generated successfully
-    assert.ok(fs.existsSync(reportPath));
+    // Assert reports were generated successfully
+    assert.ok(fs.existsSync(jsonPath), 'JSON report should exist');
+    assert.ok(fs.existsSync(mdPath), 'Markdown report should exist');
     assert.strictEqual(report.summary.failed, 0, 'All validations should pass');
   });
 });
