@@ -1,0 +1,127 @@
+/* Custom styles for Legal Tracker Admin Portal */
+
+/* Active navigation link */
+.nav-link.active {
+    background-color: rgb(59 130 246 / 0.1);
+    color: rgb(59 130 246);
+}
+
+.nav-link.active svg {
+    color: rgb(59 130 246);
+}
+
+/* Loading spinner */
+.spinner {
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #3b82f6;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Table hover effect */
+.hover-row:hover {
+    background-color: rgb(243 244 246 / 0.5);
+}
+
+.dark .hover-row:hover {
+    background-color: rgb(55 65 81 / 0.5);
+}
+
+/* Stats card animation */
+.stat-card {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+
+/* Chart container */
+.chart-container {
+    position: relative;
+    height: 300px;
+    width: 100%;
+}
+
+/* Form validation */
+.invalid-input {
+    border-color: rgb(239 68 68);
+}
+
+.invalid-feedback {
+    color: rgb(239 68 68);
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+}
+
+/* Toast notification */
+.toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(400px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Responsive table */
+@media (max-width: 768px) {
+    .responsive-table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+}
+
+/* Skeleton loader */
+.skeleton {
+    animation: skeleton-loading 1s linear infinite alternate;
+}
+
+@keyframes skeleton-loading {
+    0% {
+        background-color: hsl(200, 20%, 80%);
+    }
+    100% {
+        background-color: hsl(200, 20%, 95%);
+    }
+}
+
+/* Badge styles */
+.badge-success {
+    background-color: rgb(34 197 94);
+    color: white;
+}
+
+.badge-warning {
+    background-color: rgb(234 179 8);
+    color: white;
+}
+
+.badge-error {
+    background-color: rgb(239 68 68);
+    color: white;
+}
+
+.badge-info {
+    background-color: rgb(59 130 246);
+    color: white;
+}
