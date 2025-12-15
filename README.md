@@ -91,7 +91,7 @@ sudo nano /etc/nginx/sites-available/legal-tracker
 ```nginx
 server {
     listen 80;
-    server_name lawyerfree.lol;  # Your domain
+    server_name lawyerfree.today;  # Your domain
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -118,7 +118,7 @@ sudo systemctl restart nginx
 
 ```bash
 sudo apt install certbot python3-certbot-nginx
-sudo certbot --nginx -d lawyerfree.lol
+sudo certbot --nginx -d lawyerfree.today
 ```
 
 ## API Endpoints
