@@ -474,8 +474,20 @@ function renderModern() {
         <div style="background: ${theme.cardBg}; backdrop-filter: blur(10px); border-radius: ${theme.borderRadius}; padding: 2rem; margin-bottom: 1.5rem; box-shadow: ${theme.shadow}; border: 1px solid ${theme.cardBorder};">
           <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
             <div>
-              <h1 style="margin: 0; font-size: 1.5rem; font-weight: 600; color: ${theme.primary};">Legal Matter Tracker</h1>
-              <p style="margin: 0.5rem 0 0 0; color: ${theme.primaryDim}; font-size: 0.9rem;">${state.sessionMessage.split('•')[0].trim()}</p>
+              <h1 style="margin: 0; font-size: 1.5rem; font-weight: 600; color: ${theme.primary};">LEGAL MATTER v0.1.0</h1>
+              <p style="margin: 0.5rem 0 0 0; color: ${theme.primaryDim}; font-size: 0.75rem; line-height: 1.5;">
+                <span style="font-weight: 600;">L</span>egal
+                <span style="font-weight: 600;">E</span>xpense
+                <span style="font-weight: 600;">G</span>overnance
+                <span style="font-weight: 600;">A</span>llocation
+                <span style="font-weight: 600;">L</span>edger
+                <span style="font-weight: 600;">M</span>anagement
+                <span style="font-weight: 600;">A</span>pplication for
+                <span style="font-weight: 600;">T</span>racking
+                <span style="font-weight: 600;">T</span>ime,
+                <span style="font-weight: 600;">E</span>xpenses,
+                <span style="font-weight: 600;">R</span>etainers
+              </p>
             </div>
             <div style="display: flex; align-items: center; gap: 1rem;">
               <button onclick="toggleThemePicker()" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); color: ${theme.primary}; padding: 0.6rem 1.2rem; border-radius: 8px; font-size: 0.9rem; cursor: pointer; font-family: inherit; font-weight: 500;">
@@ -681,9 +693,22 @@ function renderRetro() {
         <div style="background: linear-gradient(45deg, ${theme.accent1} 0%, ${theme.accent2} 100%); padding: 1.5rem; border-bottom: 5px ${theme.borderStyle} ${theme.primary};">
           <div style="text-align: center;">
             <h1 style="margin: 0; font-size: 2.5rem; color: yellow; text-shadow: ${theme.textShadow}; font-weight: bold; letter-spacing: 3px;">
-              ⚖️ LAWYER-FREE ZONE ⚖️
+              ⚖️ LEGAL MATTER v0.1.0 ⚖️
             </h1>
-            <p style="margin: 0.5rem 0 0 0; font-size: 1.1rem; color: white; text-shadow: 1px 1px black; font-weight: bold;">
+            <p style="margin: 0.5rem 0 0 0; font-size: 0.85rem; color: white; text-shadow: 1px 1px black; font-weight: bold; line-height: 1.4;">
+              <span style="color: yellow;">L</span>egal
+              <span style="color: yellow;">E</span>xpense
+              <span style="color: yellow;">G</span>overnance
+              <span style="color: yellow;">A</span>llocation
+              <span style="color: yellow;">L</span>edger
+              <span style="color: yellow;">M</span>anagement
+              <span style="color: yellow;">A</span>pplication for
+              <span style="color: yellow;">T</span>racking
+              <span style="color: yellow;">T</span>ime,
+              <span style="color: yellow;">E</span>xpenses,
+              <span style="color: yellow;">R</span>etainers
+            </p>
+            <p style="margin: 0.5rem 0 0 0; font-size: 1rem; color: lime; text-shadow: 1px 1px black; font-weight: bold;">
               ${retroHeader}
             </p>
           </div>
