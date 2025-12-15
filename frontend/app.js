@@ -132,6 +132,38 @@ const SESSION_MESSAGES = [
   'TERMINAL: /etc/legal/fees • SESSION: SUBPOENA',
 ];
 
+// Self-deprecating status messages
+const STATUS_MESSAGES = {
+  ALERT: ['ALERT', 'OH NO', 'AGAIN?!', 'REALLY?', 'NOT AGAIN', 'YIKES'],
+  WARNING: ['WARNING', 'TOO SOON', 'CAREFUL', 'DANGER ZONE', 'UH OH'],
+  MONITOR: ['MONITOR', 'FRAGILE', 'HOLDING ON', 'BARELY SAFE'],
+  NOMINAL: ['NOMINAL', 'LAWYER-FREE', 'WINNING', 'SAFE...ISH', 'FREE (FOR NOW)']
+};
+
+// Sarcastic money messages
+const MONEY_MESSAGES = [
+  'it never really stops',
+  'your financial regret, quantified',
+  'the meter is always running',
+  'could have been a boat',
+  'that law degree paid for itself',
+  'justice isn\'t free (obviously)',
+  'the American dream, itemized',
+  'probably should have settled',
+  'your kids\' college fund, redirected',
+  'at least someone\'s kids are going to college'
+];
+
+// Main label variations
+const LABEL_MESSAGES = [
+  '&gt; DAYS SINCE LAST LEGAL REPRESENTATION AGREEMENT:',
+  '&gt; DAYS SINCE LAST FINANCIALLY RUINOUS DECISION:',
+  '&gt; TIME ELAPSED SINCE PREVIOUS LEGAL CATASTROPHE:',
+  '&gt; STREAK WITHOUT HIRING SOMEONE SMARTER THAN YOU:',
+  '&gt; DAYS OF FREEDOM FROM ESQUIRE TYRANNY:',
+  '&gt; YOUR LAWYER-FREE WINNING STREAK:'
+];
+
 // State
 let state = {
   daysSince: 0,
@@ -148,7 +180,9 @@ let state = {
   showMoneySettings: false,
   showThemePicker: false,
   authError: false,
-  sessionMessage: SESSION_MESSAGES[Math.floor(Math.random() * SESSION_MESSAGES.length)]
+  sessionMessage: SESSION_MESSAGES[Math.floor(Math.random() * SESSION_MESSAGES.length)],
+  moneyMessage: MONEY_MESSAGES[Math.floor(Math.random() * MONEY_MESSAGES.length)],
+  labelMessage: LABEL_MESSAGES[Math.floor(Math.random() * LABEL_MESSAGES.length)]
 };
 
 // Colors (from current theme)
@@ -290,10 +324,14 @@ async function setLastIncidentDate(date) {
 // ============ Render Functions ============
 
 function getStatusText() {
-  if (state.daysSince === 0) return 'ALERT';
-  if (state.daysSince < 7) return 'WARNING';
-  if (state.daysSince < 30) return 'MONITOR';
-  return 'NOMINAL';
+  let category;
+  if (state.daysSince === 0) category = 'ALERT';
+  else if (state.daysSince < 7) category = 'WARNING';
+  else if (state.daysSince < 30) category = 'MONITOR';
+  else category = 'NOMINAL';
+
+  const messages = STATUS_MESSAGES[category];
+  return messages[Math.floor(Math.random() * messages.length)];
 }
 
 function formatDate(dateStr) {
@@ -337,18 +375,17 @@ function render() {
       </div>
     ` : ''}
 
-    <div style="padding: 2rem; max-width: 900px; margin: 0 auto; position: relative; z-index: 10;">
+    <div style="padding: 2rem; max-width: 1200px; margin: 0 auto; position: relative; z-index: 10;">
       
       <!-- Header -->
       <div style="border-bottom: 1px solid ${theme.primaryDim}; padding-bottom: 1rem; margin-bottom: 2rem;">
-        <div style="color: ${theme.primary}; font-size: 1.2rem; letter-spacing: 0.1em; text-shadow: 0 0 10px ${theme.primaryGlow};">
-          ╔═══════════════════════════════════════════════════════════╗
-        </div>
-        <div style="color: ${theme.primary}; font-size: 1.2rem; padding: 0.5rem 0; text-shadow: 0 0 10px ${theme.primaryGlow}; letter-spacing: 0.05em;">
-          ║ LEGAL INCIDENT MONITORING SYSTEM v3.2.1 • ${theme.name.padEnd(12, ' ')} ║
-        </div>
-        <div style="color: ${theme.primary}; font-size: 1.2rem; letter-spacing: 0.1em; text-shadow: 0 0 10px ${theme.primaryGlow};">
-          ╚═══════════════════════════════════════════════════════════╝
+        <div style="background: rgba(0,0,0,0.3); border: 2px solid ${theme.primary}; padding: 1rem 1.5rem;">
+          <div style="text-align: center; color: ${theme.primary}; font-size: 1.3rem; text-shadow: 0 0 15px ${theme.primaryGlow}; letter-spacing: 0.15em; font-weight: bold;">
+            LEGAL INCIDENT MONITORING SYSTEM
+          </div>
+          <div style="text-align: center; color: ${theme.primaryDim}; font-size: 0.9rem; margin-top: 0.25rem; text-shadow: 0 0 8px ${theme.primaryGlow};">
+            v3.2.1 • ${theme.name}
+          </div>
         </div>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
           <span style="color: ${theme.primaryDim}; font-size: 1rem; letter-spacing: 0.05em; text-shadow: 0 0 8px ${theme.primaryGlow};">
@@ -409,7 +446,7 @@ function render() {
       <!-- Main Display -->
       <div style="background: rgba(0,0,0,0.4); border: 2px solid ${theme.primary}; padding: 2rem; margin-bottom: 2rem; box-shadow: 0 0 30px ${theme.primary}22, inset 0 0 60px rgba(0,0,0,0.5);">
         <p style="color: ${theme.primaryDim}; font-size: 1.3rem; margin: 0 0 1.5rem 0; letter-spacing: 0.1em; text-shadow: 0 0 10px ${theme.primaryGlow};">
-          &gt; DAYS SINCE LAST LEGAL REPRESENTATION AGREEMENT:
+          ${state.labelMessage}
         </p>
         <div style="text-align: center; padding: 2rem 0;">
           <span style="font-size: clamp(6rem, 25vw, 12rem); color: ${theme.primary}; text-shadow: 0 0 40px ${theme.primaryGlow}, 0 0 80px ${theme.primary}77, 0 0 100px ${theme.primary}44; letter-spacing: 0.1em;">
@@ -428,7 +465,7 @@ function render() {
           <p style="color: ${theme.danger}; font-size: 3rem; margin: 0.25rem 0 0 0; text-shadow: 0 0 25px ${theme.danger}, 0 0 40px ${theme.danger}77; letter-spacing: 0.05em;">
             $${state.displayedSpent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
-          ${DRAIN_ENABLED ? `<p style="color: ${theme.dangerDim}; font-size: 0.9rem; margin: 0.25rem 0 0 0; text-shadow: 0 0 8px ${theme.danger};">+$${DRAIN_RATE.toFixed(2)}/sec (it never really stops)</p>` : ''}
+          ${DRAIN_ENABLED ? `<p style="color: ${theme.dangerDim}; font-size: 0.9rem; margin: 0.25rem 0 0 0; text-shadow: 0 0 8px ${theme.danger};">+$${DRAIN_RATE.toFixed(2)}/sec (${state.moneyMessage})</p>` : ''}
         </div>
         <button onclick="toggleMoneySettings()" style="background: transparent; border: 1px solid ${theme.dangerDim}; color: ${theme.danger}; padding: 0.6rem 1.2rem; font-size: 1rem; cursor: pointer; font-family: inherit; text-shadow: 0 0 8px ${theme.danger};">
           ${state.showMoneySettings ? 'CLOSE' : 'EDIT'}
@@ -449,7 +486,7 @@ function render() {
               <button onclick="addMoney()" style="flex: 1; min-width: 120px; padding: 0.75rem 1rem; background: ${theme.dangerBg}; border: 1px solid ${theme.danger}; color: ${theme.danger}; font-size: 0.85rem; cursor: pointer; font-family: inherit;">ADD_TO_TOTAL</button>
               <button onclick="resetMoney()" style="padding: 0.75rem 1rem; background: transparent; border: 1px solid ${theme.dangerDim}; color: ${theme.dangerDim}; font-size: 0.85rem; cursor: pointer; font-family: inherit;">RESET</button>
             </div>
-            <p style="color: ${theme.dangerDim}; font-size: 0.75rem; margin: 0;">TIP: Set this to your actual lifetime legal spend for maximum emotional damage.</p>
+            <p style="color: ${theme.dangerDim}; font-size: 0.75rem; margin: 0;">💡 PRO TIP: Set this to your actual lifetime legal spend for maximum emotional damage. Or lie to yourself, we won't judge.</p>
           </div>
         </div>
       ` : ''}
@@ -512,7 +549,7 @@ function render() {
         <div style="background: rgba(0,0,0,0.4); border: 1px solid ${theme.primary}; padding: 1.5rem; margin-bottom: 1.5rem; max-height: 400px; overflow-y: auto;">
           <p style="color: ${theme.primary}; font-size: 0.9rem; margin: 0 0 1rem 0; text-shadow: 0 0 10px ${theme.primaryGlow};">&gt; INCIDENT LOG (${state.incidents.length} records):</p>
           ${state.incidents.length === 0 ? `
-            <p style="color: ${theme.primaryDim}; font-size: 0.85rem; font-style: italic;">No incidents recorded. Keep it that way!</p>
+            <p style="color: ${theme.primaryDim}; font-size: 0.85rem; font-style: italic;">No incidents recorded. Congratulations, you're winning at life! (For now...)</p>
           ` : `
             <div style="display: flex; flex-direction: column; gap: 0.75rem;">
               ${state.incidents.map((incident, idx) => `
