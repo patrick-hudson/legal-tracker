@@ -36,7 +36,7 @@ npm install
 
 ```bash
 cp .env.example .env
-nano .env
+vim .env
 ```
 
 Edit `.env`:
@@ -77,15 +77,32 @@ pm2 startup
 
 ### Install nginx
 
+**Ubuntu/Debian 24.04:**
 ```bash
 sudo apt update
 sudo apt install nginx
 ```
 
+**RHEL/Rocky/AlmaLinux:**
+```bash
+sudo dnf install nginx
+sudo systemctl enable nginx
+```
+
+**Fedora:**
+```bash
+sudo dnf install nginx
+```
+
+**Arch Linux:**
+```bash
+sudo pacman -S nginx
+```
+
 ### Create site config
 
 ```bash
-sudo nano /etc/nginx/sites-available/legal-tracker
+sudo vim /etc/nginx/sites-available/legal-tracker
 ```
 
 ```nginx
@@ -108,16 +125,48 @@ server {
 
 ### Enable site
 
+**Ubuntu/Debian:**
 ```bash
 sudo ln -s /etc/nginx/sites-available/legal-tracker /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl restart nginx
 ```
 
+**RHEL/Rocky/AlmaLinux/Fedora/Arch:**
+```bash
+# Edit main nginx.conf to include your config
+sudo vim /etc/nginx/nginx.conf
+# Add this line in the http block:
+#   include /etc/nginx/sites-available/legal-tracker;
+# Or place config directly in /etc/nginx/conf.d/legal-tracker.conf
+
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
 ### Add SSL with Let's Encrypt
 
+**Ubuntu/Debian 24.04:**
 ```bash
 sudo apt install certbot python3-certbot-nginx
+sudo certbot --nginx -d lawyerfree.today
+```
+
+**RHEL/Rocky/AlmaLinux:**
+```bash
+sudo dnf install certbot python3-certbot-nginx
+sudo certbot --nginx -d lawyerfree.today
+```
+
+**Fedora:**
+```bash
+sudo dnf install certbot python3-certbot-nginx
+sudo certbot --nginx -d lawyerfree.today
+```
+
+**Arch Linux:**
+```bash
+sudo pacman -S certbot certbot-nginx
 sudo certbot --nginx -d lawyerfree.today
 ```
 
