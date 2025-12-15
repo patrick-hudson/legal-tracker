@@ -51,9 +51,11 @@ jobs:
         mkdir -p backend/test/validation-reports
         TIMESTAMP=$(date -u +"%Y%m%d-%H%M%S")
         COMMIT_HASH=$(git rev-parse --short HEAD)
-        FILENAME="validation-report-${TIMESTAMP}-${COMMIT_HASH}.json"
-        cp backend/test-validation-report.json "backend/test/validation-reports/${FILENAME}"
-        echo "Generated report: ${FILENAME}"
+        JSON_FILENAME="validation-report-${TIMESTAMP}-${COMMIT_HASH}.json"
+        MD_FILENAME="validation-report-${TIMESTAMP}-${COMMIT_HASH}.md"
+        cp backend/test-validation-report.json "backend/test/validation-reports/${JSON_FILENAME}"
+        cp backend/test-validation-report.md "backend/test/validation-reports/${MD_FILENAME}"
+        echo "Generated reports: ${JSON_FILENAME} and ${MD_FILENAME}"
         ls -lh backend/test/validation-reports/
 
     - name: Commit validation report
@@ -76,7 +78,9 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: validation-report-${{ github.sha }}
-        path: backend/test-validation-report.json
+        path: |
+          backend/test-validation-report.json
+          backend/test-validation-report.md
         retention-days: 30
 
     - name: Build check
