@@ -14,6 +14,7 @@ const bootstrapForm = document.getElementById('bootstrap-form');
 const bootstrapError = document.getElementById('bootstrap-error');
 const bootstrapSuccess = document.getElementById('bootstrap-success');
 const submitBtn = document.getElementById('submit-btn');
+const tokenInput = document.getElementById('token');
 const passwordInput = document.getElementById('password');
 const passwordConfirmInput = document.getElementById('password-confirm');
 const passwordStrength = document.getElementById('password-strength');
@@ -21,9 +22,11 @@ const passwordStrengthBar = document.getElementById('password-strength-bar');
 const passwordStrengthText = document.getElementById('password-strength-text');
 const invalidMessage = document.getElementById('invalid-message');
 
-// Check if token exists
+// Check if token exists and populate field
 if (!token) {
     showInvalid('No bootstrap token provided in URL');
+} else {
+    tokenInput.value = token;
 }
 
 // Password strength checker
