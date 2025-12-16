@@ -157,6 +157,19 @@ describe('Admin Portal Tests', () => {
       const data = await response.json();
       assert.strictEqual(data.success, true);
       assert.ok(data.message.includes('successfully'));
+
+      // Wait to avoid rate limit
+      await new Promise(resolve => setTimeout(resolve, 13000));
+
+      // Re-login with new password to get fresh cookie for subsequent tests
+      const loginResponse = await fetch(`${baseURL}/admin/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, hashedPassword: hashedNewPassword })
+      });
+      assert.strictEqual(loginResponse.status, 200);
+      const setCookie = loginResponse.headers.get('set-cookie');
+      adminCookie = setCookie.split(';')[0];
     });
 
     it('should invalidate all sessions after password change', async () => {
@@ -209,6 +222,9 @@ describe('Admin Portal Tests', () => {
       // Update adminCookie for subsequent tests
       const setCookie = response.headers.get('set-cookie');
       adminCookie = setCookie.split(';')[0];
+
+      // Wait to avoid rate limit for next test
+      await new Promise(resolve => setTimeout(resolve, 13000));
     });
 
     it('should not be able to login with old password after change', async () => {
@@ -331,6 +347,9 @@ describe('Admin Portal Tests', () => {
 
       assert.strictEqual(response.status, 200);
 
+      // Wait to avoid rate limit (login has 5 requests per minute limit)
+      await new Promise(resolve => setTimeout(resolve, 13000));
+
       // Verify login works with new password
       response = await fetch(`${baseURL}/admin/api/auth/login`, {
         method: 'POST',
@@ -362,6 +381,22 @@ describe('Admin Portal Tests', () => {
       });
 
       assert.strictEqual(response.status, 200);
+
+      // Wait to avoid rate limit
+      await new Promise(resolve => setTimeout(resolve, 13000));
+
+      // Re-login with restored password for subsequent tests
+      response = await fetch(`${baseURL}/admin/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username,
+          hashedPassword: hashPasswordClientSide(username, newPassword)
+        })
+      });
+      assert.strictEqual(response.status, 200);
+      const finalCookie = response.headers.get('set-cookie');
+      adminCookie = finalCookie.split(';')[0];
     });
   });
 
