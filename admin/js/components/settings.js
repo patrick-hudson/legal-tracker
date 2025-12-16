@@ -155,7 +155,7 @@ export async function renderSettings(container) {
                         </div>
                     </div>
 
-                    <div class="space-y-2">
+                    <div id="sample-action-buttons" class="space-y-2">
                         <button id="populate-sample-btn" class="w-full text-white bg-green-600 hover:bg-green-700 rounded-lg px-4 py-2 text-sm">
                             Populate Sample Data
                         </button>
@@ -324,7 +324,7 @@ function setupEventListeners(currentSettings) {
             const loadingEl = document.getElementById('sample-datasets-loading');
             const containerEl = document.getElementById('sample-datasets-container');
 
-            // If no samples exist, show "Generate Samples First" message
+            // If no samples exist, show "Generate Samples First" message and hide action buttons
             if (samples.length === 0) {
                 loadingEl.innerHTML = `
                     <div class="text-center p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
@@ -336,6 +336,9 @@ function setupEventListeners(currentSettings) {
                         </button>
                     </div>
                 `;
+
+                // Hide the action buttons when no samples exist
+                document.getElementById('sample-action-buttons').classList.add('hidden');
 
                 // Add click handler for the generate button
                 document.getElementById('generate-samples-first-btn')?.addEventListener('click', async () => {
@@ -358,6 +361,9 @@ function setupEventListeners(currentSettings) {
 
                 return;
             }
+
+            // Show action buttons when samples exist
+            document.getElementById('sample-action-buttons').classList.remove('hidden');
 
             const select = document.getElementById('sample-dataset-select');
             const info = document.getElementById('sample-dataset-info');
