@@ -519,7 +519,7 @@ export async function createServer(options = {}) {
     if (!token || !username || !hashedPassword) {
       return reply.code(400).send({
         error: 'BAD_REQUEST',
-        message: 'Token, username, and hashedPassword are required'
+        message: 'Token, username, and password are required'
       });
     }
 
