@@ -330,6 +330,10 @@ describe('Admin Portal Tests', () => {
     it('should allow changing password multiple times in sequence', async () => {
       const username = 'testadmin';
 
+      // Wait before this test to avoid hitting rate limit from previous logins
+      // Need to wait long enough to ensure we're past the 60-second window
+      await new Promise(resolve => setTimeout(resolve, 35000));
+
       // Change from securepass789 to thirdpass
       let currentPassword = 'securepass789';
       let newPassword = 'thirdpass789';
@@ -401,6 +405,11 @@ describe('Admin Portal Tests', () => {
   });
 
   describe('Admin Matter Management', () => {
+    // Add delay before this test suite to avoid rate limit from previous logins
+    before(async () => {
+      await new Promise(resolve => setTimeout(resolve, 15000));
+    });
+
     it('should create single matter via admin API', async () => {
       const response = await fetch(`${baseURL}/admin/api/matters`, {
         method: 'POST',
