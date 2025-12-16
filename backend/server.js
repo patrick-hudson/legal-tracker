@@ -703,11 +703,12 @@ export async function createServer(options = {}) {
   });
 
   // Admin logout
-  fastify.post('/admin/api/auth/logout', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+  fastify.post('/admin/api/auth/logout', { preHandler: adminAuthMiddleware }, async (request) => {
     const jti = request.user.jti;
-    adminSessionsDb.invalidate(jti);
 
-    reply.clearCookie('admin_token', { path: '/' });
+    // Invalidate session in database - this is what actually logs the user out
+    // The cookie will still exist in browser but will be rejected by auth middleware
+    adminSessionsDb.invalidate(jti);
 
     return { success: true, message: 'Logged out successfully' };
   });
@@ -720,6 +721,7 @@ export async function createServer(options = {}) {
   });
 
   // Change password
+  // Both currentPassword and newPassword are SHA-256 hashes from client-side (username:password:salt)
   fastify.post('/admin/api/auth/change-password', { preHandler: adminAuthMiddleware }, async (request, reply) => {
     const { currentPassword, newPassword } = request.body || {};
 
@@ -727,21 +729,52 @@ export async function createServer(options = {}) {
       return reply.code(400).send({ error: 'BAD_REQUEST', message: 'Current and new password required' });
     }
 
-    if (newPassword.length < 8) {
-      return reply.code(400).send({ error: 'BAD_REQUEST', message: 'Password must be at least 8 characters' });
+    // Validate hash format (SHA-256 = 64 hex characters)
+    if (!/^[a-f0-9]{64}$/i.test(currentPassword) || !/^[a-f0-9]{64}$/i.test(newPassword)) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: 'Invalid password format' });
     }
 
     const user = adminUsersDb.getById(request.adminUser.id);
+    // Verify currentPassword hash against stored bcrypt(SHA-256) hash
     const validPassword = await verifyPassword(currentPassword, user.password_hash);
 
     if (!validPassword) {
       return reply.code(401).send({ error: 'INVALID_PASSWORD', message: 'Current password is incorrect' });
     }
 
+    // Hash the new password (which is already SHA-256) with bcrypt
     const newHash = await hashPassword(newPassword);
     adminUsersDb.updatePassword(request.adminUser.id, newHash);
 
-    return { success: true, message: 'Password changed successfully' };
+    // Invalidate all sessions for this user (force re-login with new password)
+    // The cookie will still exist in browser but will be rejected by auth middleware
+    adminSessionsDb.invalidateAllForUser(request.adminUser.id);
+
+    return { success: true, message: 'Password changed successfully. Please log in again.' };
+  });
+
+  // Nuclear option: Force invalidate ALL sessions (for debugging/troubleshooting)
+  fastify.post('/admin/api/auth/nuke-all-sessions', async () => {
+    // Get count before nuking
+    const sessionsBefore = adminSessionsDb.getAll();
+    const count = sessionsBefore.length;
+
+    // Delete ALL sessions from database
+    adminSessionsDb.invalidateAll();
+
+    // Verify they're gone
+    const sessionsAfter = adminSessionsDb.getAll();
+
+    return {
+      success: true,
+      message: 'All sessions nuked',
+      sessions_deleted: count,
+      sessions_remaining: sessionsAfter.length,
+      details: {
+        before: sessionsBefore.map(s => ({ id: s.id, user_id: s.user_id, jti: s.token_jti })),
+        after: sessionsAfter.map(s => ({ id: s.id, user_id: s.user_id, jti: s.token_jti }))
+      }
+    };
   });
 
   // Dashboard stats

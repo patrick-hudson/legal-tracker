@@ -3,6 +3,7 @@
  */
 
 import api from '../api.js';
+import auth from '../auth.js';
 
 export async function renderSettings(container) {
     container.innerHTML = '<div class="flex justify-center items-center h-64"><div class="spinner"></div></div>';
@@ -313,9 +314,28 @@ function setupEventListeners(currentSettings) {
         }
 
         try {
-            await api.changePassword(current, newPassword);
-            showToast('Password changed successfully', 'success');
+            // Hash current password client-side (same as login flow)
+            const username = auth.getUser()?.username;
+            if (!username) {
+                throw new Error('User not authenticated');
+            }
+            const hashedCurrentPassword = await auth.hashPassword(username, current);
+            const hashedNewPassword = await auth.hashPassword(username, newPassword);
+
+            const response = await api.changePassword(hashedCurrentPassword, hashedNewPassword);
+
+            // Password changed successfully - session was invalidated on server
+            showToast(response.message || 'Password changed successfully. Redirecting to login...', 'success');
             e.target.reset();
+
+            // Clear local auth state
+            auth.currentUser = null;
+            auth.isAuthenticated = false;
+
+            // Redirect to login page after 2 seconds
+            setTimeout(() => {
+                window.location.href = '/admin';
+            }, 2000);
         } catch (error) {
             showToast(`Error: ${error.message}`, 'error');
         }

@@ -100,6 +100,271 @@ describe('Admin Portal Tests', () => {
     });
   });
 
+  describe('Password Change', () => {
+    // Helper function to hash password client-side (same as login)
+    function hashPasswordClientSide(username, password) {
+      const message = username + ':' + password + ':' + PASSWORD_SALT;
+      return crypto.createHash('sha256').update(message).digest('hex');
+    }
+
+    it('should reject password change with incorrect current password', async () => {
+      const username = 'testadmin';
+      const wrongCurrentPassword = 'wrongpass';
+      const newPassword = 'newpass123';
+
+      const hashedCurrentPassword = hashPasswordClientSide(username, wrongCurrentPassword);
+      const hashedNewPassword = hashPasswordClientSide(username, newPassword);
+
+      const response = await fetch(`${baseURL}/admin/api/auth/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
+        body: JSON.stringify({
+          currentPassword: hashedCurrentPassword,
+          newPassword: hashedNewPassword
+        })
+      });
+
+      assert.strictEqual(response.status, 401);
+      const data = await response.json();
+      assert.strictEqual(data.error, 'INVALID_PASSWORD');
+      assert.ok(data.message.includes('incorrect'));
+    });
+
+    it('should successfully change password with correct current password', async () => {
+      const username = 'testadmin';
+      const currentPassword = 'testpass123';
+      const newPassword = 'newpass456';
+
+      const hashedCurrentPassword = hashPasswordClientSide(username, currentPassword);
+      const hashedNewPassword = hashPasswordClientSide(username, newPassword);
+
+      const response = await fetch(`${baseURL}/admin/api/auth/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
+        body: JSON.stringify({
+          currentPassword: hashedCurrentPassword,
+          newPassword: hashedNewPassword
+        })
+      });
+
+      assert.strictEqual(response.status, 200);
+      const data = await response.json();
+      assert.strictEqual(data.success, true);
+      assert.ok(data.message.includes('successfully'));
+    });
+
+    it('should invalidate all sessions after password change', async () => {
+      const username = 'testadmin';
+      const currentPassword = 'newpass456'; // From previous test
+      const newPassword = 'securepass789';
+
+      const hashedCurrentPassword = hashPasswordClientSide(username, currentPassword);
+      const hashedNewPassword = hashPasswordClientSide(username, newPassword);
+
+      // Change password
+      const changeResponse = await fetch(`${baseURL}/admin/api/auth/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
+        body: JSON.stringify({
+          currentPassword: hashedCurrentPassword,
+          newPassword: hashedNewPassword
+        })
+      });
+
+      assert.strictEqual(changeResponse.status, 200);
+
+      // Try to use old session cookie - should fail
+      const meResponse = await fetch(`${baseURL}/admin/api/auth/me`, {
+        headers: { 'Cookie': adminCookie }
+      });
+
+      assert.strictEqual(meResponse.status, 401);
+    });
+
+    it('should be able to login with new password after change', async () => {
+      const username = 'testadmin';
+      const newPassword = 'securepass789'; // Password from session invalidation test
+      const hashedPassword = hashPasswordClientSide(username, newPassword);
+
+      const response = await fetch(`${baseURL}/admin/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, hashedPassword })
+      });
+
+      assert.strictEqual(response.status, 200);
+      const data = await response.json();
+      assert.strictEqual(data.success, true);
+      assert.strictEqual(data.user.username, username);
+
+      // Update adminCookie for subsequent tests
+      const setCookie = response.headers.get('set-cookie');
+      adminCookie = setCookie.split(';')[0];
+    });
+
+    it('should not be able to login with old password after change', async () => {
+      const username = 'testadmin';
+      const oldPassword = 'testpass123';
+      const hashedPassword = hashPasswordClientSide(username, oldPassword);
+
+      const response = await fetch(`${baseURL}/admin/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, hashedPassword })
+      });
+
+      assert.strictEqual(response.status, 401);
+      const data = await response.json();
+      assert.strictEqual(data.error, 'INVALID_CREDENTIALS');
+    });
+
+    it('should reject password change without authentication', async () => {
+      const username = 'testadmin';
+      const hashedCurrentPassword = hashPasswordClientSide(username, 'newpass456');
+      const hashedNewPassword = hashPasswordClientSide(username, 'anotherpass');
+
+      const response = await fetch(`${baseURL}/admin/api/auth/change-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword: hashedCurrentPassword,
+          newPassword: hashedNewPassword
+        })
+      });
+
+      assert.strictEqual(response.status, 401);
+    });
+
+    it('should reject password change with missing fields', async () => {
+      // Missing newPassword
+      let response = await fetch(`${baseURL}/admin/api/auth/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
+        body: JSON.stringify({ currentPassword: 'hash123' })
+      });
+
+      assert.strictEqual(response.status, 400);
+      let data = await response.json();
+      assert.strictEqual(data.error, 'BAD_REQUEST');
+
+      // Missing currentPassword
+      response = await fetch(`${baseURL}/admin/api/auth/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
+        body: JSON.stringify({ newPassword: 'hash456' })
+      });
+
+      assert.strictEqual(response.status, 400);
+      data = await response.json();
+      assert.strictEqual(data.error, 'BAD_REQUEST');
+    });
+
+    it('should reject password change with invalid hash format', async () => {
+      // Non-hex characters
+      let response = await fetch(`${baseURL}/admin/api/auth/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
+        body: JSON.stringify({
+          currentPassword: 'zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz',
+          newPassword: 'a'.repeat(64)
+        })
+      });
+
+      assert.strictEqual(response.status, 400);
+      let data = await response.json();
+      assert.strictEqual(data.error, 'BAD_REQUEST');
+      assert.ok(data.message.includes('Invalid password format'));
+
+      // Too short
+      response = await fetch(`${baseURL}/admin/api/auth/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
+        body: JSON.stringify({
+          currentPassword: 'abc123',
+          newPassword: 'def456'
+        })
+      });
+
+      assert.strictEqual(response.status, 400);
+      data = await response.json();
+      assert.strictEqual(data.error, 'BAD_REQUEST');
+    });
+
+    it('should allow changing password multiple times in sequence', async () => {
+      const username = 'testadmin';
+
+      // Change from securepass789 to thirdpass
+      let currentPassword = 'securepass789';
+      let newPassword = 'thirdpass789';
+      let response = await fetch(`${baseURL}/admin/api/auth/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
+        body: JSON.stringify({
+          currentPassword: hashPasswordClientSide(username, currentPassword),
+          newPassword: hashPasswordClientSide(username, newPassword)
+        })
+      });
+
+      assert.strictEqual(response.status, 200);
+
+      // Verify login works with new password
+      response = await fetch(`${baseURL}/admin/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username,
+          hashedPassword: hashPasswordClientSide(username, newPassword)
+        })
+      });
+
+      assert.strictEqual(response.status, 200);
+
+      // Change back to original for other tests
+      const setCookie = response.headers.get('set-cookie');
+      adminCookie = setCookie.split(';')[0];
+
+      currentPassword = 'thirdpass789';
+      newPassword = 'testpass123';
+      response = await fetch(`${baseURL}/admin/api/auth/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
+        body: JSON.stringify({
+          currentPassword: hashPasswordClientSide(username, currentPassword),
+          newPassword: hashPasswordClientSide(username, newPassword)
+        })
+      });
+
+      assert.strictEqual(response.status, 200);
+    });
+  });
+
   describe('Admin Matter Management', () => {
     it('should create single matter via admin API', async () => {
       const response = await fetch(`${baseURL}/admin/api/matters`, {

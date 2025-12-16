@@ -47,7 +47,8 @@ class AdminAPI {
 
     async logout() {
         return this.request('/auth/logout', {
-            method: 'POST'
+            method: 'POST',
+            body: JSON.stringify({})
         });
     }
 
@@ -55,10 +56,13 @@ class AdminAPI {
         return this.request('/auth/me');
     }
 
-    async changePassword(currentPassword, newPassword) {
+    async changePassword(hashedCurrentPassword, hashedNewPassword) {
         return this.request('/auth/change-password', {
             method: 'POST',
-            body: JSON.stringify({ currentPassword, newPassword })
+            body: JSON.stringify({
+                currentPassword: hashedCurrentPassword,
+                newPassword: hashedNewPassword
+            })
         });
     }
 

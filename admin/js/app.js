@@ -75,14 +75,16 @@ async function handleLogout(e) {
 
     try {
         await auth.logout();
-        window.location.hash = '';
-        window.location.reload();
     } catch (error) {
         console.error('Logout error:', error);
-        // Force logout anyway
-        window.location.hash = '';
-        window.location.reload();
     }
+
+    // Clear local auth state
+    auth.currentUser = null;
+    auth.isAuthenticated = false;
+
+    // Redirect to admin page (will show login screen)
+    window.location.href = '/admin';
 }
 
 // Initialize when DOM is ready

@@ -360,6 +360,11 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
       saveDatabase();
     },
 
+    invalidateAll() {
+      db.run('DELETE FROM admin_sessions');
+      saveDatabase();
+    },
+
     cleanupExpired() {
       const now = new Date().toISOString();
       db.run('DELETE FROM admin_sessions WHERE expires_at < ?', [now]);
