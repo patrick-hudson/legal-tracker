@@ -3,10 +3,11 @@ import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import fastifyJWT from '@fastify/jwt';
 import fastifyCookie from '@fastify/cookie';
+import rateLimit from '@fastify/rate-limit';
 import { createDatabase } from './db.js';
 import { hashPassword, verifyPassword, generateTokenId, generateApiKey, createAdminAuthMiddleware, getTokenExpiration, generateBootstrapToken, hashBootstrapToken, getBootstrapTokenExpiration, validatePasswordStrength } from './auth.js';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { dirname, join, resolve } from 'path';
 import { readFileSync } from 'fs';
 import dotenv from 'dotenv';
 
@@ -65,11 +66,31 @@ export async function createServer(options = {}) {
   // Cookie support
   await fastify.register(fastifyCookie);
 
+  // Rate limiting - protect against brute force attacks
+  await fastify.register(rateLimit, {
+    global: false, // Don't apply globally, only to specific routes
+    max: 100, // Max requests per time window
+    timeWindow: '1 minute'
+  });
+
   // CORS setup
   await fastify.register(cors, {
     origin: corsOrigin,
     credentials: true, // Important for cookies
     methods: ['GET', 'POST', 'PUT', 'DELETE']
+  });
+
+  // Security headers middleware
+  fastify.addHook('onSend', async (_request, reply) => {
+    // Content Security Policy
+    reply.header('Content-Security-Policy', "default-src 'self'; script-src 'self' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none';");
+
+    // Other security headers
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('X-Frame-Options', 'DENY');
+    reply.header('X-XSS-Protection', '1; mode=block');
+    reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+    reply.header('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
   });
 
   // Serve frontend static files
@@ -78,6 +99,22 @@ export async function createServer(options = {}) {
     prefix: '/',
     decorateReply: false
   });
+
+  // Input validation limits
+  const INPUT_LIMITS = {
+    username: 100,
+    password: 1000, // Allow long passwords
+    email: 255,
+    note: 10000, // 10KB for notes
+    confirmationString: 100
+  };
+
+  // Validate string length
+  function validateStringLength(value, fieldName, maxLength) {
+    if (value && value.length > maxLength) {
+      throw new Error(`${fieldName} exceeds maximum length of ${maxLength} characters`);
+    }
+  }
 
   // Helper to get client IP
   function getClientIP(request) {
@@ -342,6 +379,31 @@ export async function createServer(options = {}) {
 
   // ============ ADMIN PORTAL ROUTES ============
 
+  // Secure file serving helper - prevents path traversal attacks
+  function serveStaticFile(baseDir, file) {
+    // Sanitize filename - reject any path with .. or absolute paths
+    if (file.includes('..') || file.startsWith('/') || file.includes('\0')) {
+      throw new Error('Invalid file path');
+    }
+
+    // Only allow alphanumeric, dash, underscore, and dot
+    if (!/^[a-zA-Z0-9_\-\.]+$/.test(file)) {
+      throw new Error('Invalid file name');
+    }
+
+    const filePath = join(__dirname, '..', 'admin', baseDir, file);
+
+    // Verify the resolved path is within the expected directory
+    const resolvedPath = resolve(filePath);
+    const expectedBase = resolve(join(__dirname, '..', 'admin', baseDir));
+
+    if (!resolvedPath.startsWith(expectedBase)) {
+      throw new Error('Path traversal attempt detected');
+    }
+
+    return readFileSync(resolvedPath, 'utf-8');
+  }
+
   // Serve admin portal files
   fastify.get('/admin', async (request, reply) => {
     const html = readFileSync(join(__dirname, '..', 'admin', 'index.html'), 'utf-8');
@@ -349,18 +411,33 @@ export async function createServer(options = {}) {
   });
 
   fastify.get('/admin/css/:file', async (request, reply) => {
-    const css = readFileSync(join(__dirname, '..', 'admin', 'css', request.params.file), 'utf-8');
-    return reply.type('text/css').send(css);
+    try {
+      const css = serveStaticFile('css', request.params.file);
+      return reply.type('text/css').send(css);
+    } catch (error) {
+      fastify.log.warn({ file: request.params.file, error: error.message }, 'Static file access denied');
+      return reply.code(404).send({ error: 'File not found' });
+    }
   });
 
   fastify.get('/admin/js/:file', async (request, reply) => {
-    const js = readFileSync(join(__dirname, '..', 'admin', 'js', request.params.file), 'utf-8');
-    return reply.type('application/javascript').send(js);
+    try {
+      const js = serveStaticFile('js', request.params.file);
+      return reply.type('application/javascript').send(js);
+    } catch (error) {
+      fastify.log.warn({ file: request.params.file, error: error.message }, 'Static file access denied');
+      return reply.code(404).send({ error: 'File not found' });
+    }
   });
 
   fastify.get('/admin/js/components/:file', async (request, reply) => {
-    const js = readFileSync(join(__dirname, '..', 'admin', 'js', 'components', request.params.file), 'utf-8');
-    return reply.type('application/javascript').send(js);
+    try {
+      const js = serveStaticFile('js/components', request.params.file);
+      return reply.type('application/javascript').send(js);
+    } catch (error) {
+      fastify.log.warn({ file: request.params.file, error: error.message }, 'Static file access denied');
+      return reply.code(404).send({ error: 'File not found' });
+    }
   });
 
   // Create admin auth middleware
@@ -418,7 +495,14 @@ export async function createServer(options = {}) {
   });
 
   // Bootstrap - set initial admin password with one-time token
-  fastify.post('/admin/api/bootstrap/setup', async (request, reply) => {
+  fastify.post('/admin/api/bootstrap/setup', {
+    config: {
+      rateLimit: {
+        max: 10, // Maximum 10 attempts
+        timeWindow: '5 minutes'
+      }
+    }
+  }, async (request, reply) => {
     const { token, username, password } = request.body || {};
 
     if (!token || !username || !password) {
@@ -426,6 +510,14 @@ export async function createServer(options = {}) {
         error: 'BAD_REQUEST',
         message: 'Token, username, and password are required'
       });
+    }
+
+    // Validate input lengths
+    try {
+      validateStringLength(username, 'username', INPUT_LIMITS.username);
+      validateStringLength(password, 'password', INPUT_LIMITS.password);
+    } catch (error) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: error.message });
     }
 
     // Check if there are already active admins (prevent bootstrap hijacking)
@@ -525,8 +617,15 @@ export async function createServer(options = {}) {
 
   // ============ ADMIN AUTH ENDPOINTS ============
 
-  // Admin login
-  fastify.post('/admin/api/auth/login', async (request, reply) => {
+  // Admin login - strict rate limiting to prevent brute force attacks
+  fastify.post('/admin/api/auth/login', {
+    config: {
+      rateLimit: {
+        max: 5, // Maximum 5 login attempts
+        timeWindow: '1 minute' // Per minute
+      }
+    }
+  }, async (request, reply) => {
     const { username, hashedPassword } = request.body || {};
 
     if (!username || !hashedPassword) {
@@ -709,6 +808,13 @@ export async function createServer(options = {}) {
 
     if (!matter_date) {
       return reply.code(400).send({ error: 'BAD_REQUEST', message: 'matter_date required' });
+    }
+
+    // Validate input lengths
+    try {
+      validateStringLength(note, 'note', INPUT_LIMITS.note);
+    } catch (error) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: error.message });
     }
 
     try {
@@ -913,6 +1019,15 @@ export async function createServer(options = {}) {
 
     if (!username || !password) {
       return reply.code(400).send({ error: 'BAD_REQUEST', message: 'Username and password required' });
+    }
+
+    // Validate input lengths
+    try {
+      validateStringLength(username, 'username', INPUT_LIMITS.username);
+      validateStringLength(password, 'password', INPUT_LIMITS.password);
+      validateStringLength(email, 'email', INPUT_LIMITS.email);
+    } catch (error) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: error.message });
     }
 
     if (password.length < 8) {
@@ -1232,6 +1347,13 @@ export async function createServer(options = {}) {
   fastify.post('/admin/api/data/wipe', { preHandler: adminAuthMiddleware }, async (request, reply) => {
     const { confirmation } = request.body || {};
 
+    // Validate input length
+    try {
+      validateStringLength(confirmation, 'confirmation', INPUT_LIMITS.confirmationString);
+    } catch (error) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: error.message });
+    }
+
     // Check if wipe is enabled (disabled in production unless explicitly enabled)
     const nodeEnv = process.env.NODE_ENV || 'development';
     const enableReset = process.env.ENABLE_DB_RESET === 'true';
@@ -1280,20 +1402,19 @@ export async function createServer(options = {}) {
         adminSessionsDb.invalidate(session.token_jti);
       }
 
-      // 3. Delete all admin users EXCEPT the current user (to prevent lockout)
-      const currentUserId = request.adminUser?.id;
-      const users = adminUsersDb.getAll();
-      for (const user of users) {
-        if (user.id !== currentUserId) {
-          // We need to add a delete method - for now just mark inactive
-          adminUsersDb.setActive(user.id, false);
-        }
-      }
+      // 3. Delete ALL admin users (including current user)
+      adminUsersDb.deleteAll();
 
       // 4. Invalidate all bootstrap tokens
       adminBootstrapTokensDb.invalidateAll();
 
-      // 5. Reset all settings to defaults (fresh install state)
+      // 5. Create a new bootstrap token for fresh setup
+      const bootstrapToken = generateBootstrapToken();
+      const tokenHash = hashBootstrapToken(bootstrapToken);
+      const expiresAt = getBootstrapTokenExpiration(60); // 60 minutes
+      adminBootstrapTokensDb.create(tokenHash, expiresAt, ip);
+
+      // 6. Reset all settings to defaults (fresh install state)
       settingsDb.set('lifetime_spent', '0');
       settingsDb.set('last_matter_date', new Date().toISOString());
       settingsDb.set('drain_start_time', new Date().toISOString());
@@ -1303,17 +1424,20 @@ export async function createServer(options = {}) {
       fastify.log.info({
         action: 'WIPE_EVERYTHING_COMPLETE',
         matters_deleted: matterCount,
-        admins_deactivated: adminCount - 1,
-        sessions_invalidated: sessionCount
+        admins_deleted: adminCount,
+        sessions_invalidated: sessionCount,
+        bootstrap_token_created: true
       }, 'Database wipe completed successfully');
 
       return {
         success: true,
         message: 'All data has been wiped successfully. Database reset to fresh install state.',
         matters_deleted: matterCount,
-        admins_deactivated: adminCount - 1,
+        admins_deleted: adminCount,
         sessions_invalidated: sessionCount,
-        settings_reset: true
+        settings_reset: true,
+        bootstrap_token: bootstrapToken,
+        bootstrap_url: `/admin/bootstrap.html?token=${bootstrapToken}`
       };
     } catch (error) {
       fastify.log.error({

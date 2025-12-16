@@ -502,7 +502,7 @@ function setupEventListeners(currentSettings) {
         }
 
         // Double confirmation with native dialog
-        if (!confirm('ARE YOU ABSOLUTELY SURE?\n\nThis will WIPE EVERYTHING and reset the database to fresh install state:\n\n• All matter records\n• All settings (reset to defaults)\n• All admin sessions (you will be logged out)\n• All other admin users\n\nThis action CANNOT be undone!')) {
+        if (!confirm('ARE YOU ABSOLUTELY SURE?\n\nThis will WIPE EVERYTHING and reset the database to fresh install state:\n\n• All matter records\n• All settings (reset to defaults)\n• All admin sessions (you will be logged out)\n• ALL admin users (including you!)\n\nYou will be redirected to create a new admin account.\n\nThis action CANNOT be undone!')) {
             return;
         }
 
@@ -514,17 +514,17 @@ function setupEventListeners(currentSettings) {
             const response = await api.wipeAllData(confirmation);
 
             showToast(
-                `Database wiped successfully! ${response.matters_deleted} matters deleted, ${response.admins_deactivated} admin(s) deactivated, ${response.sessions_invalidated} session(s) cleared. Logging out...`,
+                `Database wiped successfully! Redirecting to setup new admin account...`,
                 'success'
             );
 
             // Clear the confirmation input
             document.getElementById('wipe-confirmation').value = '';
 
-            // Log out after 3 seconds (session is invalidated)
+            // Redirect to bootstrap page immediately
             setTimeout(() => {
-                window.location.href = '/admin';
-            }, 3000);
+                window.location.href = response.bootstrap_url;
+            }, 1500);
         } catch (error) {
             showToast(`Error: ${error.message}`, 'error');
             const btn = document.getElementById('wipe-everything-btn');

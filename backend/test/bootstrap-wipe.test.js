@@ -340,7 +340,7 @@ describe('Bootstrap and Wipe Everything Functionality', () => {
       assert.strictEqual(settingsDb.get('lifetime_spent'), '0');
     });
 
-    test('should preserve current admin user but deactivate others', async () => {
+    test('should delete all admin users including current user', async () => {
       const { adminUsersDb } = fastify.db;
 
       // Create additional admin users
@@ -352,8 +352,8 @@ describe('Bootstrap and Wipe Everything Functionality', () => {
       adminUsersDb.create('admin3', hash2, null);
 
       // Verify 3 active admins exist
-      let activeAdmins = adminUsersDb.getAll().filter(u => u.is_active);
-      assert.strictEqual(activeAdmins.length, 3);
+      let allAdmins = adminUsersDb.getAll();
+      assert.strictEqual(allAdmins.length, 3);
 
       const response = await fastify.inject({
         method: 'POST',
@@ -366,12 +366,11 @@ describe('Bootstrap and Wipe Everything Functionality', () => {
 
       assert.strictEqual(response.statusCode, 200);
       const body = JSON.parse(response.body);
-      assert.strictEqual(body.admins_deactivated, 2);
+      assert.strictEqual(body.admins_deleted, 3);
 
-      // Verify only current admin remains active
-      activeAdmins = adminUsersDb.getAll().filter(u => u.is_active);
-      assert.strictEqual(activeAdmins.length, 1);
-      assert.strictEqual(activeAdmins[0].id, adminUserId);
+      // Verify ALL admins are deleted
+      allAdmins = adminUsersDb.getAll();
+      assert.strictEqual(allAdmins.length, 0);
     });
 
     test('should invalidate all sessions', async () => {
@@ -401,10 +400,10 @@ describe('Bootstrap and Wipe Everything Functionality', () => {
       assert.strictEqual(sessionsAfter.length, 0);
     });
 
-    test('should invalidate all bootstrap tokens', async () => {
+    test('should invalidate old bootstrap tokens and create a new one', async () => {
       const { adminBootstrapTokensDb } = fastify.db;
 
-      // Create some bootstrap tokens
+      // Create some old bootstrap tokens
       const token1 = generateBootstrapToken();
       const tokenHash1 = hashBootstrapToken(token1);
       const expiresAt1 = getBootstrapTokenExpiration(60);
@@ -427,9 +426,17 @@ describe('Bootstrap and Wipe Everything Functionality', () => {
       });
 
       assert.strictEqual(response.statusCode, 200);
+      const body = JSON.parse(response.body);
 
-      // Verify all tokens are invalidated
-      assert.strictEqual(adminBootstrapTokensDb.hasActiveTokens(), false);
+      // Verify old tokens are invalidated but a new one is created
+      assert(adminBootstrapTokensDb.hasActiveTokens());
+      const activeTokens = adminBootstrapTokensDb.getActiveTokens();
+      assert.strictEqual(activeTokens.length, 1);
+
+      // Verify response includes bootstrap token and URL
+      assert(body.bootstrap_token);
+      assert(body.bootstrap_url);
+      assert(body.bootstrap_url.includes('/admin/bootstrap.html?token='));
     });
 
     test('should reset settings to defaults', async () => {

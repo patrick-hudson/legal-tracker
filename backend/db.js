@@ -296,6 +296,16 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
       saveDatabase();
     },
 
+    delete(id) {
+      db.run('DELETE FROM admin_users WHERE id = ?', [id]);
+      saveDatabase();
+    },
+
+    deleteAll() {
+      db.run('DELETE FROM admin_users');
+      saveDatabase();
+    },
+
     getAll() {
       const result = db.exec('SELECT id, username, email, created_at, last_login, is_active FROM admin_users ORDER BY created_at DESC');
       if (result.length > 0) {
