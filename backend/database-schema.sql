@@ -44,3 +44,15 @@ CREATE TABLE IF NOT EXISTS admin_sessions (
   user_agent TEXT,
   FOREIGN KEY (user_id) REFERENCES admin_users(id)
 );
+
+-- Bootstrap tokens table for one-time admin password setup
+-- Used when database is fresh or after "wipe everything" operation
+CREATE TABLE IF NOT EXISTS admin_bootstrap_tokens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  token_hash TEXT UNIQUE NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  expires_at DATETIME NOT NULL,
+  used_at DATETIME,
+  ip_address TEXT,
+  is_active INTEGER DEFAULT 1
+);

@@ -205,6 +205,34 @@ class AdminAPI {
             body: JSON.stringify({ confirmation })
         });
     }
+
+    // Bootstrap methods
+    async getBootstrapStatus() {
+        // No auth required for bootstrap status
+        const response = await fetch('/admin/api/bootstrap/status');
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    }
+
+    async bootstrapSetup(token, username, password) {
+        // No auth required for bootstrap setup
+        const response = await fetch('/admin/api/bootstrap/setup', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ token, username, password })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || `HTTP ${response.status}`);
+        }
+
+        return response.json();
+    }
 }
 
 // Create singleton instance

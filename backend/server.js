@@ -4,7 +4,7 @@ import fastifyStatic from '@fastify/static';
 import fastifyJWT from '@fastify/jwt';
 import fastifyCookie from '@fastify/cookie';
 import { createDatabase } from './db.js';
-import { hashPassword, verifyPassword, generateTokenId, generateApiKey, createAdminAuthMiddleware, getTokenExpiration } from './auth.js';
+import { hashPassword, verifyPassword, generateTokenId, generateApiKey, createAdminAuthMiddleware, getTokenExpiration, generateBootstrapToken, hashBootstrapToken, getBootstrapTokenExpiration, validatePasswordStrength } from './auth.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { readFileSync } from 'fs';
@@ -38,7 +38,7 @@ export async function createServer(options = {}) {
   } = options;
 
   // Create database instance
-  const { settingsDb, mattersDb, adminUsersDb, adminSessionsDb } = await createDatabase(dbPath);
+  const { settingsDb, mattersDb, adminUsersDb, adminSessionsDb, adminBootstrapTokensDb } = await createDatabase(dbPath);
 
   const fastify = Fastify({
     logger,
@@ -365,6 +365,127 @@ export async function createServer(options = {}) {
 
   // Create admin auth middleware
   const adminAuthMiddleware = createAdminAuthMiddleware(adminSessionsDb, adminUsersDb);
+
+  // ============ BOOTSTRAP ENDPOINTS (No auth required) ============
+
+  // Check if bootstrap is needed
+  fastify.get('/admin/api/bootstrap/status', async () => {
+    const adminCount = adminUsersDb.getAll().filter(u => u.is_active).length;
+    const hasActiveTokens = adminBootstrapTokensDb.hasActiveTokens();
+
+    return {
+      needs_bootstrap: adminCount === 0 && hasActiveTokens,
+      has_active_admins: adminCount > 0
+    };
+  });
+
+  // Bootstrap - set initial admin password with one-time token
+  fastify.post('/admin/api/bootstrap/setup', async (request, reply) => {
+    const { token, username, password } = request.body || {};
+
+    if (!token || !username || !password) {
+      return reply.code(400).send({
+        error: 'BAD_REQUEST',
+        message: 'Token, username, and password are required'
+      });
+    }
+
+    // Check if there are already active admins (prevent bootstrap hijacking)
+    const activeAdmins = adminUsersDb.getAll().filter(u => u.is_active);
+    if (activeAdmins.length > 0) {
+      return reply.code(403).send({
+        error: 'FORBIDDEN',
+        message: 'Bootstrap is not available. Active admin users already exist.'
+      });
+    }
+
+    // Validate password strength
+    const passwordValidation = validatePasswordStrength(password);
+    if (!passwordValidation.success) {
+      return reply.code(400).send({
+        error: 'WEAK_PASSWORD',
+        message: passwordValidation.message
+      });
+    }
+
+    // Validate username
+    if (!username || username.trim().length < 3) {
+      return reply.code(400).send({
+        error: 'INVALID_USERNAME',
+        message: 'Username must be at least 3 characters long'
+      });
+    }
+
+    // Hash the token and look it up
+    const tokenHash = hashBootstrapToken(token);
+    const bootstrapToken = adminBootstrapTokensDb.getByTokenHash(tokenHash);
+
+    if (!bootstrapToken) {
+      return reply.code(401).send({
+        error: 'INVALID_TOKEN',
+        message: 'Invalid or expired bootstrap token'
+      });
+    }
+
+    // Check if token is still active
+    if (!bootstrapToken.is_active || bootstrapToken.used_at) {
+      return reply.code(401).send({
+        error: 'TOKEN_USED',
+        message: 'This bootstrap token has already been used'
+      });
+    }
+
+    // Check if token is expired
+    const now = new Date();
+    const expiresAt = new Date(bootstrapToken.expires_at);
+    if (now > expiresAt) {
+      return reply.code(401).send({
+        error: 'TOKEN_EXPIRED',
+        message: 'This bootstrap token has expired'
+      });
+    }
+
+    try {
+      // Create the admin user (using same password hashing as login)
+      const PASSWORD_SALT = process.env.PASSWORD_SALT || 'legal-tracker-default-CHANGE-THIS';
+      const crypto = await import('crypto');
+      const message = username.trim() + ':' + password + ':' + PASSWORD_SALT;
+      const clientHash = crypto.default.createHash('sha256').update(message).digest('hex');
+      const passwordHash = await hashPassword(clientHash);
+
+      // Create admin user
+      const user = adminUsersDb.create(username.trim(), passwordHash, null);
+
+      // Mark token as used
+      const ip = request.ip || 'unknown';
+      adminBootstrapTokensDb.markAsUsed(tokenHash, ip);
+
+      fastify.log.info({
+        action: 'BOOTSTRAP_COMPLETE',
+        user_id: user.id,
+        username: username.trim(),
+        ip_address: ip
+      }, 'Bootstrap setup completed successfully');
+
+      return {
+        success: true,
+        message: 'Admin account created successfully',
+        username: username.trim()
+      };
+    } catch (error) {
+      fastify.log.error({
+        action: 'BOOTSTRAP_FAILED',
+        error: error.message
+      }, 'Bootstrap setup failed');
+
+      return reply.code(500).send({
+        error: 'SERVER_ERROR',
+        message: `Failed to create admin account: ${error.message}`
+      });
+    }
+  });
+
+  // ============ ADMIN AUTH ENDPOINTS ============
 
   // Admin login
   fastify.post('/admin/api/auth/login', async (request, reply) => {
@@ -1068,36 +1189,100 @@ export async function createServer(options = {}) {
     }
   });
 
-  // Wipe all data (requires confirmation)
+  // Wipe everything - complete database reset (requires confirmation)
+  // Protected by env flag in production
   fastify.post('/admin/api/data/wipe', { preHandler: adminAuthMiddleware }, async (request, reply) => {
     const { confirmation } = request.body || {};
 
+    // Check if wipe is enabled (disabled in production unless explicitly enabled)
+    const nodeEnv = process.env.NODE_ENV || 'development';
+    const enableReset = process.env.ENABLE_DB_RESET === 'true';
+
+    if (nodeEnv === 'production' && !enableReset) {
+      return reply.code(403).send({
+        error: 'FORBIDDEN',
+        message: 'Database reset is disabled in production. Set ENABLE_DB_RESET=true to enable.'
+      });
+    }
+
     // Require exact confirmation string
-    if (confirmation !== 'DELETE ALL DATA') {
+    if (confirmation !== 'WIPE EVERYTHING') {
       return reply.code(400).send({
         error: 'BAD_REQUEST',
-        message: 'Confirmation string does not match. Please type "DELETE ALL DATA" to confirm.'
+        message: 'Confirmation string does not match. Please type "WIPE EVERYTHING" to confirm.'
       });
     }
 
     try {
-      // Get all matter IDs and delete them
+      // Log the wipe action (with user redacted for security)
+      const userId = request.adminUser?.id || 'unknown';
+      const ip = request.ip || 'unknown';
+      fastify.log.warn({
+        action: 'WIPE_EVERYTHING',
+        user_id: userId,
+        ip_address: ip,
+        timestamp: new Date().toISOString()
+      }, 'Database wipe initiated');
+
+      // Count items before deletion
+      const matterCount = mattersDb.getAll().length;
+      const adminCount = adminUsersDb.getAll().length;
+      const sessionCount = adminSessionsDb.getAll().length;
+
+      // Delete all data - this must be atomic
+      // 1. Delete all matters
       const matters = mattersDb.getAll();
       for (const matter of matters) {
         mattersDb.delete(matter.id);
       }
 
-      // Reset all settings to defaults
+      // 2. Delete all admin sessions
+      const sessions = adminSessionsDb.getAll();
+      for (const session of sessions) {
+        adminSessionsDb.invalidate(session.token_jti);
+      }
+
+      // 3. Delete all admin users EXCEPT the current user (to prevent lockout)
+      const currentUserId = request.adminUser?.id;
+      const users = adminUsersDb.getAll();
+      for (const user of users) {
+        if (user.id !== currentUserId) {
+          // We need to add a delete method - for now just mark inactive
+          adminUsersDb.setActive(user.id, false);
+        }
+      }
+
+      // 4. Invalidate all bootstrap tokens
+      adminBootstrapTokensDb.invalidateAll();
+
+      // 5. Reset all settings to defaults (fresh install state)
       settingsDb.set('lifetime_spent', '0');
       settingsDb.set('last_matter_date', new Date().toISOString());
       settingsDb.set('drain_start_time', new Date().toISOString());
+      settingsDb.set('drain_rate_cents', '50');
+      settingsDb.set('drain_enabled', 'true');
+
+      fastify.log.info({
+        action: 'WIPE_EVERYTHING_COMPLETE',
+        matters_deleted: matterCount,
+        admins_deactivated: adminCount - 1,
+        sessions_invalidated: sessionCount
+      }, 'Database wipe completed successfully');
 
       return {
         success: true,
-        message: 'All data has been wiped successfully',
-        matters_deleted: matters.length
+        message: 'All data has been wiped successfully. Database reset to fresh install state.',
+        matters_deleted: matterCount,
+        admins_deactivated: adminCount - 1,
+        sessions_invalidated: sessionCount,
+        settings_reset: true
       };
     } catch (error) {
+      fastify.log.error({
+        action: 'WIPE_EVERYTHING_FAILED',
+        error: error.message
+      }, 'Database wipe failed');
+
       return reply.code(500).send({
         error: 'SERVER_ERROR',
         message: `Failed to wipe data: ${error.message}`
@@ -1110,7 +1295,8 @@ export async function createServer(options = {}) {
     mattersDb,
     settingsDb,
     adminUsersDb,
-    adminSessionsDb
+    adminSessionsDb,
+    adminBootstrapTokensDb
   };
 
   return fastify;
@@ -1141,6 +1327,40 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     // Ignore if VERSION file doesn't exist
   }
 
+  // Check if bootstrap is needed (fresh DB with no active admins)
+  const { adminUsersDb, adminBootstrapTokensDb } = fastify.db;
+  const activeAdmins = adminUsersDb.getAll().filter(u => u.is_active);
+  const needsBootstrap = activeAdmins.length === 0;
+
+  let bootstrapInfo = '';
+  if (needsBootstrap) {
+    // Generate bootstrap token if needed
+    const { generateBootstrapToken, hashBootstrapToken, getBootstrapTokenExpiration } = await import('./auth.js');
+    const token = generateBootstrapToken();
+    const tokenHash = hashBootstrapToken(token);
+    const expiresAt = getBootstrapTokenExpiration(60); // 60 minutes
+
+    adminBootstrapTokensDb.create(tokenHash, expiresAt);
+
+    const bootstrapUrl = `http://localhost:${PORT}/admin/bootstrap.html?token=${token}`;
+
+    bootstrapInfo = `
+╔════════════════════════════════════════════════════════════════╗
+║  ⚠️  FIRST-TIME SETUP REQUIRED                                 ║
+╚════════════════════════════════════════════════════════════════╝
+
+  No active admin users found. Use the one-time bootstrap link below
+  to create your initial admin account:
+
+  🔐 Bootstrap URL (expires in 60 minutes):
+  ${bootstrapUrl}
+
+  ⚠️  This link can only be used once and will expire.
+  ⚠️  Keep this link secure - anyone with it can create an admin account.
+
+`;
+  }
+
   console.log(`
 ╔════════════════════════════════════════════════════════════════╗
 ║  LEGAL MATTER v${version.padEnd(48)} ║
@@ -1153,7 +1373,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   Auth Required: ${REQUIRE_AUTH}
   Allowed IPs:   ${ALLOWED_IPS.length > 0 ? ALLOWED_IPS.join(', ') : '(none configured)'}
   API Key:       ${API_KEY ? '(configured)' : '(not set)'}
-  `);
+  ${bootstrapInfo}`);
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);

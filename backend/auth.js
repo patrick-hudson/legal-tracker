@@ -109,3 +109,58 @@ export function getTokenExpiration(days = 7) {
   expiration.setDate(expiration.getDate() + days);
   return expiration;
 }
+
+/**
+ * Generate a cryptographically secure bootstrap token
+ * @returns {string} Random token (32 bytes = 64 hex chars)
+ */
+export function generateBootstrapToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+/**
+ * Hash a bootstrap token using SHA-256
+ * @param {string} token - Plain-text token
+ * @returns {string} Token hash
+ */
+export function hashBootstrapToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+/**
+ * Generate bootstrap token expiration (default: 60 minutes)
+ * @param {number} minutes - Number of minutes until expiration
+ * @returns {string} ISO timestamp
+ */
+export function getBootstrapTokenExpiration(minutes = 60) {
+  const expiration = new Date();
+  expiration.setMinutes(expiration.getMinutes() + minutes);
+  return expiration.toISOString();
+}
+
+/**
+ * Validate password strength
+ * @param {string} password - Password to validate
+ * @returns {Object} Validation result with success and message
+ */
+export function validatePasswordStrength(password) {
+  if (!password || password.length < 12) {
+    return { success: false, message: 'Password must be at least 12 characters long' };
+  }
+
+  const hasUpperCase = /[A-Z]/.test(password);
+  const hasLowerCase = /[a-z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+
+  const criteriaCount = [hasUpperCase, hasLowerCase, hasNumber, hasSpecialChar].filter(Boolean).length;
+
+  if (criteriaCount < 3) {
+    return {
+      success: false,
+      message: 'Password must contain at least 3 of: uppercase, lowercase, number, special character'
+    };
+  }
+
+  return { success: true };
+}

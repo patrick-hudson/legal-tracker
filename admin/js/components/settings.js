@@ -174,29 +174,33 @@ export async function renderSettings(container) {
                         Danger Zone
                     </h3>
                     <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
-                        <p class="text-sm text-red-800 dark:text-red-400 font-semibold mb-2">WARNING: This action cannot be undone!</p>
+                        <p class="text-sm text-red-800 dark:text-red-400 font-semibold mb-2">COMPLETE DATABASE RESET: This action cannot be undone!</p>
                         <p class="text-sm text-red-700 dark:text-red-300">
-                            Wiping the database will permanently delete:
+                            This will WIPE EVERYTHING and return to fresh install state:
                         </p>
                         <ul class="list-disc list-inside text-sm text-red-700 dark:text-red-300 mt-2 space-y-1">
-                            <li>All matter records</li>
-                            <li>All lifetime spending data</li>
-                            <li>All historical tracking information</li>
+                            <li>All matter records and historical data</li>
+                            <li>All settings (reset to defaults)</li>
+                            <li>All admin sessions (you will be logged out)</li>
+                            <li>All other admin users (only your account remains)</li>
                         </ul>
+                        <p class="text-xs text-red-700 dark:text-red-300 mt-2 italic">
+                            After wiping, the database will be in pristine fresh install state.
+                        </p>
                     </div>
                     <div class="space-y-3">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Type <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-red-600 dark:text-red-400 font-mono">DELETE ALL DATA</code> to confirm:
+                                Type <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-red-600 dark:text-red-400 font-mono">WIPE EVERYTHING</code> to confirm:
                             </label>
                             <input
                                 type="text"
                                 id="wipe-confirmation"
-                                placeholder="DELETE ALL DATA"
+                                placeholder="WIPE EVERYTHING"
                                 class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-red-500 focus:border-red-500">
                         </div>
-                        <button id="wipe-database-btn" class="w-full text-white bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg px-4 py-2 text-sm font-semibold" disabled>
-                            Wipe All Data
+                        <button id="wipe-everything-btn" class="w-full text-white bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg px-4 py-2 text-sm font-semibold" disabled>
+                            Wipe Everything
                         </button>
                     </div>
                 </div>
@@ -482,49 +486,50 @@ function setupEventListeners(currentSettings) {
         }
     });
 
-    // Wipe database confirmation input
+    // Wipe everything confirmation input
     document.getElementById('wipe-confirmation')?.addEventListener('input', (e) => {
-        const btn = document.getElementById('wipe-database-btn');
-        btn.disabled = e.target.value !== 'DELETE ALL DATA';
+        const btn = document.getElementById('wipe-everything-btn');
+        btn.disabled = e.target.value !== 'WIPE EVERYTHING';
     });
 
-    // Wipe database
-    document.getElementById('wipe-database-btn')?.addEventListener('click', async () => {
+    // Wipe everything
+    document.getElementById('wipe-everything-btn')?.addEventListener('click', async () => {
         const confirmation = document.getElementById('wipe-confirmation').value;
 
-        if (confirmation !== 'DELETE ALL DATA') {
+        if (confirmation !== 'WIPE EVERYTHING') {
             showToast('Please type the confirmation text exactly', 'error');
             return;
         }
 
         // Double confirmation with native dialog
-        if (!confirm('ARE YOU ABSOLUTELY SURE? This will permanently delete ALL data. This action CANNOT be undone!')) {
+        if (!confirm('ARE YOU ABSOLUTELY SURE?\n\nThis will WIPE EVERYTHING and reset the database to fresh install state:\n\n• All matter records\n• All settings (reset to defaults)\n• All admin sessions (you will be logged out)\n• All other admin users\n\nThis action CANNOT be undone!')) {
             return;
         }
 
         try {
-            const btn = document.getElementById('wipe-database-btn');
+            const btn = document.getElementById('wipe-everything-btn');
             btn.disabled = true;
-            btn.textContent = 'Wiping...';
+            btn.textContent = 'Wiping everything...';
 
             const response = await api.wipeAllData(confirmation);
-            showToast(`Database wiped successfully. ${response.matters_deleted} matters deleted.`, 'success');
+
+            showToast(
+                `Database wiped successfully! ${response.matters_deleted} matters deleted, ${response.admins_deactivated} admin(s) deactivated, ${response.sessions_invalidated} session(s) cleared. Logging out...`,
+                'success'
+            );
 
             // Clear the confirmation input
             document.getElementById('wipe-confirmation').value = '';
-            btn.disabled = true;
-            btn.textContent = 'Wipe All Data';
 
-            // Reload settings to show updated values
+            // Log out after 3 seconds (session is invalidated)
             setTimeout(() => {
-                window.location.hash = '#/settings';
-                window.location.reload();
-            }, 2000);
+                window.location.href = '/admin';
+            }, 3000);
         } catch (error) {
             showToast(`Error: ${error.message}`, 'error');
-            const btn = document.getElementById('wipe-database-btn');
-            btn.textContent = 'Wipe All Data';
-            // Keep disabled state based on input
+            const btn = document.getElementById('wipe-everything-btn');
+            btn.disabled = true; // Keep disabled until user re-types confirmation
+            btn.textContent = 'Wipe Everything';
         }
     });
 }

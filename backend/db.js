@@ -85,6 +85,16 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
       FOREIGN KEY (user_id) REFERENCES admin_users(id)
     );
 
+    CREATE TABLE IF NOT EXISTS admin_bootstrap_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      token_hash TEXT UNIQUE NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      expires_at DATETIME NOT NULL,
+      used_at DATETIME,
+      ip_address TEXT,
+      is_active INTEGER DEFAULT 1
+    );
+
     -- Initialize default settings if they don't exist
     INSERT OR IGNORE INTO settings (key, value) VALUES ('lifetime_spent', '0');
     INSERT OR IGNORE INTO settings (key, value) VALUES ('last_matter_date', datetime('now'));
@@ -382,7 +392,76 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
     }
   };
 
-  return { db, settingsDb, mattersDb, adminUsersDb, adminSessionsDb, saveDatabase };
+  const adminBootstrapTokensDb = {
+    create(tokenHash, expiresAt, ip = null) {
+      db.run(`
+        INSERT INTO admin_bootstrap_tokens (token_hash, created_at, expires_at, ip_address, is_active)
+        VALUES (?, ?, ?, ?, 1)
+      `, [tokenHash, new Date().toISOString(), expiresAt, ip]);
+
+      const result = db.exec('SELECT last_insert_rowid() as id');
+      const id = result[0].values[0][0];
+
+      saveDatabase();
+      return { id };
+    },
+
+    getByTokenHash(tokenHash) {
+      const result = db.exec('SELECT * FROM admin_bootstrap_tokens WHERE token_hash = ?', [tokenHash]);
+      if (result.length > 0 && result[0].values.length > 0) {
+        const columns = result[0].columns;
+        const row = result[0].values[0];
+        const obj = {};
+        columns.forEach((col, i) => {
+          obj[col] = row[i];
+        });
+        return obj;
+      }
+      return null;
+    },
+
+    markAsUsed(tokenHash, ip = null) {
+      db.run(`
+        UPDATE admin_bootstrap_tokens
+        SET used_at = ?, is_active = 0, ip_address = ?
+        WHERE token_hash = ?
+      `, [new Date().toISOString(), ip, tokenHash]);
+      saveDatabase();
+    },
+
+    invalidateAll() {
+      db.run('UPDATE admin_bootstrap_tokens SET is_active = 0 WHERE is_active = 1');
+      saveDatabase();
+    },
+
+    cleanupExpired() {
+      const now = new Date().toISOString();
+      db.run('DELETE FROM admin_bootstrap_tokens WHERE expires_at < ? AND used_at IS NULL', [now]);
+      saveDatabase();
+    },
+
+    hasActiveTokens() {
+      const result = db.exec('SELECT COUNT(*) as count FROM admin_bootstrap_tokens WHERE is_active = 1 AND used_at IS NULL');
+      return result[0]?.values[0]?.[0] > 0;
+    },
+
+    getActiveTokens() {
+      const result = db.exec('SELECT * FROM admin_bootstrap_tokens WHERE is_active = 1 AND used_at IS NULL ORDER BY created_at DESC');
+      if (result.length > 0) {
+        const columns = result[0].columns;
+        return result[0].values.map(row => {
+          const obj = {};
+          columns.forEach((col, i) => {
+            obj[col] = row[i];
+          });
+          return obj;
+        });
+      }
+      return [];
+    }
+  };
+
+  return { db, settingsDb, mattersDb, adminUsersDb, adminSessionsDb, adminBootstrapTokensDb, saveDatabase };
 }
 
 // Create default database instance for backwards compatibility

@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Legal Tracker - First-Time Setup</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Flowbite CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/flowbite@2.5.2/dist/flowbite.min.css" rel="stylesheet" />
+</head>
+<body class="bg-gray-50 dark:bg-gray-900">
+
+    <div class="flex flex-col items-center justify-center px-6 py-8 mx-auto md:h-screen lg:py-0">
+        <a href="#" class="flex items-center mb-6 text-2xl font-semibold text-gray-900 dark:text-white">
+            <svg class="w-8 h-8 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <path fill-rule="evenodd" d="M10 2a4 4 0 00-4 4v1H5a1 1 0 00-.994.89l-1 9A1 1 0 004 18h12a1 1 0 00.994-1.11l-1-9A1 1 0 0015 7h-1V6a4 4 0 00-4-4zm2 5V6a2 2 0 10-4 0v1h4zm-6 3a1 1 0 112 0 1 1 0 01-2 0zm7-1a1 1 0 100 2 1 1 0 000-2z" clip-rule="evenodd"></path>
+            </svg>
+            Legal Tracker Admin
+        </a>
+
+        <!-- Bootstrap Form -->
+        <div id="bootstrap-form-container" class="w-full bg-white rounded-lg shadow dark:border md:mt-0 sm:max-w-md xl:p-0 dark:bg-gray-800 dark:border-gray-700">
+            <div class="p-6 space-y-4 md:space-y-6 sm:p-8">
+                <div class="space-y-2">
+                    <h1 class="text-xl font-bold leading-tight tracking-tight text-gray-900 md:text-2xl dark:text-white">
+                        First-Time Setup
+                    </h1>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">
+                        Create your initial admin account to get started. This one-time setup link will expire in 60 minutes.
+                    </p>
+                </div>
+
+                <form id="bootstrap-form" class="space-y-4 md:space-y-6">
+                    <div>
+                        <label for="username" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                            Username
+                        </label>
+                        <input
+                            type="text"
+                            name="username"
+                            id="username"
+                            class="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-600 focus:border-blue-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
+                            placeholder="admin"
+                            required
+                            minlength="3"
+                        >
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">At least 3 characters</p>
+                    </div>
+
+                    <div>
+                        <label for="password" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                            Password
+                        </label>
+                        <input
+                            type="password"
+                            name="password"
+                            id="password"
+                            class="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-600 focus:border-blue-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
+                            required
+                            minlength="12"
+                        >
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            Minimum 12 characters. Must include at least 3 of: uppercase, lowercase, numbers, special characters
+                        </p>
+                        <div id="password-strength" class="mt-2 hidden">
+                            <div class="flex items-center gap-2">
+                                <div class="flex-1 h-2 bg-gray-200 rounded-full dark:bg-gray-700 overflow-hidden">
+                                    <div id="password-strength-bar" class="h-full transition-all duration-300"></div>
+                                </div>
+                                <span id="password-strength-text" class="text-xs font-medium"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="password-confirm" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                            Confirm Password
+                        </label>
+                        <input
+                            type="password"
+                            name="password-confirm"
+                            id="password-confirm"
+                            class="bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-600 focus:border-blue-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
+                            required
+                        >
+                    </div>
+
+                    <div id="bootstrap-error" class="hidden p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-gray-800 dark:text-red-400"></div>
+
+                    <div id="bootstrap-success" class="hidden p-4 text-sm text-green-800 rounded-lg bg-green-50 dark:bg-gray-800 dark:text-green-400"></div>
+
+                    <button
+                        type="submit"
+                        id="submit-btn"
+                        class="w-full text-white bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        Create Admin Account
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Success State (after bootstrap completes) -->
+        <div id="bootstrap-complete-container" class="hidden w-full bg-white rounded-lg shadow dark:border md:mt-0 sm:max-w-md xl:p-0 dark:bg-gray-800 dark:border-gray-700">
+            <div class="p-6 space-y-4 md:space-y-6 sm:p-8 text-center">
+                <div class="flex justify-center">
+                    <svg class="w-16 h-16 text-green-500" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                    </svg>
+                </div>
+                <h1 class="text-xl font-bold text-gray-900 dark:text-white">
+                    Setup Complete!
+                </h1>
+                <p class="text-sm text-gray-600 dark:text-gray-400">
+                    Your admin account has been created successfully.
+                </p>
+                <a
+                    href="/admin"
+                    class="inline-block w-full text-white bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800"
+                >
+                    Go to Admin Login
+                </a>
+            </div>
+        </div>
+
+        <!-- Invalid/Expired Token -->
+        <div id="bootstrap-invalid-container" class="hidden w-full bg-white rounded-lg shadow dark:border md:mt-0 sm:max-w-md xl:p-0 dark:bg-gray-800 dark:border-gray-700">
+            <div class="p-6 space-y-4 md:space-y-6 sm:p-8 text-center">
+                <div class="flex justify-center">
+                    <svg class="w-16 h-16 text-red-500" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                    </svg>
+                </div>
+                <h1 class="text-xl font-bold text-gray-900 dark:text-white">
+                    Invalid or Expired Link
+                </h1>
+                <p class="text-sm text-gray-600 dark:text-gray-400" id="invalid-message">
+                    This bootstrap link is invalid, has expired, or has already been used.
+                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                    If you need to set up a new admin account, contact your system administrator or check the server logs for a new bootstrap URL.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Get token from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+
+        // DOM elements
+        const bootstrapFormContainer = document.getElementById('bootstrap-form-container');
+        const bootstrapCompleteContainer = document.getElementById('bootstrap-complete-container');
+        const bootstrapInvalidContainer = document.getElementById('bootstrap-invalid-container');
+        const bootstrapForm = document.getElementById('bootstrap-form');
+        const bootstrapError = document.getElementById('bootstrap-error');
+        const bootstrapSuccess = document.getElementById('bootstrap-success');
+        const submitBtn = document.getElementById('submit-btn');
+        const passwordInput = document.getElementById('password');
+        const passwordConfirmInput = document.getElementById('password-confirm');
+        const passwordStrength = document.getElementById('password-strength');
+        const passwordStrengthBar = document.getElementById('password-strength-bar');
+        const passwordStrengthText = document.getElementById('password-strength-text');
+        const invalidMessage = document.getElementById('invalid-message');
+
+        // Check if token exists
+        if (!token) {
+            showInvalid('No bootstrap token provided in URL');
+        }
+
+        // Password strength checker
+        function checkPasswordStrength(password) {
+            if (!password) return { score: 0, text: '', color: '' };
+
+            const length = password.length;
+            const hasUpper = /[A-Z]/.test(password);
+            const hasLower = /[a-z]/.test(password);
+            const hasNumber = /[0-9]/.test(password);
+            const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+
+            const criteria = [hasUpper, hasLower, hasNumber, hasSpecial].filter(Boolean).length;
+
+            let score = 0;
+            if (length >= 12) score++;
+            if (length >= 16) score++;
+            if (criteria >= 3) score++;
+            if (criteria === 4) score++;
+
+            const levels = [
+                { min: 0, max: 1, text: 'Weak', color: 'bg-red-500', width: '25%' },
+                { min: 2, max: 2, text: 'Fair', color: 'bg-yellow-500', width: '50%' },
+                { min: 3, max: 3, text: 'Good', color: 'bg-blue-500', width: '75%' },
+                { min: 4, max: 4, text: 'Strong', color: 'bg-green-500', width: '100%' }
+            ];
+
+            const level = levels.find(l => score >= l.min && score <= l.max) || levels[0];
+            return { score, ...level };
+        }
+
+        passwordInput.addEventListener('input', (e) => {
+            const strength = checkPasswordStrength(e.target.value);
+            if (e.target.value.length > 0) {
+                passwordStrength.classList.remove('hidden');
+                passwordStrengthBar.className = `h-full transition-all duration-300 ${strength.color}`;
+                passwordStrengthBar.style.width = strength.width;
+                passwordStrengthText.textContent = strength.text;
+                passwordStrengthText.className = `text-xs font-medium ${strength.color.replace('bg-', 'text-')}`;
+            } else {
+                passwordStrength.classList.add('hidden');
+            }
+        });
+
+        // Form submission
+        bootstrapForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const username = document.getElementById('username').value.trim();
+            const password = passwordInput.value;
+            const passwordConfirm = passwordConfirmInput.value;
+
+            // Hide previous messages
+            bootstrapError.classList.add('hidden');
+            bootstrapSuccess.classList.add('hidden');
+
+            // Validate passwords match
+            if (password !== passwordConfirm) {
+                showError('Passwords do not match');
+                return;
+            }
+
+            // Validate password strength
+            const strength = checkPasswordStrength(password);
+            if (strength.score < 2) {
+                showError('Password is too weak. Please choose a stronger password.');
+                return;
+            }
+
+            // Disable submit button
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Creating account...';
+
+            try {
+                const response = await fetch('/admin/api/bootstrap/setup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ token, username, password })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    if (response.status === 401 && data.error === 'TOKEN_EXPIRED') {
+                        showInvalid('This bootstrap link has expired');
+                    } else if (response.status === 401 && data.error === 'TOKEN_USED') {
+                        showInvalid('This bootstrap link has already been used');
+                    } else if (response.status === 403) {
+                        showInvalid('Bootstrap is not available. Active admin users already exist.');
+                    } else {
+                        showError(data.message || 'Failed to create admin account');
+                    }
+                    return;
+                }
+
+                // Success!
+                showComplete();
+            } catch (error) {
+                showError('Network error. Please check your connection and try again.');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Create Admin Account';
+            }
+        });
+
+        function showError(message) {
+            bootstrapError.textContent = message;
+            bootstrapError.classList.remove('hidden');
+        }
+
+        function showComplete() {
+            bootstrapFormContainer.classList.add('hidden');
+            bootstrapCompleteContainer.classList.remove('hidden');
+        }
+
+        function showInvalid(message) {
+            invalidMessage.textContent = message;
+            bootstrapFormContainer.classList.add('hidden');
+            bootstrapInvalidContainer.classList.remove('hidden');
+        }
+    </script>
+
+    <!-- Flowbite JS -->
+    <script src="https://cdn.jsdelivr.net/npm/flowbite@2.5.2/dist/flowbite.min.js"></script>
+</body>
+</html>
