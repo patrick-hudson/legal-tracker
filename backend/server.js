@@ -410,6 +410,11 @@ export async function createServer(options = {}) {
     return reply.type('text/html').send(html);
   });
 
+  fastify.get('/admin/bootstrap.html', async (_request, reply) => {
+    const html = readFileSync(join(__dirname, '..', 'admin', 'bootstrap.html'), 'utf-8');
+    return reply.type('text/html').send(html);
+  });
+
   fastify.get('/admin/css/:file', async (request, reply) => {
     try {
       const css = serveStaticFile('css', request.params.file);
