@@ -163,6 +163,8 @@ test('Security Vulnerability Tests', async (t) => {
 
     await t.test('should reject excessively long username in bootstrap', async () => {
       const longUsername = 'A'.repeat(101); // Exceeds 100 char limit
+      const PASSWORD_SALT = process.env.PASSWORD_SALT || 'legal-tracker-default-CHANGE-THIS';
+      const hashedPassword = hashPasswordClientSide(longUsername, 'TestPassword123!', PASSWORD_SALT);
 
       const response = await fastify.inject({
         method: 'POST',
@@ -170,7 +172,7 @@ test('Security Vulnerability Tests', async (t) => {
         payload: {
           token: 'some-token',
           username: longUsername,
-          password: 'TestPassword123!'
+          hashedPassword
         }
       });
 

@@ -3,6 +3,16 @@ import assert from 'node:assert';
 import { createServer } from '../server.js';
 import { generateBootstrapToken, hashBootstrapToken, getBootstrapTokenExpiration } from '../auth.js';
 
+/**
+ * Helper function to hash password client-side (same as client does)
+ */
+async function hashPasswordClientSide(username, password) {
+  const crypto = await import('crypto');
+  const PASSWORD_SALT = process.env.PASSWORD_SALT || 'legal-tracker-default-CHANGE-THIS';
+  const message = username + ':' + password + ':' + PASSWORD_SALT;
+  return crypto.default.createHash('sha256').update(message).digest('hex');
+}
+
 describe('Bootstrap and Wipe Everything Functionality', () => {
   let fastify;
   let authCookie;
@@ -89,13 +99,14 @@ describe('Bootstrap and Wipe Everything Functionality', () => {
       const expiresAt = getBootstrapTokenExpiration(60);
       adminBootstrapTokensDb.create(tokenHash, expiresAt);
 
+      const hashedPassword = await hashPasswordClientSide('newadmin', 'StrongPassword123!');
       const response = await fastify.inject({
         method: 'POST',
         url: '/admin/api/bootstrap/setup',
         payload: {
           token,
           username: 'newadmin',
-          password: 'StrongPassword123!'
+          hashedPassword
         }
       });
 
@@ -105,7 +116,7 @@ describe('Bootstrap and Wipe Everything Functionality', () => {
       assert(body.message.includes('Active admin users already exist'));
     });
 
-    test('should reject weak passwords', async () => {
+    test('should reject invalid password hash formats', async () => {
       const { adminUsersDb, adminBootstrapTokensDb } = fastify.db;
 
       // Deactivate all admins
@@ -117,35 +128,35 @@ describe('Bootstrap and Wipe Everything Functionality', () => {
       const expiresAt = getBootstrapTokenExpiration(60);
       adminBootstrapTokensDb.create(tokenHash, expiresAt);
 
-      // Test too short password
+      // Test invalid hash format (too short)
       let response = await fastify.inject({
         method: 'POST',
         url: '/admin/api/bootstrap/setup',
         payload: {
           token,
           username: 'newadmin',
-          password: 'weak'
+          hashedPassword: 'tooshort'
         }
       });
 
       assert.strictEqual(response.statusCode, 400);
       let body = JSON.parse(response.body);
-      assert.strictEqual(body.error, 'WEAK_PASSWORD');
+      assert.strictEqual(body.error, 'INVALID_PASSWORD');
 
-      // Test password without enough criteria
+      // Test invalid hash format (non-hex characters)
       response = await fastify.inject({
         method: 'POST',
         url: '/admin/api/bootstrap/setup',
         payload: {
           token,
           username: 'newadmin',
-          password: 'alllowercase123'
+          hashedPassword: 'zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz'
         }
       });
 
       assert.strictEqual(response.statusCode, 400);
       body = JSON.parse(response.body);
-      assert.strictEqual(body.error, 'WEAK_PASSWORD');
+      assert.strictEqual(body.error, 'INVALID_PASSWORD');
     });
 
     test('should reject invalid/expired tokens', async () => {
@@ -155,13 +166,14 @@ describe('Bootstrap and Wipe Everything Functionality', () => {
       const users = adminUsersDb.getAll();
       users.forEach(u => adminUsersDb.setActive(u.id, false));
 
+      const hashedPassword = await hashPasswordClientSide('newadmin', 'StrongPassword123!');
       const response = await fastify.inject({
         method: 'POST',
         url: '/admin/api/bootstrap/setup',
         payload: {
           token: 'invalid-token',
           username: 'newadmin',
-          password: 'StrongPassword123!'
+          hashedPassword
         }
       });
 
@@ -183,13 +195,14 @@ describe('Bootstrap and Wipe Everything Functionality', () => {
       adminBootstrapTokensDb.create(tokenHash, expiresAt);
 
       // First use - should succeed
+      let hashedPassword = await hashPasswordClientSide('firstadmin', 'StrongPassword123!');
       let response = await fastify.inject({
         method: 'POST',
         url: '/admin/api/bootstrap/setup',
         payload: {
           token,
           username: 'firstadmin',
-          password: 'StrongPassword123!'
+          hashedPassword
         }
       });
 
@@ -200,13 +213,14 @@ describe('Bootstrap and Wipe Everything Functionality', () => {
       adminUsersDb.setActive(newUser.id, false);
 
       // Second use - should fail
+      hashedPassword = await hashPasswordClientSide('secondadmin', 'StrongPassword123!');
       response = await fastify.inject({
         method: 'POST',
         url: '/admin/api/bootstrap/setup',
         payload: {
           token,
           username: 'secondadmin',
-          password: 'StrongPassword123!'
+          hashedPassword
         }
       });
 
@@ -227,13 +241,14 @@ describe('Bootstrap and Wipe Everything Functionality', () => {
       const expiresAt = getBootstrapTokenExpiration(60);
       adminBootstrapTokensDb.create(tokenHash, expiresAt);
 
+      const hashedPassword = await hashPasswordClientSide('bootstrapadmin', 'VeryStrongPassword123!');
       const response = await fastify.inject({
         method: 'POST',
         url: '/admin/api/bootstrap/setup',
         payload: {
           token,
           username: 'bootstrapadmin',
-          password: 'VeryStrongPassword123!'
+          hashedPassword
         }
       });
 
@@ -265,13 +280,14 @@ describe('Bootstrap and Wipe Everything Functionality', () => {
       const expiresAt = getBootstrapTokenExpiration(60);
       adminBootstrapTokensDb.create(tokenHash, expiresAt);
 
+      const hashedPassword = await hashPasswordClientSide('ab', 'StrongPassword123!');
       const response = await fastify.inject({
         method: 'POST',
         url: '/admin/api/bootstrap/setup',
         payload: {
           token,
           username: 'ab',
-          password: 'StrongPassword123!'
+          hashedPassword
         }
       });
 
@@ -494,13 +510,14 @@ describe('Bootstrap and Wipe Everything Functionality', () => {
       assert.strictEqual(body.needs_bootstrap, true);
 
       // Use bootstrap to create admin
+      const hashedPassword = await hashPasswordClientSide('firstadmin', 'SuperSecurePassword123!');
       response = await freshServer.inject({
         method: 'POST',
         url: '/admin/api/bootstrap/setup',
         payload: {
           token,
           username: 'firstadmin',
-          password: 'SuperSecurePassword123!'
+          hashedPassword
         }
       });
 

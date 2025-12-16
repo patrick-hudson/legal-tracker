@@ -144,8 +144,8 @@ export function getBootstrapTokenExpiration(minutes = 60) {
  * @returns {Object} Validation result with success and message
  */
 export function validatePasswordStrength(password) {
-  if (!password || password.length < 12) {
-    return { success: false, message: 'Password must be at least 12 characters long' };
+  if (!password || password.length < 8) {
+    return { success: false, message: 'Password must be at least 8 characters long' };
   }
 
   const hasUpperCase = /[A-Z]/.test(password);

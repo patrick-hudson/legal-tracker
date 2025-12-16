@@ -461,7 +461,7 @@ export async function createServer(options = {}) {
     };
   });
 
-  // Request a bootstrap token (generates one if needed)
+  // Request a bootstrap token (generates one if needed or returns existing)
   fastify.post('/admin/api/bootstrap/request-token', async (request, reply) => {
     // Check if there are already active admins (prevent bootstrap hijacking)
     const activeAdmins = adminUsersDb.getAll().filter(u => u.is_active);
@@ -472,20 +472,26 @@ export async function createServer(options = {}) {
       });
     }
 
-    // Check if there's already an active token
-    if (adminBootstrapTokensDb.hasActiveTokens()) {
-      return reply.code(400).send({
-        error: 'TOKEN_EXISTS',
-        message: 'A bootstrap token already exists. Check server logs for the URL.'
-      });
+    let token;
+    let expiresAt;
+
+    // Check if there's already an active token - return it instead of creating a new one
+    const existingTokens = adminBootstrapTokensDb.getActiveTokens();
+    if (existingTokens.length > 0) {
+      // Cannot return the plain token since it's hashed, so generate a new one
+      // and invalidate the old one
+      adminBootstrapTokensDb.invalidateAll();
+      token = generateBootstrapToken();
+      const tokenHash = hashBootstrapToken(token);
+      expiresAt = getBootstrapTokenExpiration(60);
+      adminBootstrapTokensDb.create(tokenHash, expiresAt, request.ip);
+    } else {
+      // Generate new bootstrap token
+      token = generateBootstrapToken();
+      const tokenHash = hashBootstrapToken(token);
+      expiresAt = getBootstrapTokenExpiration(60);
+      adminBootstrapTokensDb.create(tokenHash, expiresAt, request.ip);
     }
-
-    // Generate new bootstrap token
-    const token = generateBootstrapToken();
-    const tokenHash = hashBootstrapToken(token);
-    const expiresAt = getBootstrapTokenExpiration(60); // 60 minutes
-
-    adminBootstrapTokensDb.create(tokenHash, expiresAt, request.ip);
 
     fastify.log.info({
       action: 'BOOTSTRAP_TOKEN_REQUESTED',
@@ -508,19 +514,19 @@ export async function createServer(options = {}) {
       }
     }
   }, async (request, reply) => {
-    const { token, username, password } = request.body || {};
+    const { token, username, hashedPassword } = request.body || {};
 
-    if (!token || !username || !password) {
+    if (!token || !username || !hashedPassword) {
       return reply.code(400).send({
         error: 'BAD_REQUEST',
-        message: 'Token, username, and password are required'
+        message: 'Token, username, and hashedPassword are required'
       });
     }
 
     // Validate input lengths
     try {
       validateStringLength(username, 'username', INPUT_LIMITS.username);
-      validateStringLength(password, 'password', INPUT_LIMITS.password);
+      validateStringLength(hashedPassword, 'hashedPassword', 256); // SHA-256 hash = 64 hex chars
     } catch (error) {
       return reply.code(400).send({ error: 'BAD_REQUEST', message: error.message });
     }
@@ -534,12 +540,11 @@ export async function createServer(options = {}) {
       });
     }
 
-    // Validate password strength
-    const passwordValidation = validatePasswordStrength(password);
-    if (!passwordValidation.success) {
+    // Validate hashedPassword format (should be 64 hex characters - SHA-256 hash)
+    if (!/^[a-f0-9]{64}$/i.test(hashedPassword)) {
       return reply.code(400).send({
-        error: 'WEAK_PASSWORD',
-        message: passwordValidation.message
+        error: 'INVALID_PASSWORD',
+        message: 'Invalid password hash format'
       });
     }
 
@@ -581,12 +586,8 @@ export async function createServer(options = {}) {
     }
 
     try {
-      // Create the admin user (using same password hashing as login)
-      const PASSWORD_SALT = process.env.PASSWORD_SALT || 'legal-tracker-default-CHANGE-THIS';
-      const crypto = await import('crypto');
-      const message = username.trim() + ':' + password + ':' + PASSWORD_SALT;
-      const clientHash = crypto.default.createHash('sha256').update(message).digest('hex');
-      const passwordHash = await hashPassword(clientHash);
+      // Password is already client-hashed (SHA-256), just bcrypt it
+      const passwordHash = await hashPassword(hashedPassword);
 
       // Create admin user
       const user = adminUsersDb.create(username.trim(), passwordHash, null);
