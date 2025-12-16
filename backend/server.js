@@ -516,10 +516,23 @@ export async function createServer(options = {}) {
   }, async (request, reply) => {
     const { token, username, hashedPassword } = request.body || {};
 
-    if (!token || !username || !hashedPassword) {
+    // Check each field individually for better error messages
+    if (!token) {
       return reply.code(400).send({
         error: 'BAD_REQUEST',
-        message: 'Token, username, and password are required'
+        message: 'Token is required'
+      });
+    }
+    if (!username) {
+      return reply.code(400).send({
+        error: 'BAD_REQUEST',
+        message: 'Username is required'
+      });
+    }
+    if (!hashedPassword) {
+      return reply.code(400).send({
+        error: 'BAD_REQUEST',
+        message: 'Password is required'
       });
     }
 
