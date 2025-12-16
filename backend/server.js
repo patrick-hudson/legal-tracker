@@ -379,6 +379,44 @@ export async function createServer(options = {}) {
     };
   });
 
+  // Request a bootstrap token (generates one if needed)
+  fastify.post('/admin/api/bootstrap/request-token', async (request, reply) => {
+    // Check if there are already active admins (prevent bootstrap hijacking)
+    const activeAdmins = adminUsersDb.getAll().filter(u => u.is_active);
+    if (activeAdmins.length > 0) {
+      return reply.code(403).send({
+        error: 'FORBIDDEN',
+        message: 'Bootstrap is not available. Active admin users already exist.'
+      });
+    }
+
+    // Check if there's already an active token
+    if (adminBootstrapTokensDb.hasActiveTokens()) {
+      return reply.code(400).send({
+        error: 'TOKEN_EXISTS',
+        message: 'A bootstrap token already exists. Check server logs for the URL.'
+      });
+    }
+
+    // Generate new bootstrap token
+    const token = generateBootstrapToken();
+    const tokenHash = hashBootstrapToken(token);
+    const expiresAt = getBootstrapTokenExpiration(60); // 60 minutes
+
+    adminBootstrapTokensDb.create(tokenHash, expiresAt, request.ip);
+
+    fastify.log.info({
+      action: 'BOOTSTRAP_TOKEN_REQUESTED',
+      ip_address: request.ip || 'unknown'
+    }, 'Bootstrap token generated via request');
+
+    return {
+      success: true,
+      token,
+      expires_in_minutes: 60
+    };
+  });
+
   // Bootstrap - set initial admin password with one-time token
   fastify.post('/admin/api/bootstrap/setup', async (request, reply) => {
     const { token, username, password } = request.body || {};

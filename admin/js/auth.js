@@ -46,6 +46,22 @@ class AuthManager {
         } catch (error) {
             this.currentUser = null;
             this.isAuthenticated = false;
+
+            // Check if we need bootstrap (fresh DB with no admins)
+            try {
+                const bootstrapStatus = await api.getBootstrapStatus();
+                if (bootstrapStatus.needs_bootstrap || !bootstrapStatus.has_active_admins) {
+                    // Request a bootstrap token and redirect
+                    const tokenResponse = await api.requestBootstrapToken();
+                    if (tokenResponse.success && tokenResponse.token) {
+                        window.location.href = `/admin/bootstrap.html?token=${tokenResponse.token}`;
+                        return false;
+                    }
+                }
+            } catch (bootstrapError) {
+                // If bootstrap check fails, continue with normal login
+                console.error('Bootstrap check failed:', bootstrapError);
+            }
         }
         return false;
     }

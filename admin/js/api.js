@@ -216,6 +216,24 @@ class AdminAPI {
         return response.json();
     }
 
+    async requestBootstrapToken() {
+        // No auth required - generates a new bootstrap token if needed
+        const response = await fetch('/admin/api/bootstrap/request-token', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({})
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || `HTTP ${response.status}`);
+        }
+
+        return response.json();
+    }
+
     async bootstrapSetup(token, username, password) {
         // No auth required for bootstrap setup
         const response = await fetch('/admin/api/bootstrap/setup', {
