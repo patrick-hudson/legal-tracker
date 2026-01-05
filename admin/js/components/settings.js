@@ -44,7 +44,7 @@ export async function renderSettings(container) {
                     <div class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Last Matter Date</label>
-                            <input type="datetime-local" id="last-matter-date" value="${settings.last_matter_date ? new Date(settings.last_matter_date).toISOString().slice(0, 16) : ''}" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                            <input type="datetime-local" id="last-matter-date" value="${settings.last_matter_date && settings.last_matter_date !== 'null' ? new Date(settings.last_matter_date).toISOString().slice(0, 16) : ''}" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Lifetime Spent (cents)</label>
