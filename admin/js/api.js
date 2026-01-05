@@ -10,12 +10,16 @@ class AdminAPI {
 
     async request(endpoint, options = {}) {
         const url = `${this.baseURL}${endpoint}`;
+
+        // Only set Content-Type for requests with a body
+        const headers = { ...options.headers };
+        if (options.body) {
+            headers['Content-Type'] = 'application/json';
+        }
+
         const config = {
             credentials: 'same-origin', // Include cookies
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            },
+            headers,
             ...options
         };
 
@@ -142,6 +146,41 @@ class AdminAPI {
         });
     }
 
+    // Claude API key management
+    async validateAndSaveClaudeApiKey(apiKey) {
+        return this.request('/settings/claude-api-key/validate-and-save', {
+            method: 'POST',
+            body: JSON.stringify({ apiKey })
+        });
+    }
+
+    async clearClaudeApiKey() {
+        return this.request('/settings/claude-api-key', {
+            method: 'DELETE'
+        });
+    }
+
+    // Claude models
+    async getClaudeModels() {
+        return this.request('/claude/models');
+    }
+
+    // AI settings (model, spice level, custom prompt)
+    async saveAiSettings({ model, spiceLevel, customPrompt }) {
+        return this.request('/settings/ai', {
+            method: 'PUT',
+            body: JSON.stringify({ model, spiceLevel, customPrompt })
+        });
+    }
+
+    // Preview AI descriptions
+    async previewAiDescriptions({ count = 5, spiceLevel, customPrompt }) {
+        return this.request('/claude/preview-descriptions', {
+            method: 'POST',
+            body: JSON.stringify({ count, spiceLevel, customPrompt })
+        });
+    }
+
     // Analytics
     async getAnalytics(params = {}) {
         const queryString = new URLSearchParams(params).toString();
@@ -189,10 +228,31 @@ class AdminAPI {
         return this.request('/data/samples');
     }
 
-    async populateSampleData(source, count) {
+    async populateSampleData(source, options = {}) {
+        const {
+            count,
+            startDate,
+            endDate,
+            minCostDollars,
+            maxCostDollars,
+            wholeDollarsOnly,
+            useAiDescriptions,
+            spiceLevelOverride
+        } = options;
+
         return this.request('/data/populate-sample', {
             method: 'POST',
-            body: JSON.stringify({ source, count })
+            body: JSON.stringify({
+                source,
+                count,
+                startDate,
+                endDate,
+                minCostDollars,
+                maxCostDollars,
+                wholeDollarsOnly,
+                useAiDescriptions,
+                spiceLevelOverride
+            })
         });
     }
 

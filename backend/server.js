@@ -4,6 +4,7 @@ import fastifyStatic from '@fastify/static';
 import fastifyJWT from '@fastify/jwt';
 import fastifyCookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
+import Anthropic from '@anthropic-ai/sdk';
 import { createDatabase } from './db.js';
 import { hashPassword, verifyPassword, generateTokenId, generateApiKey, createAdminAuthMiddleware, getTokenExpiration, generateBootstrapToken, hashBootstrapToken, getBootstrapTokenExpiration, validatePasswordStrength } from './auth.js';
 import { fileURLToPath } from 'url';
@@ -36,7 +37,17 @@ const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const DEFAULT_APP_SETTINGS = {
   lifetime_spent: '0',
   drain_rate_cents_per_second: '0',
-  auto_drain_enabled: 'false'
+  auto_drain_enabled: 'false',
+  // Security settings
+  api_key: '',
+  require_auth: 'false',
+  ip_whitelist: '',
+  // AI/Claude settings
+  claude_api_key: '',
+  claude_key_validated: 'false',
+  claude_model: '',
+  ai_spice_level: '1',
+  ai_custom_prompt: ''
   // Note: drain_start_time and last_matter_date are set dynamically to current time
 };
 
@@ -1189,7 +1200,28 @@ export async function createServer(options = {}) {
   // Get all settings
   fastify.get('/admin/api/settings', { preHandler: adminAuthMiddleware }, async () => {
     const settings = settingsDb.getAll();
-    return { settings };
+    // Add flag for Claude API key presence without exposing the key
+    const hasClaudeApiKey = !!settings.claude_api_key && settings.claude_api_key.length > 0;
+    const isClaudeKeyValidated = settings.claude_key_validated === 'true';
+    // Remove sensitive and legacy keys from response
+    const {
+      claude_api_key,
+      // Legacy drain settings (replaced by auto_drain_enabled and drain_rate_cents_per_second)
+      drain_rate_cents,
+      drain_enabled,
+      ...safeSettings
+    } = settings;
+    return {
+      settings: safeSettings,
+      hasClaudeApiKey,
+      isClaudeKeyValidated,
+      // AI settings for Data Management page
+      aiSettings: {
+        selectedModel: settings.claude_model || '',
+        spiceLevel: settings.ai_spice_level || '1',
+        customPrompt: settings.ai_custom_prompt || ''
+      }
+    };
   });
 
   // Update setting
@@ -1213,6 +1245,178 @@ export async function createServer(options = {}) {
 
     return { success: true, api_key: newApiKey };
   });
+
+  // Validate and save Claude API key (validation required before save)
+  fastify.post('/admin/api/settings/claude-api-key/validate-and-save', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { apiKey } = request.body || {};
+
+    if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: 'API key required' });
+    }
+
+    try {
+      // Create Anthropic client with the provided key
+      const client = new Anthropic({ apiKey: apiKey.trim() });
+
+      // Validate by listing models (lightweight operation)
+      const modelsResponse = await client.models.list();
+      const models = modelsResponse.data || [];
+
+      if (models.length === 0) {
+        return { valid: false, message: 'API key validated but no models available' };
+      }
+
+      // Save the key and mark as validated
+      settingsDb.set('claude_api_key', apiKey.trim());
+      settingsDb.set('claude_key_validated', 'true');
+
+      // Filter to text models only (exclude embedding models etc)
+      const textModels = models
+        .filter(m => m.type === 'model' && m.id.includes('claude'))
+        .map(m => ({ id: m.id, name: m.display_name || m.id }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      return {
+        valid: true,
+        message: 'API key validated and saved',
+        models: textModels
+      };
+    } catch (error) {
+      // Clear validation status on error
+      settingsDb.set('claude_key_validated', 'false');
+      const message = error.status === 401
+        ? 'Invalid API key'
+        : error.message || 'Validation failed';
+      return { valid: false, message };
+    }
+  });
+
+  // Clear Claude API key
+  fastify.delete('/admin/api/settings/claude-api-key', { preHandler: adminAuthMiddleware }, async () => {
+    settingsDb.set('claude_api_key', '');
+    settingsDb.set('claude_key_validated', 'false');
+    settingsDb.set('claude_model', '');
+    return { success: true };
+  });
+
+  // List available Claude models (requires validated key)
+  fastify.get('/admin/api/claude/models', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const claudeApiKey = settingsDb.get('claude_api_key');
+
+    if (!claudeApiKey) {
+      return reply.code(400).send({ error: 'NO_API_KEY', message: 'No Claude API key configured' });
+    }
+
+    try {
+      const client = new Anthropic({ apiKey: claudeApiKey });
+      const modelsResponse = await client.models.list();
+      const models = (modelsResponse.data || [])
+        .filter(m => m.type === 'model' && m.id.includes('claude'))
+        .map(m => ({ id: m.id, name: m.display_name || m.id }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      return { models };
+    } catch (error) {
+      return reply.code(500).send({
+        error: 'API_ERROR',
+        message: error.message || 'Failed to fetch models'
+      });
+    }
+  });
+
+  // Save AI settings (model, spice level, custom prompt)
+  fastify.put('/admin/api/settings/ai', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { model, spiceLevel, customPrompt } = request.body || {};
+
+    if (model !== undefined) {
+      settingsDb.set('claude_model', model);
+    }
+    if (spiceLevel !== undefined) {
+      settingsDb.set('ai_spice_level', String(spiceLevel));
+    }
+    if (customPrompt !== undefined) {
+      settingsDb.set('ai_custom_prompt', customPrompt);
+    }
+
+    return { success: true };
+  });
+
+  // Preview AI descriptions (generate without saving)
+  fastify.post('/admin/api/claude/preview-descriptions', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { count = 5, spiceLevel, customPrompt } = request.body || {};
+    const claudeApiKey = settingsDb.get('claude_api_key');
+    const model = settingsDb.get('claude_model');
+
+    if (!claudeApiKey) {
+      return reply.code(400).send({ error: 'NO_API_KEY', message: 'No Claude API key configured' });
+    }
+    if (!model) {
+      return reply.code(400).send({ error: 'NO_MODEL', message: 'No model selected' });
+    }
+
+    try {
+      const client = new Anthropic({ apiKey: claudeApiKey });
+      const prompt = buildDescriptionPrompt(count, spiceLevel, customPrompt);
+
+      const response = await client.messages.create({
+        model,
+        max_tokens: 2048,
+        messages: [{ role: 'user', content: prompt }]
+      });
+
+      const content = response.content?.[0]?.text;
+      if (!content) {
+        return reply.code(500).send({ error: 'EMPTY_RESPONSE', message: 'No response from Claude' });
+      }
+
+      // Parse JSON array from response
+      const jsonMatch = content.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) {
+        return reply.code(500).send({ error: 'PARSE_ERROR', message: 'Could not parse response' });
+      }
+
+      const descriptions = JSON.parse(jsonMatch[0]);
+      return { descriptions: Array.isArray(descriptions) ? descriptions : [] };
+    } catch (error) {
+      return reply.code(500).send({
+        error: 'API_ERROR',
+        message: error.message || 'Failed to generate preview'
+      });
+    }
+  });
+
+  // Helper function to build the description prompt based on spice level
+  function buildDescriptionPrompt(count, spiceLevel = '1', customPrompt = '') {
+    // If custom prompt provided, use it directly
+    if (customPrompt && customPrompt.trim()) {
+      return customPrompt.replace('{count}', count);
+    }
+
+    // Base prompt
+    const basePrompt = `Generate exactly ${count} unique legal matter descriptions for a law firm billing tracker. Each description should be a brief phrase (5-15 words) describing a legal service or matter type.`;
+
+    // Spice level modifications
+    const spiceInstructions = {
+      '1': 'Keep descriptions professional and straightforward. Standard legal terminology.',
+      '2': 'Add subtle dry humor. Slightly more creative descriptions while remaining professional.',
+      '3': 'Include mild sarcasm and wit. Creative descriptions that hint at the absurdity of some legal matters.',
+      '4': 'Be dramatic and slightly absurd. Passive-aggressive undertones. Petty disputes escalated to legal matters.',
+      '5': 'Go unhinged. Absurd, dramatic, and entertaining. Ridiculous legal matters that could theoretically exist. Dark humor welcome.'
+    };
+
+    const varietyNote = 'Include variety: contracts, litigation, IP, employment, regulatory, real estate, corporate, tax matters, etc.';
+
+    const fullPrompt = `${basePrompt}
+
+${spiceInstructions[spiceLevel] || spiceInstructions['1']}
+
+${varietyNote}
+
+Return ONLY a JSON array of strings, no other text. Example format:
+["Contract review for vendor agreement", "Patent infringement defense", "Employee termination consultation"]`;
+
+    return fullPrompt;
+  }
 
   // Analytics data
   fastify.get('/admin/api/analytics', { preHandler: adminAuthMiddleware }, async () => {
@@ -1394,11 +1598,83 @@ export async function createServer(options = {}) {
     }
   });
 
+  // Load static matter descriptions
+  let staticDescriptions = [];
+  try {
+    const descriptionsPath = join(__dirname, 'data', 'matter-descriptions.json');
+    const descriptionsContent = readFileSync(descriptionsPath, 'utf-8');
+    staticDescriptions = JSON.parse(descriptionsContent).descriptions || [];
+  } catch (err) {
+    console.warn('Could not load matter descriptions:', err.message);
+    // Fallback descriptions
+    staticDescriptions = [
+      'Contract review and negotiation',
+      'Employment dispute consultation',
+      'Trademark registration',
+      'Lease agreement review',
+      'NDA drafting',
+      'Partnership agreement',
+      'IP protection consultation',
+      'Tax compliance advice',
+      'Corporate governance review',
+      'Litigation support'
+    ];
+  }
+
+  // Helper function to generate descriptions using Claude API (with SDK)
+  async function generateClaudeDescriptions(count, overrideSpiceLevel = null) {
+    const claudeApiKey = settingsDb.get('claude_api_key');
+    const model = settingsDb.get('claude_model');
+
+    if (!claudeApiKey || !model) {
+      return null;
+    }
+
+    try {
+      const client = new Anthropic({ apiKey: claudeApiKey });
+      const spiceLevel = overrideSpiceLevel || settingsDb.get('ai_spice_level') || '1';
+      const customPrompt = settingsDb.get('ai_custom_prompt') || '';
+      const prompt = buildDescriptionPrompt(count, spiceLevel, customPrompt);
+
+      const response = await client.messages.create({
+        model,
+        max_tokens: 4096,
+        messages: [{ role: 'user', content: prompt }]
+      });
+
+      const content = response.content?.[0]?.text;
+      if (!content) return null;
+
+      // Parse the JSON array from the response
+      const jsonMatch = content.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) return null;
+
+      const descriptions = JSON.parse(jsonMatch[0]);
+      return Array.isArray(descriptions) ? descriptions : null;
+    } catch (err) {
+      console.error('Claude API error:', err.message);
+      return null;
+    }
+  }
+
   // Populate sample data from file or generate new
   fastify.post('/admin/api/data/populate-sample', { preHandler: adminAuthMiddleware }, async (request, reply) => {
     try {
-      const { source, count } = request.body || {};
+      const {
+        source,
+        count = 25,
+        // Advanced options
+        startDate,
+        endDate,
+        minCostDollars,
+        maxCostDollars,
+        wholeDollarsOnly = true,
+        useAiDescriptions = false,
+        spiceLevelOverride = null  // Allow per-generation spice level override
+      } = request.body || {};
+
       let sampleMatters = [];
+      let usedAi = false;
 
       if (source && source !== 'generate') {
         // Validate source name - only allow alphanumeric, dash, underscore
@@ -1434,35 +1710,68 @@ export async function createServer(options = {}) {
           });
         }
       } else {
-        // Generate new sample data
-        const matterCount = count || 25;
+        // Generate new sample data with advanced options
+        const matterCount = Math.min(Math.max(1, count), 1000); // Clamp 1-1000
+
+        // Date range - default to past 12 months
         const now = new Date();
-        const twoYearsAgo = new Date(now);
-        twoYearsAgo.setFullYear(now.getFullYear() - 2);
+        let dateStart, dateEnd;
 
-        const matterTypes = [
-          { note: 'Contract review', cost: 150000 },
-          { note: 'Incorporation paperwork', cost: 250000 },
-          { note: 'Employment dispute consultation', cost: 350000 },
-          { note: 'Trademark filing', cost: 175000 },
-          { note: 'Lease agreement review', cost: 125000 },
-          { note: 'NDA drafting', cost: 75000 },
-          { note: 'Partnership agreement', cost: 450000 },
-          { note: 'IP protection consultation', cost: 300000 },
-          { note: 'Tax compliance advice', cost: 200000 },
-          { note: 'Shareholder agreement', cost: 500000 }
-        ];
+        if (startDate) {
+          dateStart = new Date(startDate);
+        } else {
+          dateStart = new Date(now);
+          dateStart.setFullYear(now.getFullYear() - 1);
+        }
 
+        if (endDate) {
+          dateEnd = new Date(endDate);
+        } else {
+          dateEnd = now;
+        }
+
+        // Cost range in cents - default $100 to $50,000
+        const minCents = minCostDollars !== undefined ? Math.round(minCostDollars * 100) : 10000;
+        const maxCents = maxCostDollars !== undefined ? Math.round(maxCostDollars * 100) : 5000000;
+
+        // Get descriptions
+        let descriptions = staticDescriptions;
+
+        if (useAiDescriptions) {
+          const aiDescriptions = await generateClaudeDescriptions(matterCount, spiceLevelOverride);
+          if (aiDescriptions && aiDescriptions.length > 0) {
+            descriptions = aiDescriptions;
+            usedAi = true;
+          }
+        }
+
+        // Generate matters
         for (let i = 0; i < matterCount; i++) {
+          // Random date within range
           const randomDate = new Date(
-            twoYearsAgo.getTime() + Math.random() * (now.getTime() - twoYearsAgo.getTime())
+            dateStart.getTime() + Math.random() * (dateEnd.getTime() - dateStart.getTime())
           );
-          const randomMatter = matterTypes[Math.floor(Math.random() * matterTypes.length)];
+
+          // Random cost within range
+          let costCents;
+          if (wholeDollarsOnly) {
+            // Generate whole dollar amounts (round to nearest 100 cents)
+            const minDollars = Math.ceil(minCents / 100);
+            const maxDollars = Math.floor(maxCents / 100);
+            costCents = (Math.floor(Math.random() * (maxDollars - minDollars + 1)) + minDollars) * 100;
+          } else {
+            // Include random cents
+            costCents = Math.floor(Math.random() * (maxCents - minCents + 1)) + minCents;
+          }
+
+          // Pick a description
+          const description = descriptions[i % descriptions.length] ||
+            descriptions[Math.floor(Math.random() * descriptions.length)];
 
           sampleMatters.push({
             matter_date: randomDate.toISOString(),
-            note: randomMatter.note,
-            cost: randomMatter.cost
+            note: description,
+            cost: costCents
           });
         }
 
@@ -1493,14 +1802,19 @@ export async function createServer(options = {}) {
       // Update settings
       const currentSpent = parseFloat(settingsDb.get('lifetime_spent') || '0');
       settingsDb.set('lifetime_spent', currentSpent + totalCost);
-      settingsDb.set('last_matter_date', sampleMatters[sampleMatters.length - 1].matter_date);
+      if (sampleMatters.length > 0) {
+        settingsDb.set('last_matter_date', sampleMatters[sampleMatters.length - 1].matter_date);
+      }
 
       return {
         success: true,
-        message: source ? `Loaded ${sampleMatters.length} matters from ${source}` : `Generated ${sampleMatters.length} sample matters`,
+        message: source && source !== 'generate'
+          ? `Loaded ${sampleMatters.length} matters from ${source}`
+          : `Generated ${sampleMatters.length} sample matters`,
         matters_added: sampleMatters.length,
         total_cost_added: totalCost / 100,
-        source: (source === 'generate' || !source) ? 'generated' : source
+        source: (source === 'generate' || !source) ? 'generated' : source,
+        used_ai_descriptions: usedAi
       };
     } catch (error) {
       return reply.code(500).send({

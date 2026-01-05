@@ -60,9 +60,9 @@ export async function renderSecurity(container) {
                 </div>
 
                 <!-- Change Password -->
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 lg:col-span-2">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
                     <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Change Password</h3>
-                    <form id="change-password-form" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <form id="change-password-form" class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Current Password</label>
                             <input type="password" name="current" required class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
@@ -75,9 +75,7 @@ export async function renderSecurity(container) {
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Confirm New Password</label>
                             <input type="password" name="confirm" required minlength="8" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                         </div>
-                        <div class="md:col-span-3">
-                            <button type="submit" class="text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-6 py-2 text-sm">Change Password</button>
-                        </div>
+                        <button type="submit" class="w-full text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-6 py-2 text-sm">Change Password</button>
                     </form>
                 </div>
             </div>

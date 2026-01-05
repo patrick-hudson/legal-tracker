@@ -370,6 +370,233 @@ POST /admin/api/settings/api-key/generate
 Response: { "success": true, "api_key": "..." }
 ```
 
+### Claude AI Endpoints
+
+**Validate and Save Claude API Key**
+```http
+POST /admin/api/settings/claude-api-key/validate-and-save
+Content-Type: application/json
+
+{
+  "apiKey": "sk-ant-api03-..."
+}
+
+Response (success): { "valid": true, "models": [...] }
+Response (invalid): { "valid": false, "message": "Invalid API key" }
+```
+
+**Clear Claude API Key**
+```http
+DELETE /admin/api/settings/claude-api-key
+
+Response: { "success": true }
+```
+
+**List Available Claude Models**
+```http
+GET /admin/api/claude/models
+
+Response: { "models": [{ "id": "claude-sonnet-4-20250514", "name": "Claude Sonnet 4" }, ...] }
+```
+
+**Save AI Settings**
+```http
+PUT /admin/api/settings/ai
+Content-Type: application/json
+
+{
+  "model": "claude-sonnet-4-20250514",
+  "spiceLevel": "3",
+  "customPrompt": ""  // Optional, empty uses default
+}
+
+Response: { "success": true }
+```
+
+**Preview AI Descriptions**
+```http
+POST /admin/api/claude/preview-descriptions
+Content-Type: application/json
+
+{
+  "count": 5,
+  "spiceLevel": "3",       // Optional
+  "customPrompt": ""       // Optional
+}
+
+Response: { "descriptions": ["...", "...", ...] }
+```
+
+### Data Management Endpoints
+
+**Populate Sample Data**
+```http
+POST /admin/api/data/populate-sample
+Content-Type: application/json
+
+{
+  "source": "generate",           // or predefined dataset ID
+  "count": 25,                    // Number of matters
+  "startDate": "2025-01-01",      // Optional
+  "endDate": "2026-01-05",        // Optional
+  "minCostDollars": 100,          // Optional
+  "maxCostDollars": 50000,        // Optional
+  "wholeDollarsOnly": true,       // Optional
+  "useAiDescriptions": false,     // Optional, requires Claude setup
+  "spiceLevelOverride": "3"       // Optional, override saved spice level
+}
+
+Response: {
+  "success": true,
+  "matters_added": 25,
+  "total_cost_added": 125000.00,
+  "used_ai_descriptions": false
+}
+```
+
+**List Sample Datasets**
+```http
+GET /admin/api/data/samples
+
+Response: { "samples": [{ "id": "...", "name": "...", "matter_count": 100 }, ...] }
+```
+
+**Wipe Operations**
+```http
+POST /admin/api/data/wipe-matters
+Content-Type: application/json
+{ "confirmation": "WIPE MATTERS" }
+
+POST /admin/api/data/wipe-matters-settings
+Content-Type: application/json
+{ "confirmation": "WIPE SETTINGS" }
+
+POST /admin/api/data/wipe-all
+Content-Type: application/json
+{ "confirmation": "WIPE EVERYTHING" }
+```
+
+### 6. Data Management
+
+The Data Management page provides tools for managing sample data, AI-powered descriptions, and database maintenance.
+
+#### Claude AI Integration
+
+Integrate with Claude API to generate unique, AI-powered matter descriptions for sample data. The AI configuration section is collapsible - click the header to expand/collapse.
+
+**Setup:**
+
+1. Navigate to Data Management page
+2. In the "Claude AI Integration" section:
+   - Enter your Claude API key (starts with `sk-ant-`)
+   - Click "Validate & Save" - the key is validated against Claude's API before saving
+   - Once validated, the model dropdown becomes available
+   - Select your preferred model (auto-saves on change)
+
+**API Key Management:**
+- **Validate & Save**: API key is tested against Claude API before storing
+- **Show/Hide**: Toggle visibility of the API key (only available before validation)
+- **Clear**: Remove the stored API key (requires confirmation)
+
+**Model Selection:**
+- Available after API key validation
+- Lists all available Claude models from your account
+- **Auto-saves**: Selection is immediately saved when changed (displays toast notification)
+- Persists across sessions
+
+**Getting an API Key:**
+- Sign up at [console.anthropic.com](https://console.anthropic.com/)
+- Create an API key in the API Keys section
+- Copy the key (starts with `sk-ant-api03-...`)
+
+#### Description Prompt Configuration
+
+Customize how AI generates matter descriptions with spice levels and custom prompts.
+
+**Spice Levels:**
+
+Select the tone using the button group:
+
+| Level | Name | Description |
+|-------|------|-------------|
+| 1 | Professional | Straightforward, formal corporate tone |
+| 2 | Dry Humor | Subtle, understated wit |
+| 3 | Witty | Mild sarcasm and clever wordplay |
+| 4 | Dramatic | Theatrical, slightly absurd descriptions |
+| 5 | Unhinged | Wildly creative, maximally entertaining |
+| 6 | Chaotic Evil | Maximum depravity with mandatory puns and sarcasm |
+| 7 | Eldritch Horror | Cosmic legal nightmare fuel (may cause existential dread)
+
+Changing the spice level updates the default prompt preview in real-time.
+
+**Custom Prompt:**
+- Check "Override with custom prompt" to write your own template
+- Use `{count}` placeholder where you want the number of descriptions inserted
+  - Example: "Generate {count} legal matter descriptions" → "Generate 25 legal matter descriptions"
+- The default prompt is shown read-only when custom prompt is disabled
+- Click "Save Prompt" to persist custom prompt changes
+
+**Preview:**
+- Click "Preview (5 samples)" to generate sample descriptions
+- Requires a validated API key and selected model
+- Shows 5 example descriptions using current settings
+- Use this to test your prompt and spice level before generating data
+
+**Settings Persistence:**
+- Model selection: Auto-saved immediately on change
+- Spice level and custom prompt: Saved when clicking "Save Prompt"
+- All AI settings are cleared by "Wipe + Reset" and "Factory Reset" operations
+
+#### Sample Data Generation
+
+Generate test data for development and demo purposes.
+
+**Dataset Options:**
+- **Generate New**: Create randomized matters with configurable options
+- **Predefined Datasets**: Load pre-built sample datasets
+
+**Generation Options (Advanced Modal):**
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| Count | Number of matters to generate | 25 |
+| Start Date | Earliest matter date | 1 year ago |
+| End Date | Latest matter date | Today |
+| Min Cost | Minimum cost per matter | $100 |
+| Max Cost | Maximum cost per matter | $50,000 |
+| Whole Dollars | Generate round dollar amounts | Yes |
+| Use AI | Use Claude for descriptions | No (requires setup) |
+
+**Quick Generate:**
+- Click "Generate Now" for fast generation with defaults
+- Uses the count from the main form
+
+#### Database Wipe Operations
+
+⚠️ **Warning**: These operations cannot be undone!
+
+**Wipe Matters (Orange):**
+- Deletes all matter records
+- Preserves all settings and admin accounts
+- Type `WIPE MATTERS` to enable
+
+**Wipe + Reset (Amber):**
+- Deletes all matters
+- Resets lifetime fees to $0
+- Disables auto-drain, resets drain timer
+- Clears API key, auth settings, IP whitelist
+- Clears Claude API key and AI settings
+- Preserves admin accounts
+- Type `WIPE SETTINGS` to enable
+
+**Factory Reset (Red):**
+- Complete database reset to fresh install state
+- Deletes everything: matters, settings, admin users, sessions
+- Clears API key, auth settings, IP whitelist
+- Clears Claude API key and AI settings
+- Redirects to create new admin account
+- Type `WIPE EVERYTHING` to enable
+
 ## Troubleshooting
 
 ### Can't Log In
