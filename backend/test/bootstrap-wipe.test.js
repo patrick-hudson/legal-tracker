@@ -297,6 +297,128 @@ describe('Bootstrap and Wipe Everything Functionality', () => {
     });
   });
 
+  describe('Bootstrap Token Validation API', () => {
+    test('should return valid=true for active unused token', async () => {
+      const { adminBootstrapTokensDb } = fastify.db;
+
+      const token = generateBootstrapToken();
+      const tokenHash = hashBootstrapToken(token);
+      const expiresAt = getBootstrapTokenExpiration(60);
+      adminBootstrapTokensDb.create(tokenHash, expiresAt);
+
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/bootstrap/validate-token',
+        payload: { token }
+      });
+
+      assert.strictEqual(response.statusCode, 200);
+      const body = JSON.parse(response.body);
+      assert.strictEqual(body.valid, true);
+      assert(body.expires_at);
+    });
+
+    test('should return error for invalid token', async () => {
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/bootstrap/validate-token',
+        payload: { token: 'invalid-token-that-does-not-exist' }
+      });
+
+      assert.strictEqual(response.statusCode, 401);
+      const body = JSON.parse(response.body);
+      assert.strictEqual(body.valid, false);
+      assert.strictEqual(body.error, 'INVALID_TOKEN');
+    });
+
+    test('should return error for used token', async () => {
+      const { adminBootstrapTokensDb } = fastify.db;
+
+      const token = generateBootstrapToken();
+      const tokenHash = hashBootstrapToken(token);
+      const expiresAt = getBootstrapTokenExpiration(60);
+      adminBootstrapTokensDb.create(tokenHash, expiresAt);
+
+      // Mark token as used
+      adminBootstrapTokensDb.markAsUsed(tokenHash, '127.0.0.1');
+
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/bootstrap/validate-token',
+        payload: { token }
+      });
+
+      assert.strictEqual(response.statusCode, 401);
+      const body = JSON.parse(response.body);
+      assert.strictEqual(body.valid, false);
+      assert.strictEqual(body.error, 'TOKEN_USED');
+    });
+
+    test('should return error for expired token', async () => {
+      const { adminBootstrapTokensDb } = fastify.db;
+
+      const token = generateBootstrapToken();
+      const tokenHash = hashBootstrapToken(token);
+      // Create token that expired 1 hour ago
+      const expiresAt = new Date(Date.now() - 3600000).toISOString();
+      adminBootstrapTokensDb.create(tokenHash, expiresAt);
+
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/bootstrap/validate-token',
+        payload: { token }
+      });
+
+      assert.strictEqual(response.statusCode, 401);
+      const body = JSON.parse(response.body);
+      assert.strictEqual(body.valid, false);
+      assert.strictEqual(body.error, 'TOKEN_EXPIRED');
+    });
+
+    test('should return error when no token provided', async () => {
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/bootstrap/validate-token',
+        payload: {}
+      });
+
+      assert.strictEqual(response.statusCode, 400);
+      const body = JSON.parse(response.body);
+      assert.strictEqual(body.error, 'BAD_REQUEST');
+    });
+
+    test('should not consume the token when validating', async () => {
+      const { adminBootstrapTokensDb } = fastify.db;
+
+      const token = generateBootstrapToken();
+      const tokenHash = hashBootstrapToken(token);
+      const expiresAt = getBootstrapTokenExpiration(60);
+      adminBootstrapTokensDb.create(tokenHash, expiresAt);
+
+      // Validate twice - should succeed both times
+      let response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/bootstrap/validate-token',
+        payload: { token }
+      });
+      assert.strictEqual(response.statusCode, 200);
+      assert.strictEqual(JSON.parse(response.body).valid, true);
+
+      response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/bootstrap/validate-token',
+        payload: { token }
+      });
+      assert.strictEqual(response.statusCode, 200);
+      assert.strictEqual(JSON.parse(response.body).valid, true);
+
+      // Token should still be unused
+      const tokenRecord = adminBootstrapTokensDb.getByTokenHash(tokenHash);
+      assert.strictEqual(tokenRecord.used_at, null);
+      assert.strictEqual(tokenRecord.is_active, 1);
+    });
+  });
+
   describe('Wipe Everything API', () => {
     test('should reject wipe without auth', async () => {
       const response = await fastify.inject({
@@ -460,8 +582,8 @@ describe('Bootstrap and Wipe Everything Functionality', () => {
 
       // Set some custom values
       settingsDb.set('lifetime_spent', '999999');
-      settingsDb.set('drain_rate_cents', '100');
-      settingsDb.set('drain_enabled', 'false');
+      settingsDb.set('drain_rate_cents_per_second', '100');
+      settingsDb.set('auto_drain_enabled', 'false');
 
       const response = await fastify.inject({
         method: 'POST',
@@ -476,10 +598,170 @@ describe('Bootstrap and Wipe Everything Functionality', () => {
 
       // Verify defaults are restored
       assert.strictEqual(settingsDb.get('lifetime_spent'), '0');
-      assert.strictEqual(settingsDb.get('drain_rate_cents'), '50');
-      assert.strictEqual(settingsDb.get('drain_enabled'), 'true');
+      assert.strictEqual(settingsDb.get('drain_rate_cents_per_second'), '50');
+      assert.strictEqual(settingsDb.get('auto_drain_enabled'), 'true');
       assert(settingsDb.get('drain_start_time')); // Should be set to current time
       assert(settingsDb.get('last_matter_date')); // Should be set to current time
+    });
+  });
+
+  describe('Wipe Matters API', () => {
+    test('should reject wipe matters without auth', async () => {
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/data/wipe-matters',
+        payload: { confirmation: 'WIPE MATTERS' }
+      });
+
+      assert.strictEqual(response.statusCode, 401);
+    });
+
+    test('should reject wipe matters with wrong confirmation string', async () => {
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/data/wipe-matters',
+        headers: {
+          cookie: authCookie
+        },
+        payload: { confirmation: 'DELETE MATTERS' }
+      });
+
+      assert.strictEqual(response.statusCode, 400);
+      const body = JSON.parse(response.body);
+      assert.strictEqual(body.error, 'BAD_REQUEST');
+      assert(body.message.includes('WIPE MATTERS'));
+    });
+
+    test('should successfully wipe all matters with correct confirmation', async () => {
+      const { mattersDb } = fastify.db;
+
+      // Add some test matters
+      mattersDb.add(new Date().toISOString(), 'Test matter 1', 10, 10000);
+      mattersDb.add(new Date().toISOString(), 'Test matter 2', 5, 20000);
+      mattersDb.add(new Date().toISOString(), 'Test matter 3', 3, 15000);
+
+      // Verify matters exist
+      assert.strictEqual(mattersDb.getAll().length, 3);
+
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/data/wipe-matters',
+        headers: {
+          cookie: authCookie
+        },
+        payload: { confirmation: 'WIPE MATTERS' }
+      });
+
+      assert.strictEqual(response.statusCode, 200);
+      const body = JSON.parse(response.body);
+      assert.strictEqual(body.success, true);
+      assert.strictEqual(body.matters_deleted, 3);
+
+      // Verify matters were wiped
+      assert.strictEqual(mattersDb.getAll().length, 0);
+    });
+
+    test('should reset last_matter_date setting', async () => {
+      const { mattersDb, settingsDb } = fastify.db;
+
+      // Set a last_matter_date
+      settingsDb.set('last_matter_date', '2024-01-15T12:00:00.000Z');
+
+      // Add a matter
+      mattersDb.add(new Date().toISOString(), 'Test matter', 10, 10000);
+
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/data/wipe-matters',
+        headers: {
+          cookie: authCookie
+        },
+        payload: { confirmation: 'WIPE MATTERS' }
+      });
+
+      assert.strictEqual(response.statusCode, 200);
+
+      // Verify last_matter_date was reset (null or 'null' string depending on db implementation)
+      const lastMatterDate = settingsDb.get('last_matter_date');
+      assert(lastMatterDate === null || lastMatterDate === 'null', `Expected null but got: ${lastMatterDate}`);
+    });
+
+    test('should preserve admin users and sessions', async () => {
+      const { mattersDb, adminUsersDb, adminSessionsDb } = fastify.db;
+
+      // Add some matters
+      mattersDb.add(new Date().toISOString(), 'Test matter', 10, 10000);
+
+      // Count admins and sessions before
+      const adminsBefore = adminUsersDb.getAll().length;
+      const sessionsBefore = adminSessionsDb.getAll().length;
+
+      assert(adminsBefore > 0);
+      assert(sessionsBefore > 0);
+
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/data/wipe-matters',
+        headers: {
+          cookie: authCookie
+        },
+        payload: { confirmation: 'WIPE MATTERS' }
+      });
+
+      assert.strictEqual(response.statusCode, 200);
+
+      // Verify admins and sessions are preserved
+      assert.strictEqual(adminUsersDb.getAll().length, adminsBefore);
+      assert.strictEqual(adminSessionsDb.getAll().length, sessionsBefore);
+    });
+
+    test('should preserve other settings', async () => {
+      const { mattersDb, settingsDb } = fastify.db;
+
+      // Set some custom settings
+      settingsDb.set('lifetime_spent_cents', '50000');
+      settingsDb.set('drain_rate_cents_per_second', '75');
+      settingsDb.set('auto_drain_enabled', 'false');
+
+      // Add a matter
+      mattersDb.add(new Date().toISOString(), 'Test matter', 10, 10000);
+
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/data/wipe-matters',
+        headers: {
+          cookie: authCookie
+        },
+        payload: { confirmation: 'WIPE MATTERS' }
+      });
+
+      assert.strictEqual(response.statusCode, 200);
+
+      // Verify other settings are preserved
+      assert.strictEqual(settingsDb.get('lifetime_spent_cents'), '50000');
+      assert.strictEqual(settingsDb.get('drain_rate_cents_per_second'), '75');
+      assert.strictEqual(settingsDb.get('auto_drain_enabled'), 'false');
+    });
+
+    test('should handle empty matters gracefully', async () => {
+      const { mattersDb } = fastify.db;
+
+      // Ensure no matters exist
+      assert.strictEqual(mattersDb.getAll().length, 0);
+
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/data/wipe-matters',
+        headers: {
+          cookie: authCookie
+        },
+        payload: { confirmation: 'WIPE MATTERS' }
+      });
+
+      assert.strictEqual(response.statusCode, 200);
+      const body = JSON.parse(response.body);
+      assert.strictEqual(body.success, true);
+      assert.strictEqual(body.matters_deleted, 0);
     });
   });
 

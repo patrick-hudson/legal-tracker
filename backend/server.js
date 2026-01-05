@@ -83,7 +83,7 @@ export async function createServer(options = {}) {
   // Security headers middleware
   fastify.addHook('onSend', async (_request, reply) => {
     // Content Security Policy
-    reply.header('Content-Security-Policy', "default-src 'self'; script-src 'self' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none';");
+    reply.header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none';");
 
     // Other security headers
     reply.header('X-Content-Type-Options', 'nosniff');
@@ -97,7 +97,19 @@ export async function createServer(options = {}) {
   await fastify.register(fastifyStatic, {
     root: join(__dirname, '..', 'frontend'),
     prefix: '/',
-    decorateReply: false
+    decorateReply: false,
+    cacheControl: false, // Disable default cache control
+    setHeaders: (res, path) => {
+      // Disable caching for JavaScript files to prevent stale code
+      if (path.endsWith('.js')) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+      } else {
+        // Allow caching for other static assets
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+      }
+    }
   });
 
   // Input validation limits
@@ -188,8 +200,8 @@ export async function createServer(options = {}) {
     const daysSince = Math.floor((now - lastMatterDate) / (1000 * 60 * 60 * 24));
 
     // Calculate accumulated drain since drain_start_time
-    const drainEnabled = settings.drain_enabled === 'true';
-    const drainRateCents = parseInt(settings.drain_rate_cents || '50');
+    const drainEnabled = settings.auto_drain_enabled === 'true';
+    const drainRateCents = parseFloat(settings.drain_rate_cents_per_second || '50');
     const drainRateDollars = drainRateCents / 100; // Convert cents to dollars
     // lifetime_spent is stored in cents, convert to dollars
     const baseSpentCents = parseFloat(settings.lifetime_spent || '0');
@@ -207,7 +219,7 @@ export async function createServer(options = {}) {
       total_spent: totalSpent,
       drain_start_time: settings.drain_start_time,
       drain_enabled: drainEnabled,
-      drain_rate_cents: drainRateCents,
+      drain_rate_cents_per_second: drainRateCents,
       stats: {
         total_matters: stats.total,
         matters_this_year: stats.thisYear,
@@ -352,19 +364,24 @@ export async function createServer(options = {}) {
   });
 
   // Update drain configuration
-  fastify.post('/api/settings/drain', { preHandler: authMiddleware }, async (request) => {
+  // Rate is in cents per second (explicit unit)
+  // Max rate: 1000 cents/sec = $10/sec = $600/min = $36,000/hr = $864,000/day
+  fastify.post('/api/settings/drain', { preHandler: authMiddleware }, async (request, reply) => {
     const { enabled, rate_cents } = request.body || {};
 
     if (enabled !== undefined) {
-      settingsDb.set('drain_enabled', enabled ? 'true' : 'false');
+      settingsDb.set('auto_drain_enabled', enabled ? 'true' : 'false');
     }
 
     if (rate_cents !== undefined) {
-      const cents = parseInt(rate_cents);
-      if (isNaN(cents) || cents < 0) {
-        return { error: 'BAD_REQUEST', message: 'Invalid rate_cents value' };
+      const cents = parseFloat(rate_cents);
+      if (isNaN(cents) || cents < 0 || cents > 1000) {
+        return reply.code(400).send({
+          error: 'BAD_REQUEST',
+          message: 'Invalid drain rate. Must be between 0 and 1000 cents per second.'
+        });
       }
-      settingsDb.set('drain_rate_cents', String(cents));
+      settingsDb.set('drain_rate_cents_per_second', String(cents));
     }
 
     // Reset drain start time when changing drain settings
@@ -372,8 +389,8 @@ export async function createServer(options = {}) {
 
     return {
       success: true,
-      drain_enabled: settingsDb.get('drain_enabled') === 'true',
-      drain_rate_cents: parseInt(settingsDb.get('drain_rate_cents'))
+      drain_enabled: settingsDb.get('auto_drain_enabled') === 'true',
+      drain_rate_cents_per_second: parseFloat(settingsDb.get('drain_rate_cents_per_second'))
     };
   });
 
@@ -428,6 +445,10 @@ export async function createServer(options = {}) {
   fastify.get('/admin/js/:file', async (request, reply) => {
     try {
       const js = serveStaticFile('js', request.params.file);
+      // Disable caching for JavaScript files to prevent stale code
+      reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+      reply.header('Pragma', 'no-cache');
+      reply.header('Expires', '0');
       return reply.type('application/javascript').send(js);
     } catch (error) {
       fastify.log.warn({ file: request.params.file, error: error.message }, 'Static file access denied');
@@ -438,6 +459,10 @@ export async function createServer(options = {}) {
   fastify.get('/admin/js/components/:file', async (request, reply) => {
     try {
       const js = serveStaticFile('js/components', request.params.file);
+      // Disable caching for JavaScript files to prevent stale code
+      reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+      reply.header('Pragma', 'no-cache');
+      reply.header('Expires', '0');
       return reply.type('application/javascript').send(js);
     } catch (error) {
       fastify.log.warn({ file: request.params.file, error: error.message }, 'Static file access denied');
@@ -502,6 +527,54 @@ export async function createServer(options = {}) {
       success: true,
       token,
       expires_in_minutes: 60
+    };
+  });
+
+  // Validate a bootstrap token without consuming it
+  fastify.post('/admin/api/bootstrap/validate-token', async (request, reply) => {
+    const { token } = request.body || {};
+
+    if (!token) {
+      return reply.code(400).send({
+        error: 'BAD_REQUEST',
+        message: 'Token is required'
+      });
+    }
+
+    // Hash the token and look it up
+    const tokenHash = hashBootstrapToken(token);
+    const bootstrapToken = adminBootstrapTokensDb.getByTokenHash(tokenHash);
+
+    if (!bootstrapToken) {
+      return reply.code(401).send({
+        valid: false,
+        error: 'INVALID_TOKEN',
+        message: 'Invalid bootstrap token'
+      });
+    }
+
+    // Check if token is still active
+    if (!bootstrapToken.is_active || bootstrapToken.used_at) {
+      return reply.code(401).send({
+        valid: false,
+        error: 'TOKEN_USED',
+        message: 'This bootstrap token has already been used'
+      });
+    }
+
+    // Check if token is expired
+    if (new Date(bootstrapToken.expires_at) < new Date()) {
+      return reply.code(401).send({
+        valid: false,
+        error: 'TOKEN_EXPIRED',
+        message: 'This bootstrap token has expired'
+      });
+    }
+
+    // Token is valid
+    return {
+      valid: true,
+      expires_at: bootstrapToken.expires_at
     };
   });
 
@@ -787,8 +860,8 @@ export async function createServer(options = {}) {
     const now = new Date();
     const daysSince = Math.floor((now - lastMatterDate) / (1000 * 60 * 60 * 24));
 
-    const drainEnabled = settings.drain_enabled === 'true';
-    const drainRateCents = parseInt(settings.drain_rate_cents || '50');
+    const drainEnabled = settings.auto_drain_enabled === 'true';
+    const drainRateCents = parseFloat(settings.drain_rate_cents_per_second || '50');
     const baseSpent = parseFloat(settings.lifetime_spent || '0');
 
     return {
@@ -796,7 +869,7 @@ export async function createServer(options = {}) {
       last_matter_date: settings.last_matter_date,
       lifetime_spent: baseSpent,
       drain_enabled: drainEnabled,
-      drain_rate_cents: drainRateCents,
+      drain_rate_cents_per_second: drainRateCents,
       stats: {
         total_matters: stats.total,
         matters_this_year: stats.thisYear,
@@ -1394,6 +1467,67 @@ export async function createServer(options = {}) {
     }
   });
 
+  // Wipe matters only - delete all matter records but keep admin users and settings
+  fastify.post('/admin/api/data/wipe-matters', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { confirmation } = request.body || {};
+
+    // Validate input length
+    try {
+      validateStringLength(confirmation, 'confirmation', INPUT_LIMITS.confirmationString);
+    } catch (error) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: error.message });
+    }
+
+    // Require exact confirmation string
+    if (confirmation !== 'WIPE MATTERS') {
+      return reply.code(400).send({
+        error: 'BAD_REQUEST',
+        message: 'Confirmation string does not match. Please type "WIPE MATTERS" to confirm.'
+      });
+    }
+
+    try {
+      // Log the wipe action
+      const userId = request.adminUser?.id || 'unknown';
+      const ip = request.ip || 'unknown';
+      fastify.log.warn({
+        action: 'WIPE_MATTERS',
+        user_id: userId,
+        ip_address: ip,
+        timestamp: new Date().toISOString()
+      }, 'Matters wipe initiated');
+
+      // Count matters before deletion
+      const matterCount = mattersDb.getAll().length;
+
+      // Delete all matters
+      const matters = mattersDb.getAll();
+      for (const matter of matters) {
+        mattersDb.delete(matter.id);
+      }
+
+      // Reset the last_matter_date setting
+      settingsDb.set('last_matter_date', null);
+
+      fastify.log.info({
+        action: 'WIPE_MATTERS_COMPLETE',
+        matters_deleted: matterCount
+      }, 'Matters wipe completed successfully');
+
+      return {
+        success: true,
+        message: `Successfully deleted ${matterCount} matter records`,
+        matters_deleted: matterCount
+      };
+    } catch (error) {
+      fastify.log.error({ error: error.message }, 'Failed to wipe matters');
+      return reply.code(500).send({
+        error: 'SERVER_ERROR',
+        message: `Failed to wipe matters: ${error.message}`
+      });
+    }
+  });
+
   // Wipe everything - complete database reset (requires confirmation)
   // Protected by env flag in production
   fastify.post('/admin/api/data/wipe', { preHandler: adminAuthMiddleware }, async (request, reply) => {
@@ -1470,8 +1604,8 @@ export async function createServer(options = {}) {
       settingsDb.set('lifetime_spent', '0');
       settingsDb.set('last_matter_date', new Date().toISOString());
       settingsDb.set('drain_start_time', new Date().toISOString());
-      settingsDb.set('drain_rate_cents', '50');
-      settingsDb.set('drain_enabled', 'true');
+      settingsDb.set('drain_rate_cents_per_second', '50');
+      settingsDb.set('auto_drain_enabled', 'true');
 
       fastify.log.info({
         action: 'WIPE_EVERYTHING_COMPLETE',

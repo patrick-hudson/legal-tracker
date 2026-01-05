@@ -108,15 +108,15 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
     `, [new Date().toISOString()]);
   }
 
-  // Initialize drain configuration settings
-  const drainRateExists = db.exec('SELECT value FROM settings WHERE key = ?', ['drain_rate_cents']);
+  // Initialize drain configuration settings with explicit unit (cents per second)
+  const drainRateExists = db.exec('SELECT value FROM settings WHERE key = ?', ['drain_rate_cents_per_second']);
   if (!drainRateExists.length || !drainRateExists[0].values.length) {
-    db.run(`INSERT INTO settings (key, value) VALUES ('drain_rate_cents', '50')`); // 50 cents per second default
+    db.run(`INSERT INTO settings (key, value) VALUES ('drain_rate_cents_per_second', '50')`); // 50 cents per second default ($0.50/sec = $43.20/day)
   }
 
-  const drainEnabledExists = db.exec('SELECT value FROM settings WHERE key = ?', ['drain_enabled']);
+  const drainEnabledExists = db.exec('SELECT value FROM settings WHERE key = ?', ['auto_drain_enabled']);
   if (!drainEnabledExists.length || !drainEnabledExists[0].values.length) {
-    db.run(`INSERT INTO settings (key, value) VALUES ('drain_enabled', 'true')`);
+    db.run(`INSERT INTO settings (key, value) VALUES ('auto_drain_enabled', 'true')`);
   }
 
   // Helper to save database to disk

@@ -4,7 +4,7 @@
 
 // Get token from URL
 const urlParams = new URLSearchParams(window.location.search);
-const token = urlParams.get('token');
+let token = urlParams.get('token');
 
 // DOM elements
 const bootstrapFormContainer = document.getElementById('bootstrap-form-container');
@@ -22,12 +22,67 @@ const passwordStrengthBar = document.getElementById('password-strength-bar');
 const passwordStrengthText = document.getElementById('password-strength-text');
 const invalidMessage = document.getElementById('invalid-message');
 
-// Check if token exists and populate field
-if (!token) {
-    showInvalid('No bootstrap token provided in URL');
-} else {
-    tokenInput.value = token;
+// Validate token on page load
+async function validateAndInitialize() {
+    if (!token) {
+        showInvalid('No bootstrap token provided in URL');
+        return;
+    }
+
+    try {
+        const response = await fetch('/admin/api/bootstrap/validate-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.valid) {
+            // Token is invalid - try to get a fresh one
+            const statusResponse = await fetch('/admin/api/bootstrap/status');
+            const status = await statusResponse.json();
+
+            if (!status.has_active_admins) {
+                // No admins exist, request a new token
+                const tokenResponse = await fetch('/admin/api/bootstrap/request-token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+
+                const tokenData = await tokenResponse.json();
+
+                if (tokenData.success && tokenData.token) {
+                    // Update URL and token without full page reload
+                    token = tokenData.token;
+                    tokenInput.value = token;
+                    window.history.replaceState({}, '', `/admin/bootstrap.html?token=${token}`);
+                    return; // Token is now valid, show the form
+                }
+            }
+
+            // Could not get a valid token
+            if (data.error === 'TOKEN_EXPIRED') {
+                showInvalid('This bootstrap link has expired');
+            } else if (data.error === 'TOKEN_USED') {
+                showInvalid('This bootstrap link has already been used');
+            } else {
+                showInvalid('Invalid bootstrap token');
+            }
+            return;
+        }
+
+        // Token is valid, populate the field
+        tokenInput.value = token;
+    } catch (error) {
+        console.error('Token validation failed:', error);
+        showInvalid('Unable to validate bootstrap token. Please check your connection.');
+    }
 }
+
+// Initialize on page load
+validateAndInitialize();
 
 // Password strength checker
 function checkPasswordStrength(password) {

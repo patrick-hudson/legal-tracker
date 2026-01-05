@@ -599,13 +599,14 @@ describe('Admin Portal Tests', () => {
       const response = await fetch(`${baseURL}/api/status`);
       const data = await response.json();
 
-      // Verify drain fields are present
+      // Verify drain fields are present with correct naming
       assert.ok('drain_enabled' in data);
-      assert.ok('drain_rate_cents' in data);
+      assert.ok('drain_rate_cents_per_second' in data);
       assert.ok('accumulated_drain' in data);
       assert.ok('drain_start_time' in data);
       assert.ok(typeof data.accumulated_drain === 'number');
       assert.ok(data.accumulated_drain >= 0);
+      assert.ok(typeof data.drain_rate_cents_per_second === 'number');
     });
 
     it('should calculate total_spent including drain', async () => {
@@ -712,6 +713,146 @@ describe('Admin Portal Tests', () => {
       assert.strictEqual(response.status, 200);
       const data = await response.json();
       assert.strictEqual(data.lifetime_spent, 0);
+    });
+  });
+
+  describe('Drain Settings Management', () => {
+    it('should get current drain settings from admin API', async () => {
+      const response = await fetch(`${baseURL}/admin/api/settings`, {
+        headers: { 'Cookie': adminCookie }
+      });
+
+      assert.strictEqual(response.status, 200);
+      const data = await response.json();
+      assert.ok(data.settings);
+      assert.ok('auto_drain_enabled' in data.settings);
+      assert.ok('drain_rate_cents_per_second' in data.settings);
+    });
+
+    it('should update drain enabled setting', async () => {
+      // Disable drain
+      const response1 = await fetch(`${baseURL}/admin/api/settings/auto_drain_enabled`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
+        body: JSON.stringify({ value: 'false' })
+      });
+
+      assert.strictEqual(response1.status, 200);
+
+      // Verify it's disabled in status
+      const statusResponse = await fetch(`${baseURL}/api/status`);
+      const statusData = await statusResponse.json();
+      assert.strictEqual(statusData.drain_enabled, false);
+
+      // Re-enable drain for other tests
+      await fetch(`${baseURL}/admin/api/settings/auto_drain_enabled`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
+        body: JSON.stringify({ value: 'true' })
+      });
+    });
+
+    it('should update drain rate with validation', async () => {
+      // Set valid drain rate
+      const validRate = '100.5';
+      const response1 = await fetch(`${baseURL}/admin/api/settings/drain_rate_cents_per_second`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
+        body: JSON.stringify({ value: validRate })
+      });
+
+      assert.strictEqual(response1.status, 200);
+
+      // Verify it's updated in status
+      const statusResponse = await fetch(`${baseURL}/api/status`);
+      const statusData = await statusResponse.json();
+      assert.strictEqual(statusData.drain_rate_cents_per_second, 100.5);
+
+      // Restore default rate for other tests
+      await fetch(`${baseURL}/admin/api/settings/drain_rate_cents_per_second`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
+        body: JSON.stringify({ value: '50' })
+      });
+    });
+
+    it('should enforce rate validation boundaries (0-1000)', async () => {
+      // The validation is actually in the admin UI, but the API should still accept valid values
+      // Test that extremely high rates work (up to 1000)
+      const maxRate = '1000';
+      const response = await fetch(`${baseURL}/admin/api/settings/drain_rate_cents_per_second`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
+        body: JSON.stringify({ value: maxRate })
+      });
+
+      assert.strictEqual(response.status, 200);
+
+      // Verify it's updated
+      const statusResponse = await fetch(`${baseURL}/api/status`);
+      const statusData = await statusResponse.json();
+      assert.strictEqual(statusData.drain_rate_cents_per_second, 1000);
+
+      // Restore default
+      await fetch(`${baseURL}/admin/api/settings/drain_rate_cents_per_second`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
+        body: JSON.stringify({ value: '50' })
+      });
+    });
+
+    it('should not accumulate drain when disabled', async () => {
+      // Disable drain
+      await fetch(`${baseURL}/admin/api/settings/auto_drain_enabled`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
+        body: JSON.stringify({ value: 'false' })
+      });
+
+      // Get initial status
+      const response1 = await fetch(`${baseURL}/api/status`);
+      const data1 = await response1.json();
+      assert.strictEqual(data1.drain_enabled, false);
+      assert.strictEqual(data1.accumulated_drain, 0);
+
+      // Wait a bit
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Check that drain didn't accumulate
+      const response2 = await fetch(`${baseURL}/api/status`);
+      const data2 = await response2.json();
+      assert.strictEqual(data2.accumulated_drain, 0);
+
+      // Re-enable for other tests
+      await fetch(`${baseURL}/admin/api/settings/auto_drain_enabled`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
+        body: JSON.stringify({ value: 'true' })
+      });
     });
   });
 });

@@ -271,7 +271,7 @@ async function fetchStatus() {
     state.displayedSpent = data.total_spent || data.lifetime_spent;
     state.drainStartTime = new Date(data.drain_start_time);
     state.drainEnabled = data.drain_enabled !== undefined ? data.drain_enabled : true;
-    state.drainRateCents = data.drain_rate_cents !== undefined ? data.drain_rate_cents : 50;
+    state.drainRateCents = data.drain_rate_cents_per_second !== undefined ? data.drain_rate_cents_per_second : 50;
     state.stats = data.stats;
     state.currentIP = data.your_ip;
     state.isAuthorized = true; // We'll find out on write attempts
