@@ -5,11 +5,110 @@
 
 import api from '../api.js';
 
+// Store persisted settings for comparison
+let persistedDrainSettings = {
+    auto_drain_enabled: 'false',
+    drain_rate_cents_per_second: '0'
+};
+
+/**
+ * Calculate drain rate preview values
+ * @param {number} centsPerSecond - Drain rate in cents per second
+ * @returns {Object} Preview values in dollars
+ */
+function calculateDrainPreview(centsPerSecond) {
+    const dollarsPerSecond = centsPerSecond / 100;
+    return {
+        perHour: (dollarsPerSecond * 3600).toFixed(2),
+        perDay: (dollarsPerSecond * 86400).toFixed(2)
+    };
+}
+
+/**
+ * Check if drain settings have unsaved changes
+ */
+function hasDrainChanges() {
+    const enabledCheckbox = document.getElementById('auto-drain-enabled');
+    const rateInput = document.getElementById('drain-rate');
+    if (!enabledCheckbox || !rateInput) return false;
+
+    const currentEnabled = enabledCheckbox.checked ? 'true' : 'false';
+    const currentRate = rateInput.value;
+
+    return currentEnabled !== persistedDrainSettings.auto_drain_enabled ||
+           currentRate !== persistedDrainSettings.drain_rate_cents_per_second;
+}
+
+/**
+ * Update the drain rate preview display
+ */
+function updateDrainPreview() {
+    const rateInput = document.getElementById('drain-rate');
+    const previewEl = document.getElementById('drain-rate-preview');
+    if (!rateInput || !previewEl) return;
+
+    const rate = parseFloat(rateInput.value) || 0;
+    const preview = calculateDrainPreview(rate);
+    previewEl.textContent = `$${preview.perHour}/hour | $${preview.perDay}/day`;
+}
+
+/**
+ * Update the auto-drain status indicator
+ */
+function updateStatusIndicator() {
+    const enabledCheckbox = document.getElementById('auto-drain-enabled');
+    const statusIndicator = document.getElementById('auto-drain-status');
+    if (!enabledCheckbox || !statusIndicator) return;
+
+    const isEnabled = enabledCheckbox.checked;
+    if (isEnabled) {
+        statusIndicator.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
+        statusIndicator.innerHTML = `
+            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+            </svg>
+            Enabled
+        `;
+    } else {
+        statusIndicator.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+        statusIndicator.innerHTML = `
+            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+            </svg>
+            Disabled
+        `;
+    }
+}
+
+/**
+ * Update the unsaved changes indicator
+ */
+function updateUnsavedIndicator() {
+    const unsavedEl = document.getElementById('drain-unsaved-indicator');
+    if (!unsavedEl) return;
+
+    if (hasDrainChanges()) {
+        unsavedEl.classList.remove('hidden');
+    } else {
+        unsavedEl.classList.add('hidden');
+    }
+}
+
 export async function renderTrackerSettings(container) {
     container.innerHTML = '<div class="flex justify-center items-center h-64"><div class="spinner"></div></div>';
 
     try {
         const { settings } = await api.getSettings();
+
+        // Store persisted settings
+        persistedDrainSettings = {
+            auto_drain_enabled: settings.auto_drain_enabled || 'false',
+            drain_rate_cents_per_second: settings.drain_rate_cents_per_second || '0'
+        };
+
+        const drainRate = parseFloat(settings.drain_rate_cents_per_second) || 0;
+        const drainPreview = calculateDrainPreview(drainRate);
+        const isEnabled = settings.auto_drain_enabled === 'true';
 
         container.innerHTML = `
             <div class="mb-4">
@@ -20,19 +119,37 @@ export async function renderTrackerSettings(container) {
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <!-- Drain Settings -->
                 <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Drain Settings</h3>
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Drain Settings</h3>
+                        <div class="flex items-center gap-2">
+                            <span id="drain-unsaved-indicator" class="hidden text-xs text-amber-600 dark:text-amber-400 font-medium">Unsaved changes</span>
+                            <span id="auto-drain-status" class="${isEnabled ? 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'}">
+                                ${isEnabled ? `
+                                    <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                    </svg>
+                                    Enabled
+                                ` : `
+                                    <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                                    </svg>
+                                    Disabled
+                                `}
+                            </span>
+                        </div>
+                    </div>
                     <div class="space-y-4">
                         <div>
                             <label class="flex items-center cursor-pointer">
-                                <input type="checkbox" id="auto-drain-enabled" ${settings.auto_drain_enabled === 'true' ? 'checked' : ''} class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
+                                <input type="checkbox" id="auto-drain-enabled" ${isEnabled ? 'checked' : ''} class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
                                 <span class="ml-2 text-sm font-medium text-gray-900 dark:text-white">Enable Auto-Drain</span>
                             </label>
                             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">When disabled, the cost meter stops accumulating automatically</p>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Drain Rate (cents per second)</label>
-                            <input type="number" step="0.001" min="0" max="1000" id="drain-rate" value="${settings.drain_rate_cents_per_second || 50}" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                            <p class="mt-1 text-xs text-gray-500">$${((parseFloat(settings.drain_rate_cents_per_second || 50) * 3600) / 100).toFixed(2)}/hour | $${((parseFloat(settings.drain_rate_cents_per_second || 50) * 86400) / 100).toFixed(2)}/day</p>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Drain Rate (cents/second)</label>
+                            <input type="number" step="0.001" min="0" max="1000" id="drain-rate" value="${drainRate}" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                            <p id="drain-rate-preview" class="mt-1 text-xs text-gray-500 dark:text-gray-400">$${drainPreview.perHour}/hour | $${drainPreview.perDay}/day</p>
                             <p class="mt-1 text-xs text-gray-400">Maximum: 1000 cents/sec ($864,000/day)</p>
                         </div>
                         <button id="save-drain-btn" class="w-full text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-4 py-2 text-sm">Save Drain Settings</button>
@@ -77,8 +194,23 @@ export async function renderTrackerSettings(container) {
 }
 
 function setupEventListeners(currentSettings) {
-    // Drain settings
+    // Live preview updates on drain rate input
+    document.getElementById('drain-rate')?.addEventListener('input', () => {
+        updateDrainPreview();
+        updateUnsavedIndicator();
+    });
+
+    // Status indicator and unsaved changes on checkbox toggle
+    document.getElementById('auto-drain-enabled')?.addEventListener('change', () => {
+        updateStatusIndicator();
+        updateUnsavedIndicator();
+    });
+
+    // Drain settings save
     document.getElementById('save-drain-btn')?.addEventListener('click', async () => {
+        const btn = document.getElementById('save-drain-btn');
+        const originalText = btn.textContent;
+
         try {
             const enabled = document.getElementById('auto-drain-enabled').checked;
             const rate = parseFloat(document.getElementById('drain-rate').value);
@@ -88,12 +220,27 @@ function setupEventListeners(currentSettings) {
                 return;
             }
 
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+
             await api.updateSetting('auto_drain_enabled', enabled.toString());
             await api.updateSetting('drain_rate_cents_per_second', rate.toString());
+
+            // Update persisted settings after successful save
+            persistedDrainSettings = {
+                auto_drain_enabled: enabled.toString(),
+                drain_rate_cents_per_second: rate.toString()
+            };
+
+            // Hide unsaved indicator
+            updateUnsavedIndicator();
 
             showToast('Drain settings saved successfully. Drain timer has been reset.', 'success');
         } catch (error) {
             showToast(`Error: ${error.message}`, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalText;
         }
     });
 
