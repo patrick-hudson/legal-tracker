@@ -31,9 +31,6 @@ backend/samples/*.json
 # Test output
 coverage/
 .nyc_output/
-backend/test-validation-report.json
-backend/test-validation-report.md
-backend/test/validation-reports/
 
 # IDE
 .vscode/

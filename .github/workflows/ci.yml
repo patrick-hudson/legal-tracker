@@ -40,24 +40,6 @@ jobs:
       working-directory: ./backend
       run: npm test
 
-    - name: Generate validation report
-      if: matrix.node-version == '20.x'
-      working-directory: ./backend
-      run: npm test -- test/validation-report.test.js
-
-    - name: Archive validation report with timestamp and commit hash
-      if: matrix.node-version == '20.x' && github.event_name == 'push'
-      run: |
-        mkdir -p backend/test/validation-reports
-        TIMESTAMP=$(date -u +"%Y%m%d-%H%M%S")
-        COMMIT_HASH=$(git rev-parse --short HEAD)
-        JSON_FILENAME="validation-report-${TIMESTAMP}-${COMMIT_HASH}.json"
-        MD_FILENAME="validation-report-${TIMESTAMP}-${COMMIT_HASH}.md"
-        cp backend/test-validation-report.json "backend/test/validation-reports/${JSON_FILENAME}"
-        cp backend/test-validation-report.md "backend/test/validation-reports/${MD_FILENAME}"
-        echo "Generated reports: ${JSON_FILENAME} and ${MD_FILENAME}"
-        ls -lh backend/test/validation-reports/
-
     - name: Determine version bump type
       if: matrix.node-version == '20.x' && github.event_name == 'push'
       id: version_type
@@ -81,15 +63,14 @@ jobs:
         NEW_VERSION=$(cat ../VERSION)
         echo "Updated to version $NEW_VERSION"
 
-    - name: Commit validation report and version bump
+    - name: Commit version bump
       if: matrix.node-version == '20.x' && github.event_name == 'push'
       run: |
         git config --local user.email "github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions[bot]"
-        git add -f backend/test/validation-reports/
         git add VERSION README.md backend/package.json frontend/app.js
         NEW_VERSION=$(cat VERSION)
-        git diff --staged --quiet || git commit -m "Release version $NEW_VERSION and add validation report [skip ci]"
+        git diff --staged --quiet || git commit -m "Release version $NEW_VERSION [skip ci]"
 
     - name: Create version tag
       if: matrix.node-version == '20.x' && github.event_name == 'push'
@@ -104,16 +85,6 @@ jobs:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         branch: ${{ github.ref }}
         tags: true
-
-    - name: Upload validation report as artifact
-      if: matrix.node-version == '20.x'
-      uses: actions/upload-artifact@v4
-      with:
-        name: validation-report-${{ github.sha }}
-        path: |
-          backend/test-validation-report.json
-          backend/test-validation-report.md
-        retention-days: 30
 
     - name: Build check
       working-directory: ./backend
