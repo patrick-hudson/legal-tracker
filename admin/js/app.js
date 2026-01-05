@@ -5,6 +5,7 @@
 import auth from './auth.js';
 import router from './router.js';
 import api from './api.js';
+import { showConfirm } from './modal.js';
 
 // Initialize the application
 async function init() {
@@ -69,7 +70,14 @@ async function handleLogin(e) {
 async function handleLogout(e) {
     e.preventDefault();
 
-    if (!confirm('Are you sure you want to log out?')) {
+    const confirmed = await showConfirm('Are you sure you want to log out?', {
+        title: 'Confirm Logout',
+        confirmText: 'Log out',
+        cancelText: 'Cancel',
+        type: 'warning'
+    });
+
+    if (!confirmed) {
         return;
     }
 

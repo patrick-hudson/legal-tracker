@@ -10,6 +10,7 @@ import {
     formatErrorMessage,
     PLACEHOLDER
 } from '../display-utils.js';
+import { showConfirm } from '../modal.js';
 
 let currentPage = 1;
 let currentSearch = '';
@@ -220,7 +221,14 @@ function updateBulkActions() {
 async function handleDeleteSelected() {
     if (selectedMatters.size === 0) return;
 
-    if (!confirm(`Are you sure you want to delete ${selectedMatters.size} matter(s)?`)) {
+    const confirmed = await showConfirm(`Are you sure you want to delete ${selectedMatters.size} matter(s)?`, {
+        title: 'Delete Matters',
+        confirmText: 'Delete',
+        cancelText: 'Cancel',
+        type: 'danger'
+    });
+
+    if (!confirmed) {
         return;
     }
 
@@ -419,7 +427,14 @@ window.changePage = (page) => {
 };
 
 window.deleteMatter = async (id) => {
-    if (!confirm('Are you sure you want to delete this matter?')) return;
+    const confirmed = await showConfirm('Are you sure you want to delete this matter?', {
+        title: 'Delete Matter',
+        confirmText: 'Delete',
+        cancelText: 'Cancel',
+        type: 'danger'
+    });
+
+    if (!confirmed) return;
 
     try {
         await api.deleteMatters([id]);

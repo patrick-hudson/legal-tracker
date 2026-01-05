@@ -5,6 +5,7 @@
 
 import api from '../api.js';
 import auth from '../auth.js';
+import { showConfirm } from '../modal.js';
 
 export async function renderSecurity(container) {
     container.innerHTML = '<div class="flex justify-center items-center h-64"><div class="spinner"></div></div>';
@@ -113,7 +114,14 @@ function setupEventListeners(currentSettings) {
     });
 
     document.getElementById('regenerate-api-key')?.addEventListener('click', async () => {
-        if (!confirm('Are you sure you want to regenerate the API key? The old key will stop working.')) {
+        const confirmed = await showConfirm('Are you sure you want to regenerate the API key? The old key will stop working.', {
+            title: 'Regenerate API Key',
+            confirmText: 'Regenerate',
+            cancelText: 'Cancel',
+            type: 'danger'
+        });
+
+        if (!confirmed) {
             return;
         }
 

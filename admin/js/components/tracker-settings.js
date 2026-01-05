@@ -10,6 +10,7 @@ import {
     renderErrorBanner,
     PLACEHOLDER
 } from '../display-utils.js';
+import { showConfirm } from '../modal.js';
 
 // Store persisted settings for comparison
 let persistedDrainSettings = {
@@ -257,7 +258,14 @@ function setupEventListeners(currentSettings) {
 
     // Reset lifetime fees button
     document.getElementById('reset-lifetime-btn')?.addEventListener('click', async () => {
-        if (!confirm('Are you sure you want to reset lifetime legal fees to $0? This cannot be undone.')) {
+        const confirmed = await showConfirm('Are you sure you want to reset lifetime legal fees to $0? This cannot be undone.', {
+            title: 'Reset Lifetime Fees',
+            confirmText: 'Reset to $0',
+            cancelText: 'Cancel',
+            type: 'danger'
+        });
+
+        if (!confirmed) {
             return;
         }
 

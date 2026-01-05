@@ -5,6 +5,7 @@
 
 import api from '../api.js';
 import { renderErrorBanner } from '../display-utils.js';
+import { showConfirm } from '../modal.js';
 
 export async function renderDataManagement(container) {
     container.innerHTML = '<div class="flex justify-center items-center h-64"><div class="spinner"></div></div>';
@@ -284,7 +285,14 @@ function setupEventListeners() {
             ? `This will generate ${count} random sample matters. Continue?`
             : `This will load ${select.options[select.selectedIndex].dataset.count} matters from "${select.options[select.selectedIndex].textContent}". Continue?`;
 
-        if (!confirm(confirmMsg)) {
+        const confirmed = await showConfirm(confirmMsg, {
+            title: 'Populate Sample Data',
+            confirmText: 'Populate',
+            cancelText: 'Cancel',
+            type: 'info'
+        });
+
+        if (!confirmed) {
             return;
         }
 
@@ -311,7 +319,14 @@ function setupEventListeners() {
 
     // Regenerate sample files
     document.getElementById('regenerate-samples-btn')?.addEventListener('click', async () => {
-        if (!confirm('This will regenerate all sample JSON files with new random data. The database will not be affected. Continue?')) {
+        const confirmed = await showConfirm('This will regenerate all sample JSON files with new random data. The database will not be affected. Continue?', {
+            title: 'Regenerate Sample Files',
+            confirmText: 'Regenerate',
+            cancelText: 'Cancel',
+            type: 'info'
+        });
+
+        if (!confirmed) {
             return;
         }
 
@@ -362,7 +377,14 @@ function setupEventListeners() {
             return;
         }
 
-        if (!confirm('Are you sure you want to delete all matter records?\n\nThis will remove all matters but keep your admin account and settings.\n\nThis action CANNOT be undone!')) {
+        const confirmed = await showConfirm('Are you sure you want to delete all matter records?\n\nThis will remove all matters but keep your admin account and settings.\n\nThis action CANNOT be undone!', {
+            title: 'Wipe Matters',
+            confirmText: 'Wipe Matters',
+            cancelText: 'Cancel',
+            type: 'danger'
+        });
+
+        if (!confirmed) {
             return;
         }
 
@@ -401,7 +423,14 @@ function setupEventListeners() {
             return;
         }
 
-        if (!confirm('Are you sure you want to delete all matters AND reset all settings?\n\nThis will:\n- Delete all matter records\n- Reset lifetime legal fees to $0\n- Reset drain rate to 0\n- Disable auto-drain\n- Reset drain timer\n\nYour admin account will be preserved.\n\nThis action CANNOT be undone!')) {
+        const confirmed = await showConfirm('Are you sure you want to delete all matters AND reset all settings?\n\nThis will:\n- Delete all matter records\n- Reset lifetime legal fees to $0\n- Reset drain rate to 0\n- Disable auto-drain\n- Reset drain timer\n\nYour admin account will be preserved.\n\nThis action CANNOT be undone!', {
+            title: 'Wipe + Reset',
+            confirmText: 'Wipe + Reset',
+            cancelText: 'Cancel',
+            type: 'danger'
+        });
+
+        if (!confirmed) {
             return;
         }
 
@@ -440,7 +469,14 @@ function setupEventListeners() {
             return;
         }
 
-        if (!confirm('ARE YOU ABSOLUTELY SURE?\n\nThis will WIPE EVERYTHING and reset the database to fresh install state:\n\n- All matter records\n- All settings (reset to defaults)\n- All admin sessions (you will be logged out)\n- ALL admin users (including you!)\n\nYou will be redirected to create a new admin account.\n\nThis action CANNOT be undone!')) {
+        const confirmed = await showConfirm('ARE YOU ABSOLUTELY SURE?\n\nThis will WIPE EVERYTHING and reset the database to fresh install state:\n\n- All matter records\n- All settings (reset to defaults)\n- All admin sessions (you will be logged out)\n- ALL admin users (including you!)\n\nYou will be redirected to create a new admin account.\n\nThis action CANNOT be undone!', {
+            title: 'Factory Reset',
+            confirmText: 'Factory Reset',
+            cancelText: 'Cancel',
+            type: 'danger'
+        });
+
+        if (!confirmed) {
             return;
         }
 

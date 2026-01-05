@@ -1,6 +1,8 @@
 // Legal Matter Tracker - Frontend
 // Vanilla JS for maximum compatibility and zero build step
 
+import { showAlert, showConfirm } from './modal.js';
+
 const API_BASE = window.location.origin + '/api';
 
 // ============ Display Utilities ============
@@ -1362,7 +1364,10 @@ async function saveDrainSettings() {
   const rateCents = DISPLAY.safeNumber(rateValue);
 
   if (rateCents === null || rateCents < 0) {
-    alert('Please enter a valid drain rate (0 or greater)');
+    await showAlert('Please enter a valid drain rate (0 or greater)', {
+      title: 'Invalid Input',
+      type: 'error'
+    });
     return;
   }
 
@@ -1408,7 +1413,10 @@ async function submitManualMatter() {
   const costInput = document.getElementById('matterCost');
 
   if (!dateInput.value) {
-    alert('Please select a date');
+    await showAlert('Please select a date', {
+      title: 'Missing Date',
+      type: 'warning'
+    });
     return;
   }
 
@@ -1423,7 +1431,14 @@ async function submitManualMatter() {
 }
 
 async function deleteMatterById(id) {
-  if (confirm('Delete this matter? This cannot be undone.')) {
+  const confirmed = await showConfirm('Delete this matter? This cannot be undone.', {
+    title: 'Delete Matter',
+    confirmText: 'Delete',
+    cancelText: 'Cancel',
+    type: 'danger'
+  });
+
+  if (confirmed) {
     await deleteMatter(id);
     render();
   }
@@ -1451,7 +1466,14 @@ async function addMoney() {
 }
 
 async function resetMoney() {
-  if (confirm('Reset lifetime spent to $0? This cannot be undone.')) {
+  const confirmed = await showConfirm('Reset lifetime spent to $0? This cannot be undone.', {
+    title: 'Reset Lifetime Spent',
+    confirmText: 'Reset to $0',
+    cancelText: 'Cancel',
+    type: 'danger'
+  });
+
+  if (confirmed) {
     await updateLifetimeSpent(0, false);
     await fetchStatus(); // Refresh to get new drain_start_time
     render();
