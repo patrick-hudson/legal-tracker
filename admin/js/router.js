@@ -7,7 +7,10 @@ import auth from './auth.js';
 import { renderDashboard } from './components/dashboard.js';
 import { renderMatters } from './components/matters.js';
 import { renderAnalytics } from './components/analytics.js';
-import { renderSettings } from './components/settings.js';
+import { renderSecurity } from './components/security.js';
+import { renderTrackerSettings } from './components/tracker-settings.js';
+import { renderDataManagement } from './components/data-management.js';
+import { renderSystemInfo } from './components/system-info.js';
 
 class Router {
     constructor() {
@@ -15,7 +18,10 @@ class Router {
             '/dashboard': renderDashboard,
             '/matters': renderMatters,
             '/analytics': renderAnalytics,
-            '/settings': renderSettings
+            '/security': renderSecurity,
+            '/tracker-settings': renderTrackerSettings,
+            '/data-management': renderDataManagement,
+            '/system-info': renderSystemInfo
         };
         this.defaultRoute = '/dashboard';
     }
