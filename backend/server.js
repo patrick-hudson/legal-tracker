@@ -212,18 +212,33 @@ export async function createServer(options = {}) {
     // Get git commit hash
     let commitHash = null;
     let commitHashShort = null;
+    let commitPushed = false;
     try {
       commitHash = execSync('git rev-parse HEAD', { cwd: __dirname, encoding: 'utf8' }).trim();
       commitHashShort = execSync('git rev-parse --short HEAD', { cwd: __dirname, encoding: 'utf8' }).trim();
+      // Check if this commit exists on origin by looking for it in remote refs
+      try {
+        const result = execSync(`git branch -r --contains ${commitHash} 2>/dev/null`, { cwd: __dirname, encoding: 'utf8', shell: true }).trim();
+        commitPushed = !!result;
+      } catch {
+        // Commit not on remote or git command failed
+        commitPushed = false;
+      }
     } catch {
       // Not a git repo or git not available
     }
+
+    // Get environment setting (null means auto-detect on client)
+    const envSetting = settingsDb.get('environment');
+    const environment = (envSetting && envSetting !== 'null') ? envSetting : null;
 
     return {
       version,
       commitHash,
       commitHashShort,
-      nodeVersion: process.version
+      commitPushed,
+      nodeVersion: process.version,
+      environment
     };
   });
 

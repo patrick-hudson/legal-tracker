@@ -254,7 +254,9 @@ let state = {
   version: 'loading...',
   commitHash: null,
   commitHashShort: null,
+  commitPushed: false,
   nodeVersion: null,
+  environment: null,
   pageLoadTime: 0
 };
 
@@ -307,7 +309,9 @@ async function fetchVersion() {
     state.version = data.version || 'unknown';
     state.commitHash = data.commitHash;
     state.commitHashShort = data.commitHashShort;
+    state.commitPushed = data.commitPushed;
     state.nodeVersion = data.nodeVersion;
+    state.environment = data.environment;
   } catch (err) {
     console.error('Failed to fetch version:', err);
     state.version = 'error';
@@ -487,19 +491,32 @@ function formatDateLong(dateStr) {
 }
 
 function renderFooter(styleClass = '') {
-  const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  const commitLink = state.commitHash
-    ? `<a href="https://github.com/patrick-hudson/legal-tracker/commit/${state.commitHash}" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">${state.commitHashShort}</a>`
-    : 'N/A';
+  // Use API environment if set, otherwise auto-detect from hostname
+  const getEnvDisplay = () => {
+    if (state.environment === 'production') return 'PROD';
+    if (state.environment === 'development') return 'DEV';
+    // Auto-detect
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    return isLocal ? 'DEV' : 'PROD';
+  };
+
+  // Build display: linked if pushed, plain text with "Unpushed" if not
+  const getBuildDisplay = () => {
+    if (!state.commitHashShort) return 'N/A';
+    if (state.commitPushed) {
+      return `<a href="https://github.com/patrick-hudson/legal-tracker/commit/${state.commitHash}" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">${state.commitHashShort}</a>`;
+    }
+    return `Unpushed (${state.commitHashShort})`;
+  };
 
   return `
     <footer class="system-footer ${styleClass}">
       <div class="footer-content">
         <span>v${state.version}</span>
         <span class="footer-separator">•</span>
-        <span>Build: ${commitLink}</span>
+        <span>Build: ${getBuildDisplay()}</span>
         <span class="footer-separator">•</span>
-        <span>${isDev ? 'DEV' : 'PROD'}</span>
+        <span>${getEnvDisplay()}</span>
         <span class="footer-separator">•</span>
         <span>Load: ${state.pageLoadTime}ms</span>
       </div>
