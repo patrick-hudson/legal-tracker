@@ -224,6 +224,9 @@ const RETRO_MESSAGES = {
 };
 
 // State
+// Track page load time for performance metrics
+const pageLoadStart = performance.now();
+
 let state = {
   daysSince: 0,
   lastMatterDate: new Date(),
@@ -246,7 +249,13 @@ let state = {
   sessionMessage: SESSION_MESSAGES[Math.floor(Math.random() * SESSION_MESSAGES.length)],
   moneyMessage: MONEY_MESSAGES[Math.floor(Math.random() * MONEY_MESSAGES.length)],
   labelMessage: LABEL_MESSAGES[Math.floor(Math.random() * LABEL_MESSAGES.length)],
-  timeBreakdown: { hours: 0, minutes: 0, seconds: 0 }
+  timeBreakdown: { hours: 0, minutes: 0, seconds: 0 },
+  // Version info
+  version: 'loading...',
+  commitHash: null,
+  commitHashShort: null,
+  nodeVersion: null,
+  pageLoadTime: 0
 };
 
 // Colors (from current theme)
@@ -288,6 +297,20 @@ async function fetchMatters() {
     state.matters = await res.json();
   } catch (err) {
     console.error('Failed to fetch matters:', err);
+  }
+}
+
+async function fetchVersion() {
+  try {
+    const res = await fetch(`${API_BASE}/version`);
+    const data = await res.json();
+    state.version = data.version || 'unknown';
+    state.commitHash = data.commitHash;
+    state.commitHashShort = data.commitHashShort;
+    state.nodeVersion = data.nodeVersion;
+  } catch (err) {
+    console.error('Failed to fetch version:', err);
+    state.version = 'error';
   }
 }
 
@@ -463,6 +486,27 @@ function formatDateLong(dateStr) {
   }).toUpperCase();
 }
 
+function renderFooter(styleClass = '') {
+  const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  const commitLink = state.commitHash
+    ? `<a href="https://github.com/patrick-hudson/legal-tracker/commit/${state.commitHash}" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">${state.commitHashShort}</a>`
+    : 'N/A';
+
+  return `
+    <footer class="system-footer ${styleClass}">
+      <div class="footer-content">
+        <span>v${state.version}</span>
+        <span class="footer-separator">•</span>
+        <span>Build: ${commitLink}</span>
+        <span class="footer-separator">•</span>
+        <span>${isDev ? 'DEV' : 'PROD'}</span>
+        <span class="footer-separator">•</span>
+        <span>Load: ${state.pageLoadTime}ms</span>
+      </div>
+    </footer>
+  `;
+}
+
 function renderModern() {
   const app = document.getElementById('app');
 
@@ -474,7 +518,7 @@ function renderModern() {
         <div class="modern-card">
           <div class="modern-header">
             <div>
-              <h1 class="modern-title">LEGAL MATTER v0.1.0</h1>
+              <h1 class="modern-title">LEGAL MATTER v${state.version}</h1>
               <p class="modern-subtitle">
                 <span class="letter">L</span>egal
                 <span class="letter">E</span>xpense
@@ -664,6 +708,7 @@ function renderModern() {
           </div>
         ` : ''}
       </div>
+      ${renderFooter('modern-footer')}
     </div>
   `;
 
@@ -684,7 +729,7 @@ function renderRetro() {
         <div class="retro-header">
           <div class="retro-header-content">
             <h1 class="retro-title">
-              ⚖️ LEGAL MATTER v0.1.0 ⚖️
+              ⚖️ LEGAL MATTER v${state.version} ⚖️
             </h1>
             <p class="retro-subtitle">
               <span class="letter">L</span>egal
@@ -884,6 +929,7 @@ function renderRetro() {
           </p>
         </div>
       </div>
+      ${renderFooter('retro-sys-footer')}
     </div>
   `;
 
@@ -937,7 +983,7 @@ function render() {
       <div class="header">
         <div class="header-box">
           <div class="title">
-            LEGAL MATTER v0.1.0
+            LEGAL MATTER v${state.version}
           </div>
           <div class="subtitle">
             <span class="letter">L</span>egal
@@ -1147,6 +1193,8 @@ function render() {
       <div class="footer">
         <p class="footer-text">YOUR_IP: ${state.currentIP || 'DETECTING...'} • STATUS: ${state.isAuthorized ? 'READ/WRITE' : 'READ_ONLY'}</p>
       </div>
+
+      ${renderFooter('crt-footer')}
     </div>
   `;
 
@@ -1319,8 +1367,8 @@ function applyTheme() {
 
 async function init() {
   applyTheme();
-  await fetchStatus();
-  await fetchMatters();
+  await Promise.all([fetchStatus(), fetchMatters(), fetchVersion()]);
+  state.pageLoadTime = Math.round(performance.now() - pageLoadStart);
   state.isLoading = false;
   render();
   startDrain();

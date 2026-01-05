@@ -125,7 +125,11 @@ export async function renderSettings(container) {
                         </div>
                         <div class="flex justify-between">
                             <span class="text-gray-600 dark:text-gray-400">Version</span>
-                            <span class="text-gray-900 dark:text-white">1.0.0</span>
+                            <span id="system-version" class="text-gray-900 dark:text-white">Loading...</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600 dark:text-gray-400">Build</span>
+                            <span id="system-build" class="text-gray-900 dark:text-white">Loading...</span>
                         </div>
                     </div>
                 </div>
@@ -260,6 +264,35 @@ export async function renderSettings(container) {
 }
 
 function setupEventListeners(currentSettings) {
+    // Load version info
+    (async () => {
+        try {
+            const response = await fetch('/api/version');
+            const versionInfo = await response.json();
+
+            const versionEl = document.getElementById('system-version');
+            const buildEl = document.getElementById('system-build');
+
+            if (versionEl) {
+                versionEl.textContent = `v${versionInfo.version}`;
+            }
+
+            if (buildEl) {
+                if (versionInfo.commitHashShort) {
+                    buildEl.innerHTML = `<a href="https://github.com/patrick-hudson/legal-tracker/commit/${versionInfo.commitHash}" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline">${versionInfo.commitHashShort}</a>`;
+                } else {
+                    buildEl.textContent = 'N/A';
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load version info:', error);
+            const versionEl = document.getElementById('system-version');
+            const buildEl = document.getElementById('system-build');
+            if (versionEl) versionEl.textContent = 'Error';
+            if (buildEl) buildEl.textContent = 'Error';
+        }
+    })();
+
     // Drain settings
     document.getElementById('save-drain-btn')?.addEventListener('click', async () => {
         try {

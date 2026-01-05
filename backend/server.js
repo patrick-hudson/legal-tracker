@@ -8,7 +8,8 @@ import { createDatabase } from './db.js';
 import { hashPassword, verifyPassword, generateTokenId, generateApiKey, createAdminAuthMiddleware, getTokenExpiration, generateBootstrapToken, hashBootstrapToken, getBootstrapTokenExpiration, validatePasswordStrength } from './auth.js';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve } from 'path';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
+import { execSync } from 'child_process';
 import dotenv from 'dotenv';
 
 // Initialize __filename and __dirname for ES modules
@@ -186,6 +187,43 @@ export async function createServer(options = {}) {
     return {
       passwordSalt: PASSWORD_SALT,
       requireAuth: REQUIRE_AUTH
+    };
+  });
+
+  // Get version and build info
+  fastify.get('/api/version', async () => {
+    // Read version from VERSION file
+    let version = 'unknown';
+    try {
+      const versionPath = join(__dirname, '..', 'VERSION');
+      if (existsSync(versionPath)) {
+        version = readFileSync(versionPath, 'utf8').trim();
+      }
+    } catch (error) {
+      // Fall back to package.json version
+      try {
+        const pkg = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf8'));
+        version = pkg.version || 'unknown';
+      } catch {
+        // ignore
+      }
+    }
+
+    // Get git commit hash
+    let commitHash = null;
+    let commitHashShort = null;
+    try {
+      commitHash = execSync('git rev-parse HEAD', { cwd: __dirname, encoding: 'utf8' }).trim();
+      commitHashShort = execSync('git rev-parse --short HEAD', { cwd: __dirname, encoding: 'utf8' }).trim();
+    } catch {
+      // Not a git repo or git not available
+    }
+
+    return {
+      version,
+      commitHash,
+      commitHashShort,
+      nodeVersion: process.version
     };
   });
 
