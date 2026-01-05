@@ -151,7 +151,7 @@ async function loadMatters() {
                 <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">${matter.id}</td>
                 <td class="px-6 py-4">${formatDate(matter.matter_date, { format: 'datetime', placeholder: PLACEHOLDER.DASH })}</td>
                 <td class="px-6 py-4">${safeEscapeHtml(matter.note, 'No note')}</td>
-                <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">${formatCurrency(matter.cost, { fromCents: true })}</td>
+                <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">${formatCurrency(matter.cost)}</td>
                 <td class="px-6 py-4">
                     <button class="text-red-600 hover:text-red-800 dark:text-red-400" onclick="deleteMatter(${matter.id})">Delete</button>
                 </td>
