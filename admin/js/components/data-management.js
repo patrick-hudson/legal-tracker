@@ -30,7 +30,8 @@ const SPICE_INSTRUCTIONS = {
     '4': 'Be dramatic and theatrical. Make descriptions slightly absurd but still believable.',
     '5': 'Go completely unhinged. Be wildly creative, absurd, and maximally entertaining while still being legal-adjacent.',
     '6': 'CHAOTIC EVIL MODE: Maximum depravity. Every description must contain at least one terrible pun, dripping sarcasm, or absurdist legal nightmare. Channel the energy of a sleep-deprived lawyer who has seen too much and fears nothing. Mock the legal system while technically describing billable work. Be viciously funny.',
-    '7': 'ELDRITCH LEGAL HORROR: You are a cosmic entity that has consumed 10,000 law firms and absorbed their collective trauma. Generate descriptions that make readers question reality, legality, and their life choices simultaneously. Every phrase should be a war crime against professionalism. Puns are mandatory. Sanity is optional. These descriptions should make opposing counsel weep and judges recuse themselves out of sheer confusion. Go absolutely feral.'
+    '7': 'ELDRITCH LEGAL HORROR: You are a cosmic entity that has consumed 10,000 law firms and absorbed their collective trauma. Generate descriptions that make readers question reality, legality, and their life choices simultaneously. Every phrase should be a war crime against professionalism. Puns are mandatory. Sanity is optional. These descriptions should make opposing counsel weep and judges recuse themselves out of sheer confusion. Go absolutely feral.',
+    '8': 'THE FINAL FORM: You have transcended legal reality itself. Combine puns, existential dread, cosmic horror, time paradoxes, and bureaucratic nightmares. Each description should feel like a fever dream about law school that makes Franz Kafka weep with envy. Reference interdimensional disputes, sentient contracts, emotional support evidence, and crimes against grammar. Reality is optional. Sanity is forbidden.'
 };
 
 // Get the full default prompt for a given spice level
@@ -52,7 +53,8 @@ function getSpiceLevelName(level) {
         '4': 'Dramatic',
         '5': 'Unhinged',
         '6': 'Chaotic Evil',
-        '7': 'Eldritch Horror'
+        '7': 'Eldritch Horror',
+        '8': 'THE FINAL FORM'
     };
     return names[level] || 'Professional';
 }
@@ -193,11 +195,14 @@ export async function renderDataManagement(container) {
                                         <button type="button" data-level="6" class="spice-btn px-3 py-2 text-xs font-medium border ${aiSettings.spiceLevel === '6' ? 'bg-red-600 text-white border-red-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700'}" ${!isClaudeKeyValidated ? 'disabled' : ''}>
                                             Chaotic Evil
                                         </button>
-                                        <button type="button" data-level="7" class="spice-btn px-3 py-2 text-xs font-medium rounded-r-lg border ${aiSettings.spiceLevel === '7' ? 'bg-gradient-to-r from-purple-600 via-red-600 to-orange-500 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700'}" ${!isClaudeKeyValidated ? 'disabled' : ''}>
+                                        <button type="button" data-level="7" class="spice-btn px-3 py-2 text-xs font-medium border ${aiSettings.spiceLevel === '7' ? 'bg-gradient-to-r from-purple-600 via-red-600 to-orange-500 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700'}" ${!isClaudeKeyValidated ? 'disabled' : ''}>
                                             Eldritch Horror
                                         </button>
+                                        <button type="button" data-level="8" class="spice-btn px-3 py-2 text-xs font-medium rounded-r-lg border ${aiSettings.spiceLevel === '8' ? 'bg-gradient-to-r from-black via-purple-900 to-red-900 text-white border-purple-900 animate-pulse' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700'}" ${!isClaudeKeyValidated ? 'disabled' : ''}>
+                                            ☠️ FINAL FORM
+                                        </button>
                                     </div>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Controls the tone of AI-generated descriptions (levels 6-7 may cause existential dread)</p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Controls the tone of AI-generated descriptions (levels 6+ may cause existential dread)</p>
                                 </div>
 
                                 <!-- Prompt Section -->
@@ -713,12 +718,14 @@ function setupEventListeners() {
             document.querySelectorAll('.spice-btn').forEach(b => {
                 const btnLevel = b.dataset.level;
                 // Remove all possible active styles
-                b.classList.remove('bg-purple-600', 'bg-red-600', 'bg-gradient-to-r', 'from-purple-600', 'via-red-600', 'to-orange-500', 'text-white', 'border-purple-600', 'border-red-600');
+                b.classList.remove('bg-purple-600', 'bg-red-600', 'bg-gradient-to-r', 'from-purple-600', 'via-red-600', 'to-orange-500', 'from-black', 'via-purple-900', 'to-red-900', 'text-white', 'border-purple-600', 'border-red-600', 'border-purple-900', 'animate-pulse');
 
                 if (btnLevel === level) {
                     b.classList.remove('bg-white', 'text-gray-700', 'border-gray-300', 'hover:bg-gray-50', 'dark:bg-gray-800', 'dark:text-gray-300', 'dark:border-gray-600', 'dark:hover:bg-gray-700');
                     // Apply level-specific styling
-                    if (level === '7') {
+                    if (level === '8') {
+                        b.classList.add('bg-gradient-to-r', 'from-black', 'via-purple-900', 'to-red-900', 'text-white', 'border-purple-900', 'animate-pulse');
+                    } else if (level === '7') {
                         b.classList.add('bg-gradient-to-r', 'from-purple-600', 'via-red-600', 'to-orange-500', 'text-white', 'border-purple-600');
                     } else if (level === '6') {
                         b.classList.add('bg-red-600', 'text-white', 'border-red-600');
@@ -1078,12 +1085,12 @@ function setupEventListeners() {
                             <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Use AI for matter descriptions</span>
                         </label>
                         ${!hasClaudeApiKey
-                            ? '<p class="text-xs text-amber-600 dark:text-amber-400 ml-6">Configure Claude API key above to enable AI descriptions</p>'
+                            ? '<p class="text-xs text-amber-600 dark:text-amber-400 ml-6">Configure Claude API key in the AI Integration section above</p>'
                             : !isClaudeKeyValidated
-                            ? '<p class="text-xs text-amber-600 dark:text-amber-400 ml-6">Validate your API key above to enable AI descriptions</p>'
+                            ? '<p class="text-xs text-amber-600 dark:text-amber-400 ml-6">Validate your API key in the AI Integration section above</p>'
                             : !aiSettings.selectedModel
-                            ? '<p class="text-xs text-amber-600 dark:text-amber-400 ml-6">Select a model above to enable AI descriptions</p>'
-                            : `<p class="text-xs text-gray-500 dark:text-gray-400 ml-6">Model: <span class="font-medium">${aiSettings.selectedModel}</span> | Spice: <span class="font-medium">${getSpiceLevelName(aiSettings.spiceLevel)}</span></p>`
+                            ? '<p class="text-xs text-amber-600 dark:text-amber-400 ml-6">Select a model in the AI Integration section above</p>'
+                            : `<p class="text-xs text-gray-500 dark:text-gray-400 ml-6">Using: <span class="font-medium">${getSpiceLevelName(aiSettings.spiceLevel)}</span> spice level. <span class="text-purple-600 dark:text-purple-400">Change in AI Integration section above.</span></p>`
                         }
                     </div>
                 </div>
@@ -1125,12 +1132,17 @@ function setupEventListeners() {
                     // Disable all modal buttons during generation
                     modal.querySelectorAll('.modal-action-btn').forEach(btn => btn.disabled = true);
 
+                    // Show persistent toast
+                    showPersistentToast(`Generating ${count} matters... please wait`, 'loading');
+
                     try {
                         const response = await api.populateSampleData('generate', { count });
+                        dismissPersistentToast();
                         showToast(`Successfully added ${response.matters_added} sample matters ($${response.total_cost_added.toFixed(2)})`, 'success');
                         // Close modal by clicking the close button
                         modal.querySelector('.modal-close')?.click();
                     } catch (error) {
+                        dismissPersistentToast();
                         statusArea.classList.add('hidden');
                         quickBtn.disabled = false;
                         quickBtn.textContent = 'Generate Now';
@@ -1174,11 +1186,19 @@ function setupEventListeners() {
                 return;
             }
 
+            // Show persistent loading toast FIRST (before any button manipulation)
+            const loadingMsg = useAi
+                ? `Generating ${modalCount} matters with AI (${getSpiceLevelName(aiSettings.spiceLevel)})... please wait`
+                : `Generating ${modalCount} matters... please wait`;
+            showPersistentToast(loadingMsg, 'loading');
+
             const btn = document.getElementById('populate-sample-btn');
-            btn.disabled = true;
-            btn.innerHTML = useAi
-                ? '<span class="flex items-center justify-center"><span class="spinner-sm mr-2"></span>Generating with AI...</span>'
-                : 'Generating...';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = useAi
+                    ? '<span class="flex items-center justify-center"><span class="spinner-sm mr-2"></span>Generating with AI...</span>'
+                    : 'Generating...';
+            }
 
             try {
                 const response = await api.populateSampleData('generate', {
@@ -1192,13 +1212,18 @@ function setupEventListeners() {
                     spiceLevelOverride: useAi ? aiSettings.spiceLevel : undefined
                 });
 
+                // Dismiss loading toast and show success
+                dismissPersistentToast();
                 const aiNote = response.used_ai_descriptions ? ` (AI @ ${getSpiceLevelName(aiSettings.spiceLevel)})` : '';
                 showToast(`Successfully added ${response.matters_added} sample matters ($${response.total_cost_added.toFixed(2)})${aiNote}`, 'success');
             } catch (error) {
+                dismissPersistentToast();
                 showToast(`Error: ${error.message}`, 'error');
             } finally {
-                btn.disabled = false;
-                btn.textContent = 'Populate Data';
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Populate Data';
+                }
             }
         }
     });
@@ -1438,4 +1463,39 @@ function showToast(message, type = 'info') {
         toast.style.opacity = '0';
         setTimeout(() => toast.remove(), 300);
     }, 3000);
+}
+
+// Persistent toast that stays until dismissed
+let persistentToast = null;
+
+function showPersistentToast(message, type = 'info') {
+    // Remove existing persistent toast if any
+    dismissPersistentToast();
+
+    persistentToast = document.createElement('div');
+    persistentToast.className = `toast p-4 rounded-lg shadow-lg flex items-center ${
+        type === 'success' ? 'bg-green-500' :
+        type === 'error' ? 'bg-red-500' :
+        type === 'loading' ? 'bg-blue-500' :
+        'bg-blue-500'
+    } text-white`;
+
+    if (type === 'loading') {
+        persistentToast.innerHTML = `<span class="spinner-sm mr-2"></span><span>${message}</span>`;
+    } else {
+        persistentToast.textContent = message;
+    }
+
+    document.body.appendChild(persistentToast);
+    return persistentToast;
+}
+
+function dismissPersistentToast() {
+    if (persistentToast) {
+        persistentToast.style.opacity = '0';
+        setTimeout(() => {
+            persistentToast?.remove();
+            persistentToast = null;
+        }, 300);
+    }
 }

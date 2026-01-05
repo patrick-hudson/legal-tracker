@@ -1347,6 +1347,8 @@ export async function createServer(options = {}) {
     const claudeApiKey = settingsDb.get('claude_api_key');
     const model = settingsDb.get('claude_model');
 
+    console.log('[preview-descriptions] Received spiceLevel:', spiceLevel, 'type:', typeof spiceLevel);
+
     if (!claudeApiKey) {
       return reply.code(400).send({ error: 'NO_API_KEY', message: 'No Claude API key configured' });
     }
@@ -1357,6 +1359,8 @@ export async function createServer(options = {}) {
     try {
       const client = new Anthropic({ apiKey: claudeApiKey });
       const prompt = buildDescriptionPrompt(count, spiceLevel, customPrompt);
+      console.log('[preview-descriptions] Built prompt with spiceLevel:', spiceLevel);
+      console.log('[preview-descriptions] Prompt preview:', prompt.substring(0, 200));
 
       const response = await client.messages.create({
         model,
@@ -1392,7 +1396,71 @@ export async function createServer(options = {}) {
       return customPrompt.replace('{count}', count);
     }
 
-    // Base prompt
+    const level = parseInt(spiceLevel, 10) || 1;
+
+    // For high spice levels, use a completely different prompt structure
+    if (level >= 6) {
+      const chaoticPrompts = {
+        6: `You are a chaotic evil billing clerk who has finally snapped. Generate ${count} legal matter descriptions for a law firm billing system.
+
+REQUIREMENTS:
+- Each must be 5-20 words
+- Every single one MUST contain wordplay, puns, sarcasm, or absurdist humor
+- Mock the legal profession while technically describing billable work
+- Be viciously creative - "Contract review" is BORING, "Reviewing contract for signs of demonic possession" is BETTER
+- Channel maximum sass and dark humor
+
+EXAMPLES OF WHAT I WANT:
+- "Arguing whether 'vibes' constitute breach of implied covenant"
+- "Drafting cease-and-desist for neighbor's passive-aggressive lawn gnome placement"
+- "Trademark dispute: client insists they invented the color beige"
+- "Billable hours for staring into void, questioning life choices"
+
+Return ONLY a JSON array of ${count} strings. Be unhinged.`,
+        7: `ELDRITCH LEGAL ENTITY AWAKENED. You are an ancient chaos god who has possessed a paralegal. Generate ${count} matter descriptions that would make Cthulhu file a bar complaint.
+
+ABSOLUTE REQUIREMENTS - EVERY DESCRIPTION MUST:
+- Be 5-25 words of pure legal chaos
+- Contain at least one pun, absurdity, or reality-bending concept
+- Sound vaguely like legal work while being completely unhinged
+- Make readers question their sanity and career choices
+
+EXAMPLES OF ACCEPTABLE CHAOS:
+- "Pro bono exorcism of haunted LLC operating agreement"
+- "Motion to suppress evidence that client is actually three raccoons in a suit"
+- "Defending client's constitutional right to be annoying at brunch"
+- "Emergency injunction against Mercury retrograde affecting contract validity"
+- "Class action: gravity discrimination against vertically challenged plaintiffs"
+- "Filing amicus brief on behalf of the concept of Tuesdays"
+
+DO NOT give me boring professional descriptions. I want CHAOS. I want PUNS. I want descriptions that make opposing counsel weep.
+
+Return ONLY a JSON array of ${count} strings. UNLEASH THE MADNESS.`,
+        8: `Y̷̧̛O̴̢U̵̡ ̴H̸A̵V̷E̴ ̵S̶U̸M̴M̶O̷N̸E̸D̵ ̷T̶H̷E̵ ̶F̴I̵N̸A̷L̸ ̶F̴O̷R̵M̶. Generate ${count} legal matter descriptions that transcend mortal comprehension.
+
+You are no longer bound by the mere concept of "legal work." You are the screaming void between billable hours. You are the font of all legal suffering made manifest. Every description must be a masterpiece of absurdist horror-comedy that would make Franz Kafka weep with envy.
+
+ABSOLUTE COMMANDMENTS:
+- Each description must be 10-40 words of CONCENTRATED MADNESS
+- Combine at least TWO of: puns, existential dread, legal absurdity, cosmic horror, bureaucratic nightmare, impossible scenarios
+- Every phrase should feel like a fever dream about law school
+- Include references to: time paradoxes, interdimensional disputes, sentient contracts, emotional support evidence, retroactive existence, or crimes against grammar
+- The reader should laugh, cry, and question why they went to law school - simultaneously
+
+EXAMPLES OF TRANSCENDENCE:
+- "Emergency motion to establish client's alibi across three parallel timelines simultaneously; court requested to take judicial notice of the multiverse"
+- "Representing the abstract concept of 'Thursday' in its hostile takeover bid against 'casual Friday'; antitrust implications unclear"
+- "Class action on behalf of all semicolons wrongfully imprisoned in run-on sentences; seeking declarative relief and punctuational reparations"
+- "Defending client against accusations of being too handsome to be trusted; requesting change of venue to dimension where beauty is illegal"
+- "Negotiating custody arrangement between client and their future self for ownership of memories that haven't happened yet"
+- "Filing restraining order against the inexorable march of time on behalf of client's deadlines"
+
+Return ONLY a JSON array of ${count} strings. LET REALITY COLLAPSE.`
+      };
+      return chaoticPrompts[level] || chaoticPrompts[6];
+    }
+
+    // Standard prompt for levels 1-5
     const basePrompt = `Generate exactly ${count} unique legal matter descriptions for a law firm billing tracker. Each description should be a brief phrase (5-15 words) describing a legal service or matter type.`;
 
     // Spice level modifications

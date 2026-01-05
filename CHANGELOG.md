@@ -4,7 +4,23 @@ All notable changes to LEGAL MATTER (Legal Expense Governance Allocation Ledger 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.1] - 2026-01-05
+
+### Added
+- **Level 8 - THE FINAL FORM**: Ultimate spice level that transcends legal reality with zalgo text, time paradoxes, interdimensional disputes, and sentient contracts (pulsing skull button)
+- **Persistent loading toast**: Shows "Generating X matters... please wait" with spinner during sample data generation, stays visible until operation completes
+
+### Changed
+- **Spice levels 6-8 prompt restructuring**: High spice levels now use completely custom prompt templates instead of appending instructions to base prompt, ensuring consistently chaotic output
+- Updated help text for spice levels from "6-7 may cause existential dread" to "6+ may cause existential dread"
+- Improved AI descriptions hint text in generation modal for clarity
+
+### Fixed
+- Spice levels 6 and 7 producing professional output instead of chaotic descriptions (prompts were falling back to level 1)
+
+---
+
+## [0.5.0] - 2026-01-05
 
 ### Added
 
@@ -21,7 +37,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Model selection auto-saves on change
 - **AI Description Generation**:
   - Generate AI-powered matter descriptions for sample data
-  - 7 spice levels controlling tone (Professional → Eldritch Horror)
+  - 8 spice levels controlling tone (Professional → THE FINAL FORM)
   - Custom prompt override with `{count}` placeholder support
   - Preview functionality (generate 5 samples without saving)
   - Descriptions used in sample data population when enabled
@@ -34,6 +50,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Level 5 - Unhinged**: Wildly creative and entertaining
 - **Level 6 - Chaotic Evil**: Maximum depravity with mandatory puns and sarcasm (red button)
 - **Level 7 - Eldritch Horror**: Cosmic legal nightmare fuel (gradient button)
+- **Level 8 - THE FINAL FORM**: Transcendent chaos combining puns, existential dread, cosmic horror, and bureaucratic nightmares (pulsing skull button)
 
 #### New API Endpoints
 - `POST /admin/api/settings/claude-api-key/validate-and-save` - Validate and store API key
@@ -349,6 +366,8 @@ Initial development phase establishing core functionality.
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 0.5.1 | 2026-01-05 | Level 8 "THE FINAL FORM", persistent loading toast, spice level fixes |
+| 0.5.0 | 2026-01-05 | Claude AI Integration, 8 spice levels, AI-powered descriptions |
 | 0.4.0 | 2026-01-05 | Fix cost display 100x bug *(MINOR bump for v0.3.3)* |
 | 0.3.3 | 2026-01-05 | Custom HTML/CSS modals |
 | 0.3.2 | 2026-01-05 | Drop Node.js 18 support |
