@@ -4,25 +4,18 @@
  */
 
 import api from '../api.js';
+import {
+    formatDrainPreview,
+    safeNumber,
+    renderErrorBanner,
+    PLACEHOLDER
+} from '../display-utils.js';
 
 // Store persisted settings for comparison
 let persistedDrainSettings = {
     auto_drain_enabled: 'false',
     drain_rate_cents_per_second: '0'
 };
-
-/**
- * Calculate drain rate preview values
- * @param {number} centsPerSecond - Drain rate in cents per second
- * @returns {Object} Preview values in dollars
- */
-function calculateDrainPreview(centsPerSecond) {
-    const dollarsPerSecond = centsPerSecond / 100;
-    return {
-        perHour: (dollarsPerSecond * 3600).toFixed(2),
-        perDay: (dollarsPerSecond * 86400).toFixed(2)
-    };
-}
 
 /**
  * Check if drain settings have unsaved changes
@@ -47,9 +40,13 @@ function updateDrainPreview() {
     const previewEl = document.getElementById('drain-rate-preview');
     if (!rateInput || !previewEl) return;
 
-    const rate = parseFloat(rateInput.value) || 0;
-    const preview = calculateDrainPreview(rate);
-    previewEl.textContent = `$${preview.perHour}/hour | $${preview.perDay}/day`;
+    const rate = safeNumber(rateInput.value) ?? 0;
+    const preview = formatDrainPreview(rate);
+    if (preview.isValid) {
+        previewEl.textContent = `$${preview.perHour}/hour | $${preview.perDay}/day`;
+    } else {
+        previewEl.textContent = `${PLACEHOLDER.DASH}/hour | ${PLACEHOLDER.DASH}/day`;
+    }
 }
 
 /**
@@ -106,8 +103,8 @@ export async function renderTrackerSettings(container) {
             drain_rate_cents_per_second: settings.drain_rate_cents_per_second || '0'
         };
 
-        const drainRate = parseFloat(settings.drain_rate_cents_per_second) || 0;
-        const drainPreview = calculateDrainPreview(drainRate);
+        const drainRate = safeNumber(settings.drain_rate_cents_per_second) ?? 0;
+        const drainPreview = formatDrainPreview(drainRate);
         const isEnabled = settings.auto_drain_enabled === 'true';
 
         container.innerHTML = `
@@ -185,11 +182,7 @@ export async function renderTrackerSettings(container) {
         setupEventListeners(settings);
 
     } catch (error) {
-        container.innerHTML = `
-            <div class="p-4 mb-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-gray-800 dark:text-red-400">
-                <span class="font-medium">Error!</span> Failed to load tracker settings: ${error.message}
-            </div>
-        `;
+        container.innerHTML = renderErrorBanner(error, 'Error! Failed to load tracker settings:');
     }
 }
 

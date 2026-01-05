@@ -3,6 +3,14 @@
  */
 
 import api from '../api.js';
+import {
+    formatCurrency,
+    formatDate,
+    formatInt,
+    escapeHtml,
+    renderErrorBanner,
+    PLACEHOLDER
+} from '../display-utils.js';
 
 export async function renderDashboard(container) {
     // Show loading state
@@ -24,7 +32,7 @@ export async function renderDashboard(container) {
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Days Since Last</p>
-                            <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2">${data.days_since}</p>
+                            <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2">${formatInt(data.days_since, { placeholder: '0' })}</p>
                         </div>
                         <div class="p-3 bg-blue-100 dark:bg-blue-900 rounded-full">
                             <svg class="w-8 h-8 text-blue-600 dark:text-blue-300" fill="currentColor" viewBox="0 0 20 20">
@@ -39,7 +47,7 @@ export async function renderDashboard(container) {
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Total Matters</p>
-                            <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2">${data.stats?.total_matters || 0}</p>
+                            <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2">${formatInt(data.stats?.total_matters, { placeholder: '0' })}</p>
                         </div>
                         <div class="p-3 bg-red-100 dark:bg-red-900 rounded-full">
                             <svg class="w-8 h-8 text-red-600 dark:text-red-300" fill="currentColor" viewBox="0 0 20 20">
@@ -54,7 +62,7 @@ export async function renderDashboard(container) {
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Lifetime Spent</p>
-                            <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2">$${(data.lifetime_spent / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                            <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2">${formatCurrency(data.lifetime_spent, { fromCents: true, placeholder: '$0.00' })}</p>
                         </div>
                         <div class="p-3 bg-green-100 dark:bg-green-900 rounded-full">
                             <svg class="w-8 h-8 text-green-600 dark:text-green-300" fill="currentColor" viewBox="0 0 20 20">
@@ -70,7 +78,7 @@ export async function renderDashboard(container) {
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Current Streak</p>
-                            <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2">${data.days_since} days</p>
+                            <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2">${formatInt(data.days_since, { placeholder: '0' })} days</p>
                         </div>
                         <div class="p-3 bg-purple-100 dark:bg-purple-900 rounded-full">
                             <svg class="w-8 h-8 text-purple-600 dark:text-purple-300" fill="currentColor" viewBox="0 0 20 20">
@@ -131,11 +139,7 @@ export async function renderDashboard(container) {
         renderCharts(data);
 
     } catch (error) {
-        container.innerHTML = `
-            <div class="p-4 mb-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-gray-800 dark:text-red-400">
-                <span class="font-medium">Error!</span> Failed to load dashboard: ${error.message}
-            </div>
-        `;
+        container.innerHTML = renderErrorBanner(error, 'Error! Failed to load dashboard:');
     }
 }
 
@@ -147,17 +151,11 @@ function renderRecentMatters(matters) {
     return matters.map(matter => `
         <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover-row">
             <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">
-                ${new Date(matter.matter_date).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                })}
+                ${formatDate(matter.matter_date, { format: 'datetime', placeholder: PLACEHOLDER.DASH })}
             </td>
-            <td class="px-6 py-4">${escapeHtml(matter.note || 'No note')}</td>
+            <td class="px-6 py-4">${escapeHtml(matter.note, 'No note')}</td>
             <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">
-                $${(matter.cost / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ${formatCurrency(matter.cost, { fromCents: true })}
             </td>
         </tr>
     `).join('');
@@ -216,8 +214,3 @@ function renderCharts(data) {
     }
 }
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}

@@ -3,6 +3,13 @@
  */
 
 import api from '../api.js';
+import {
+    formatCurrency,
+    formatDate,
+    escapeHtml as safeEscapeHtml,
+    formatErrorMessage,
+    PLACEHOLDER
+} from '../display-utils.js';
 
 let currentPage = 1;
 let currentSearch = '';
@@ -141,9 +148,9 @@ async function loadMatters() {
                     <input type="checkbox" class="matter-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500" data-id="${matter.id}">
                 </td>
                 <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">${matter.id}</td>
-                <td class="px-6 py-4">${formatDateTime(matter.matter_date)}</td>
-                <td class="px-6 py-4">${escapeHtml(matter.note || 'No note')}</td>
-                <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">$${matter.cost.toFixed(2)}</td>
+                <td class="px-6 py-4">${formatDate(matter.matter_date, { format: 'datetime', placeholder: PLACEHOLDER.DASH })}</td>
+                <td class="px-6 py-4">${safeEscapeHtml(matter.note, 'No note')}</td>
+                <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">${formatCurrency(matter.cost, { fromCents: true })}</td>
                 <td class="px-6 py-4">
                     <button class="text-red-600 hover:text-red-800 dark:text-red-400" onclick="deleteMatter(${matter.id})">Delete</button>
                 </td>
@@ -162,7 +169,7 @@ async function loadMatters() {
 
     } catch (error) {
         const tbody = document.getElementById('matters-tbody');
-        tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-4 text-center text-red-600">Error: ${error.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-4 text-center text-red-600">Error: ${formatErrorMessage(error)}</td></tr>`;
     }
 }
 
@@ -424,22 +431,6 @@ window.deleteMatter = async (id) => {
 };
 
 // Utility functions
-function formatDateTime(dateString) {
-    return new Date(dateString).toLocaleString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
 function debounce(func, wait) {
     let timeout;
     return function(...args) {

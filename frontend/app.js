@@ -3,6 +3,78 @@
 
 const API_BASE = window.location.origin + '/api';
 
+// ============ Display Utilities ============
+// Safe formatting helpers for consistent display
+
+const DISPLAY = {
+  DASH: '—',
+
+  /**
+   * Safely convert value to number, return null if invalid
+   */
+  safeNumber(value) {
+    if (value === null || value === undefined || value === '') return null;
+    const num = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(num) ? num : null;
+  },
+
+  /**
+   * Format currency safely
+   * @param {*} value - Value in dollars (or cents if fromCents=true)
+   * @param {Object} options - { fromCents: false, placeholder: '—' }
+   */
+  formatCurrency(value, options = {}) {
+    const { fromCents = false, placeholder = this.DASH } = options;
+    const num = this.safeNumber(value);
+    if (num === null) return placeholder;
+    const dollars = fromCents ? num / 100 : num;
+    return '$' + dollars.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  },
+
+  /**
+   * Format drain rate display safely
+   */
+  formatDrainRate(centsPerSecond) {
+    const num = this.safeNumber(centsPerSecond);
+    if (num === null || num < 0) return { perSec: this.DASH, perMin: this.DASH, perHour: this.DASH };
+    const dollarsPerSecond = num / 100;
+    return {
+      perSec: dollarsPerSecond.toFixed(2),
+      perMin: (dollarsPerSecond * 60).toFixed(2),
+      perHour: (dollarsPerSecond * 3600).toFixed(2)
+    };
+  },
+
+  /**
+   * Safely format matter cost for display
+   * Note: Frontend receives cost in dollars from API, not cents
+   */
+  formatMatterCost(cost) {
+    const num = this.safeNumber(cost);
+    if (num === null) return null; // Return null to allow conditional rendering
+    return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  },
+
+  /**
+   * Safely display a value or return placeholder
+   */
+  displayOrDash(value, placeholder = this.DASH) {
+    if (value === null || value === undefined || value === '' || value === 'null') return placeholder;
+    return String(value);
+  },
+
+  /**
+   * Format time breakdown (HH:MM:SS) with validity check
+   */
+  formatTimeBreakdown(breakdown) {
+    if (!breakdown || breakdown.isValid === false) return this.DASH;
+    const h = String(breakdown.hours ?? 0).padStart(2, '0');
+    const m = String(breakdown.minutes ?? 0).padStart(2, '0');
+    const s = String(breakdown.seconds ?? 0).padStart(2, '0');
+    return `${h}:${m}:${s}`;
+  }
+};
+
 // Color Themes - 8 options!
 const THEMES = {
   amber: {
@@ -276,14 +348,15 @@ async function fetchStatus() {
     const res = await fetch(`${API_BASE}/status`);
     const data = await res.json();
 
-    state.daysSince = data.days_since;
+    state.daysSince = DISPLAY.safeNumber(data.days_since) ?? 0;
     state.lastMatterDate = new Date(data.last_matter_date);
-    state.lifetimeSpent = data.lifetime_spent;
-    state.displayedSpent = data.total_spent || data.lifetime_spent;
+    state.lifetimeSpent = DISPLAY.safeNumber(data.lifetime_spent) ?? 0;
+    // Use nullish coalescing to handle 0 correctly (|| would skip 0)
+    state.displayedSpent = data.total_spent ?? data.lifetime_spent ?? 0;
     state.drainStartTime = new Date(data.drain_start_time);
     state.drainEnabled = data.drain_enabled !== undefined ? data.drain_enabled : true;
-    state.drainRateCents = data.drain_rate_cents_per_second !== undefined ? data.drain_rate_cents_per_second : 50;
-    state.stats = data.stats;
+    state.drainRateCents = DISPLAY.safeNumber(data.drain_rate_cents_per_second) ?? 50;
+    state.stats = data.stats ?? { total_matters: 0, matters_this_year: 0, max_streak: 0 };
     state.currentIP = data.your_ip;
     state.isAuthorized = true; // We'll find out on write attempts
 
@@ -443,8 +516,14 @@ async function setLastMatterDate(date) {
 function updateTimeBreakdown() {
   const now = new Date();
   const lastMatter = new Date(state.lastMatterDate);
-  const diffMs = now - lastMatter;
 
+  // Handle invalid dates gracefully
+  if (!state.lastMatterDate || isNaN(lastMatter.getTime())) {
+    state.timeBreakdown = { hours: 0, minutes: 0, seconds: 0, isValid: false };
+    return;
+  }
+
+  const diffMs = now - lastMatter;
   const totalSeconds = Math.floor(diffMs / 1000);
   const totalMinutes = Math.floor(totalSeconds / 60);
   const totalHours = Math.floor(totalMinutes / 60);
@@ -452,7 +531,8 @@ function updateTimeBreakdown() {
   state.timeBreakdown = {
     hours: totalHours % 24,
     minutes: totalMinutes % 60,
-    seconds: totalSeconds % 60
+    seconds: totalSeconds % 60,
+    isValid: true
   };
 }
 
@@ -483,7 +563,9 @@ function formatDateTime(dateStr) {
 }
 
 function formatDateLong(dateStr) {
+  if (!dateStr || dateStr === 'null') return DISPLAY.DASH;
   const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return DISPLAY.DASH;
   return date.toLocaleString(undefined, {
     year: 'numeric', month: 'long', day: 'numeric',
     hour: '2-digit', minute: '2-digit'
@@ -590,7 +672,7 @@ function renderModern() {
             ${state.daysSince}
           </div>
           <div data-time-display class="modern-time">
-            ${String(state.timeBreakdown.hours).padStart(2, '0')}:${String(state.timeBreakdown.minutes).padStart(2, '0')}:${String(state.timeBreakdown.seconds).padStart(2, '0')}
+            ${DISPLAY.formatTimeBreakdown(state.timeBreakdown)}
           </div>
           <div class="modern-last-matter">
             Last matter: ${formatDateLong(state.lastMatterDate)}
@@ -605,9 +687,9 @@ function renderModern() {
                 Lifetime Legal Fees
               </div>
               <div data-money-display class="modern-money-amount">
-                $${state.displayedSpent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ${DISPLAY.formatCurrency(state.displayedSpent)}
               </div>
-              ${state.drainEnabled ? `<div class="modern-money-drain">+$${(state.drainRateCents / 100).toFixed(2)}/sec (${state.moneyMessage})</div>` : `<div class="money-drain-disabled">Auto-drain disabled</div>`}
+              ${state.drainEnabled ? `<div class="modern-money-drain">+$${DISPLAY.formatDrainRate(state.drainRateCents).perSec}/sec (${state.moneyMessage})</div>` : `<div class="money-drain-disabled">Auto-drain disabled</div>`}
             </div>
             <div class="modern-money-buttons">
               <button onclick="toggleDrainSettings()" class="modern-btn-danger">
@@ -630,7 +712,7 @@ function renderModern() {
                 <div>
                   <label class="modern-input-label">Drain rate (cents per second)</label>
                   <input type="number" id="drainRateInput" value="${state.drainRateCents}" min="0" step="1" class="modern-input">
-                  <p class="form-hint">Current: $${(state.drainRateCents / 100).toFixed(2)}/sec = $${((state.drainRateCents / 100) * 60).toFixed(2)}/min = $${((state.drainRateCents / 100) * 3600).toFixed(2)}/hour</p>
+                  <p class="form-hint">Current: $${DISPLAY.formatDrainRate(state.drainRateCents).perSec}/sec = $${DISPLAY.formatDrainRate(state.drainRateCents).perMin}/min = $${DISPLAY.formatDrainRate(state.drainRateCents).perHour}/hour</p>
                 </div>
                 <button onclick="saveDrainSettings()" class="modern-button-primary">Save Drain Settings</button>
                 <p class="settings-note">⚠️ Changing drain settings will reset the accumulation timer</p>
@@ -655,7 +737,7 @@ function renderModern() {
         <div class="modern-stats-grid">
           <div class="modern-stat-card">
             <div class="modern-stat-label">Record Streak</div>
-            <div class="modern-stat-value">${state.stats.max_streak}</div>
+            <div class="modern-stat-value">${DISPLAY.displayOrDash(state.stats.max_streak, '0')}</div>
           </div>
           <div class="modern-stat-card">
             <div class="modern-stat-label">This Year</div>
@@ -715,7 +797,7 @@ function renderModern() {
                     <div>
                       <div class="modern-log-date">${formatDateTime(matter.matter_date)}</div>
                       <div class="modern-log-note">${matter.note}</div>
-                      ${matter.cost ? `<div class="modern-log-cost">$${parseFloat(matter.cost).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>` : ''}
+                      ${DISPLAY.formatMatterCost(matter.cost) !== null ? `<div class="modern-log-cost">${DISPLAY.formatMatterCost(matter.cost)}</div>` : ''}
                     </div>
                     <button onclick="deleteMatterById(${matter.id})" class="modern-delete-btn">Delete</button>
                   </div>
@@ -825,7 +907,7 @@ function renderRetro() {
                 ${state.daysSince}
               </p>
               <p data-time-display class="retro-time">
-                ${String(state.timeBreakdown.hours).padStart(2, '0')}:${String(state.timeBreakdown.minutes).padStart(2, '0')}:${String(state.timeBreakdown.seconds).padStart(2, '0')}
+                ${DISPLAY.formatTimeBreakdown(state.timeBreakdown)}
               </p>
             </div>
             <p class="retro-last-matter">
@@ -840,9 +922,9 @@ function renderRetro() {
                 💸 CA-CHING! YOUR LEGAL BILL$ 💸
               </p>
               <p data-money-display class="retro-money-value">
-                $${state.displayedSpent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ${DISPLAY.formatCurrency(state.displayedSpent)}
               </p>
-              ${state.drainEnabled ? `<p class="retro-money-drain">+$${(state.drainRateCents / 100).toFixed(2)}/sec (the meter never stops!)</p>` : ''}
+              ${state.drainEnabled ? `<p class="retro-money-drain">+$${DISPLAY.formatDrainRate(state.drainRateCents).perSec}/sec (the meter never stops!)</p>` : ''}
               <button onclick="toggleMoneySettings()" class="retro-money-button">
                 ${state.showMoneySettings ? '✖ CLOSE' : '✎ EDIT TOTAL'}
               </button>
@@ -865,7 +947,7 @@ function renderRetro() {
           <div class="retro-stats-grid">
             <div class="retro-stat-card retro-stat-card-cyan">
               <p class="retro-stat-label" style="color: ${theme.primary};">★ RECORD STREAK ★</p>
-              <p class="retro-stat-value" style="color: ${theme.danger};">${state.stats.max_streak}</p>
+              <p class="retro-stat-value" style="color: ${theme.danger};">${DISPLAY.displayOrDash(state.stats.max_streak, '0')}</p>
             </div>
             <div class="retro-stat-card retro-stat-card-magenta">
               <p class="retro-stat-label" style="color: white;">★ THIS YEAR ★</p>
@@ -925,7 +1007,7 @@ function renderRetro() {
                       <div class="retro-log-info">
                         <div class="retro-log-date">${formatDateTime(matter.matter_date)}</div>
                         <div class="retro-log-note">${matter.note}</div>
-                        ${matter.cost ? `<div class="retro-log-cost">Cost: $${parseFloat(matter.cost).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>` : ''}
+                        ${DISPLAY.formatMatterCost(matter.cost) !== null ? `<div class="retro-log-cost">Cost: ${DISPLAY.formatMatterCost(matter.cost)}</div>` : ''}
                       </div>
                       <button onclick="deleteMatterById(${matter.id})" class="retro-delete-btn">DELETE</button>
                     </div>
@@ -1082,7 +1164,7 @@ function render() {
           </span>
         </div>
         <p data-time-display class="time-display">
-          ${String(state.timeBreakdown.hours).padStart(2, '0')}:${String(state.timeBreakdown.minutes).padStart(2, '0')}:${String(state.timeBreakdown.seconds).padStart(2, '0')}
+          ${DISPLAY.formatTimeBreakdown(state.timeBreakdown)}
         </p>
         <p class="last-matter">
           LAST MATTER: ${formatDateLong(state.lastMatterDate)}
@@ -1094,9 +1176,9 @@ function render() {
         <div class="money-info">
           <p class="money-label">LIFETIME_LEGAL_FEES:</p>
           <p data-money-display class="money-amount">
-            $${state.displayedSpent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            ${DISPLAY.formatCurrency(state.displayedSpent)}
           </p>
-          ${state.drainEnabled ? `<p class="money-drain-info">+$${(state.drainRateCents / 100).toFixed(2)}/sec (${state.moneyMessage})</p>` : ''}
+          ${state.drainEnabled ? `<p class="money-drain-info">+$${DISPLAY.formatDrainRate(state.drainRateCents).perSec}/sec (${state.moneyMessage})</p>` : ''}
         </div>
         <button onclick="toggleMoneySettings()" class="btn btn-danger">
           ${state.showMoneySettings ? 'CLOSE' : 'EDIT'}
@@ -1126,7 +1208,7 @@ function render() {
       <div class="stats-grid">
         <div class="stat-card">
           <p class="stat-label">RECORD_MAX</p>
-          <p class="stat-value" style="text-shadow: 0 0 15px ${theme.primaryGlow}, 0 0 30px ${theme.primary}44;">${state.stats.max_streak}</p>
+          <p class="stat-value" style="text-shadow: 0 0 15px ${theme.primaryGlow}, 0 0 30px ${theme.primary}44;">${DISPLAY.displayOrDash(state.stats.max_streak, '0')}</p>
         </div>
         <div class="stat-card">
           <p class="stat-label">COUNT_YTD</p>
@@ -1191,7 +1273,7 @@ function render() {
                     </p>
                     <p class="matter-note">${matter.note}</p>
                     ${matter.days_since !== undefined ? `<p class="matter-streak">Streak broken: ${matter.days_since} days</p>` : ''}
-                    ${matter.cost ? `<p class="matter-cost">Cost: $${parseFloat(matter.cost).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>` : ''}
+                    ${DISPLAY.formatMatterCost(matter.cost) !== null ? `<p class="matter-cost">Cost: ${DISPLAY.formatMatterCost(matter.cost)}</p>` : ''}
                   </div>
                   <button onclick="deleteMatterById(${matter.id})" class="matter-delete-btn">DEL</button>
                 </div>
@@ -1249,7 +1331,7 @@ function startDrain() {
 
     const moneyDisplay = document.querySelector('[data-money-display]');
     if (moneyDisplay) {
-      moneyDisplay.textContent = '$' + state.displayedSpent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      moneyDisplay.textContent = DISPLAY.formatCurrency(state.displayedSpent);
     }
   }, 1000);
 }
@@ -1276,9 +1358,10 @@ function toggleDrainSettings() {
 
 async function saveDrainSettings() {
   const enabled = document.getElementById('drainEnabled')?.checked;
-  const rateCents = parseInt(document.getElementById('drainRateInput')?.value);
+  const rateValue = document.getElementById('drainRateInput')?.value;
+  const rateCents = DISPLAY.safeNumber(rateValue);
 
-  if (rateCents !== undefined && (isNaN(rateCents) || rateCents < 0)) {
+  if (rateCents === null || rateCents < 0) {
     alert('Please enter a valid drain rate (0 or greater)');
     return;
   }
@@ -1332,7 +1415,7 @@ async function submitManualMatter() {
   await logMatter(
     dateInput.value,
     noteInput.value || 'Manual entry',
-    parseFloat(costInput.value) || 0
+    DISPLAY.safeNumber(costInput.value) ?? 0
   );
 
   state.showDatePicker = false;
@@ -1348,8 +1431,9 @@ async function deleteMatterById(id) {
 
 async function setMoney() {
   const input = document.getElementById('moneyInput');
-  if (input && input.value) {
-    await updateLifetimeSpent(parseFloat(input.value), false);
+  const amount = DISPLAY.safeNumber(input?.value);
+  if (amount !== null) {
+    await updateLifetimeSpent(amount, false);
     await fetchStatus(); // Refresh to get new drain_start_time
     state.showMoneySettings = false;
     render();
@@ -1358,8 +1442,9 @@ async function setMoney() {
 
 async function addMoney() {
   const input = document.getElementById('moneyInput');
-  if (input && input.value) {
-    await updateLifetimeSpent(parseFloat(input.value), true);
+  const amount = DISPLAY.safeNumber(input?.value);
+  if (amount !== null) {
+    await updateLifetimeSpent(amount, true);
     await fetchStatus(); // Refresh to get new drain_start_time
     render();
   }
@@ -1397,7 +1482,7 @@ async function init() {
     // Only update time display elements without re-rendering everything
     const timeElements = document.querySelectorAll('[data-time-display]');
     timeElements.forEach(el => {
-      el.textContent = `${String(state.timeBreakdown.hours).padStart(2, '0')}:${String(state.timeBreakdown.minutes).padStart(2, '0')}:${String(state.timeBreakdown.seconds).padStart(2, '0')}`;
+      el.textContent = DISPLAY.formatTimeBreakdown(state.timeBreakdown);
     });
   }, 1000);
 }

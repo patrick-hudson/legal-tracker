@@ -3,6 +3,7 @@
  */
 
 import api from '../api.js';
+import { renderErrorBanner } from '../display-utils.js';
 
 export async function renderAnalytics(container) {
     container.innerHTML = '<div class="flex justify-center items-center h-64"><div class="spinner"></div></div>';
@@ -70,11 +71,7 @@ export async function renderAnalytics(container) {
         renderCharts();
 
     } catch (error) {
-        container.innerHTML = `
-            <div class="p-4 mb-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-gray-800 dark:text-red-400">
-                <span class="font-medium">Error!</span> Failed to load analytics: ${error.message}
-            </div>
-        `;
+        container.innerHTML = renderErrorBanner(error, 'Error! Failed to load analytics:');
     }
 }
 
