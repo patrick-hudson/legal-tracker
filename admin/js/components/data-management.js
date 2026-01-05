@@ -15,41 +15,54 @@ export async function renderDataManagement(container) {
                 <p class="text-gray-600 dark:text-gray-400">Sample data and database management</p>
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- 4-column grid for all cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                 <!-- Sample Data -->
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Sample Data</h3>
-                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                        Populate the database with sample matters for testing. Choose from predefined datasets or generate custom data.
-                    </p>
-
-                    <!-- Sample Dataset Selection -->
-                    <div id="sample-datasets-loading" class="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                        Loading available datasets...
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border-2 border-green-500">
+                    <h3 class="text-lg font-semibold text-green-600 dark:text-green-500 mb-4 flex items-center">
+                        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z"></path>
+                            <path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z"></path>
+                            <path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z"></path>
+                        </svg>
+                        Sample Data
+                    </h3>
+                    <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 mb-4">
+                        <p class="text-sm text-green-800 dark:text-green-400 font-semibold mb-2">Add test data</p>
+                        <ul class="list-disc list-inside text-xs text-green-700 dark:text-green-300 space-y-1">
+                            <li>Generate random matters</li>
+                            <li>Use predefined datasets</li>
+                            <li>Custom matter counts</li>
+                        </ul>
+                        <p class="text-xs text-green-700 dark:text-green-300 mt-2 italic">
+                            Non-destructive operation.
+                        </p>
                     </div>
-                    <div id="sample-datasets-container" class="hidden">
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select Dataset</label>
-                        <select id="sample-dataset-select" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white mb-3">
-                            <option value="generate">Generate New (Custom Count)</option>
-                        </select>
-
-                        <div id="sample-dataset-info" class="text-xs text-gray-500 dark:text-gray-400 mb-3 hidden"></div>
-
-                        <!-- Custom count for generated data -->
-                        <div id="custom-count-container" class="mb-3">
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Number of Matters</label>
-                            <input type="number" id="sample-count-input" value="25" min="1" max="1000" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                            <p class="mt-1 text-xs text-gray-500">1-1000 matters, randomly generated</p>
+                    <div class="space-y-3">
+                        <div id="sample-datasets-loading" class="text-sm text-gray-500 dark:text-gray-400">
+                            Loading datasets...
                         </div>
-                    </div>
-
-                    <div id="sample-action-buttons" class="space-y-2">
-                        <button id="populate-sample-btn" class="w-full text-white bg-green-600 hover:bg-green-700 rounded-lg px-4 py-2 text-sm">
-                            Populate Sample Data
-                        </button>
-                        <button id="regenerate-samples-btn" class="w-full text-gray-700 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 rounded-lg px-4 py-2 text-sm">
-                            Regenerate All Sample Files
-                        </button>
+                        <div id="sample-datasets-container" class="hidden space-y-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Dataset</label>
+                                <select id="sample-dataset-select" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                    <option value="generate">Generate New</option>
+                                </select>
+                            </div>
+                            <div id="sample-dataset-info" class="text-xs text-gray-500 dark:text-gray-400 hidden"></div>
+                            <div id="custom-count-container">
+                                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Count (1-1000)</label>
+                                <input type="number" id="sample-count-input" value="25" min="1" max="1000" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                            </div>
+                        </div>
+                        <div id="sample-action-buttons" class="space-y-2">
+                            <button id="populate-sample-btn" class="w-full text-white bg-green-600 hover:bg-green-700 rounded-lg px-4 py-2 text-sm font-semibold">
+                                Populate Data
+                            </button>
+                            <button id="regenerate-samples-btn" class="w-full text-gray-700 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-300 dark:hover:bg-gray-500 rounded-lg px-4 py-2 text-xs">
+                                Regenerate Files
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -59,25 +72,25 @@ export async function renderDataManagement(container) {
                         <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                             <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"></path>
                         </svg>
-                        Wipe Matters Data
+                        Wipe Matters
                     </h3>
-                    <div class="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4 mb-4">
-                        <p class="text-sm text-orange-800 dark:text-orange-400 font-semibold mb-2">DELETE ALL MATTERS: This action cannot be undone!</p>
-                        <p class="text-sm text-orange-700 dark:text-orange-300">
-                            This will delete all matter records but keep your account and settings:
-                        </p>
-                        <ul class="list-disc list-inside text-sm text-orange-700 dark:text-orange-300 mt-2 space-y-1">
-                            <li>All matter records and historical data</li>
-                            <li>Last matter date will be reset</li>
+                    <div class="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-3 mb-4">
+                        <p class="text-sm text-orange-800 dark:text-orange-400 font-semibold mb-2">Deletes:</p>
+                        <ul class="list-disc list-inside text-xs text-orange-700 dark:text-orange-300 space-y-1">
+                            <li>All matter records</li>
+                            <li>Matter timestamps</li>
+                            <li>Last matter date</li>
                         </ul>
-                        <p class="text-xs text-orange-700 dark:text-orange-300 mt-2 italic">
-                            Admin users, sessions, and other settings will be preserved.
-                        </p>
+                        <p class="text-xs text-orange-700 dark:text-orange-300 mt-2 font-semibold">Preserves:</p>
+                        <ul class="list-disc list-inside text-xs text-orange-700 dark:text-orange-300 space-y-1">
+                            <li>All settings (fees, drain rate)</li>
+                            <li>Admin users & sessions</li>
+                        </ul>
                     </div>
                     <div class="space-y-3">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Type <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-orange-600 dark:text-orange-400 font-mono">WIPE MATTERS</code> to confirm:
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Type <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-orange-600 dark:text-orange-400 font-mono text-xs">WIPE MATTERS</code>
                             </label>
                             <input
                                 type="text"
@@ -86,38 +99,76 @@ export async function renderDataManagement(container) {
                                 class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-orange-500 focus:border-orange-500">
                         </div>
                         <button id="wipe-matters-btn" class="w-full text-white bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg px-4 py-2 text-sm font-semibold" disabled>
-                            Wipe Matters Data
+                            Wipe Matters
                         </button>
                     </div>
                 </div>
 
-                <!-- Wipe Everything (Danger Zone) -->
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border-2 border-red-500 lg:col-span-2">
+                <!-- Wipe Matters + Settings -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border-2 border-amber-500">
+                    <h3 class="text-lg font-semibold text-amber-600 dark:text-amber-500 mb-4 flex items-center">
+                        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                            <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"></path>
+                        </svg>
+                        Wipe + Reset
+                    </h3>
+                    <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mb-4">
+                        <p class="text-sm text-amber-800 dark:text-amber-400 font-semibold mb-2">Deletes:</p>
+                        <ul class="list-disc list-inside text-xs text-amber-700 dark:text-amber-300 space-y-1">
+                            <li>All matter records</li>
+                            <li>Lifetime fees → $0</li>
+                            <li>Drain rate → 0</li>
+                            <li>Auto-drain → disabled</li>
+                            <li>Drain timer → reset</li>
+                        </ul>
+                        <p class="text-xs text-amber-700 dark:text-amber-300 mt-2 font-semibold">Preserves:</p>
+                        <ul class="list-disc list-inside text-xs text-amber-700 dark:text-amber-300 space-y-1">
+                            <li>Admin users & sessions</li>
+                        </ul>
+                    </div>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Type <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-amber-600 dark:text-amber-400 font-mono text-xs">WIPE SETTINGS</code>
+                            </label>
+                            <input
+                                type="text"
+                                id="wipe-matters-settings-confirmation"
+                                placeholder="WIPE SETTINGS"
+                                class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-amber-500 focus:border-amber-500">
+                        </div>
+                        <button id="wipe-matters-settings-btn" class="w-full text-white bg-amber-600 hover:bg-amber-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg px-4 py-2 text-sm font-semibold" disabled>
+                            Wipe + Reset
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Wipe Everything (Factory Reset) -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border-2 border-red-500">
                     <h3 class="text-lg font-semibold text-red-600 dark:text-red-500 mb-4 flex items-center">
                         <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                             <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
                         </svg>
-                        Danger Zone
+                        Factory Reset
                     </h3>
-                    <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
-                        <p class="text-sm text-red-800 dark:text-red-400 font-semibold mb-2">COMPLETE DATABASE RESET: This action cannot be undone!</p>
-                        <p class="text-sm text-red-700 dark:text-red-300">
-                            This will WIPE EVERYTHING and return to fresh install state:
-                        </p>
-                        <ul class="list-disc list-inside text-sm text-red-700 dark:text-red-300 mt-2 space-y-1">
-                            <li>All matter records and historical data</li>
-                            <li>All settings (reset to defaults)</li>
-                            <li>All admin sessions (you will be logged out)</li>
-                            <li>All other admin users (only your account remains)</li>
+                    <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 mb-4">
+                        <p class="text-sm text-red-800 dark:text-red-400 font-semibold mb-2">Deletes:</p>
+                        <ul class="list-disc list-inside text-xs text-red-700 dark:text-red-300 space-y-1">
+                            <li>All matter records</li>
+                            <li>All settings → defaults</li>
+                            <li>All admin users</li>
+                            <li>All active sessions</li>
+                            <li>Bootstrap tokens</li>
                         </ul>
-                        <p class="text-xs text-red-700 dark:text-red-300 mt-2 italic">
-                            After wiping, the database will be in pristine fresh install state.
-                        </p>
+                        <p class="text-xs text-red-700 dark:text-red-300 mt-2 font-semibold">Result:</p>
+                        <ul class="list-disc list-inside text-xs text-red-700 dark:text-red-300 space-y-1">
+                            <li>Fresh install state</li>
+                        </ul>
                     </div>
-                    <div class="space-y-3 max-w-md">
+                    <div class="space-y-3">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Type <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-red-600 dark:text-red-400 font-mono">WIPE EVERYTHING</code> to confirm:
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Type <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-red-600 dark:text-red-400 font-mono text-xs">WIPE EVERYTHING</code>
                             </label>
                             <input
                                 type="text"
@@ -126,7 +177,7 @@ export async function renderDataManagement(container) {
                                 class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-red-500 focus:border-red-500">
                         </div>
                         <button id="wipe-everything-btn" class="w-full text-white bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg px-4 py-2 text-sm font-semibold" disabled>
-                            Wipe Everything
+                            Factory Reset
                         </button>
                     </div>
                 </div>
@@ -335,6 +386,45 @@ function setupEventListeners() {
             const btn = document.getElementById('wipe-matters-btn');
             btn.disabled = true;
             btn.textContent = 'Wipe Matters Data';
+        }
+    });
+
+    // Wipe matters + settings - confirmation input only (uniform with other wipes)
+    document.getElementById('wipe-matters-settings-confirmation')?.addEventListener('input', (e) => {
+        const btn = document.getElementById('wipe-matters-settings-btn');
+        btn.disabled = e.target.value !== 'WIPE SETTINGS';
+    });
+
+    // Wipe matters + settings
+    document.getElementById('wipe-matters-settings-btn')?.addEventListener('click', async () => {
+        const confirmation = document.getElementById('wipe-matters-settings-confirmation').value;
+
+        if (confirmation !== 'WIPE SETTINGS') {
+            showToast('Please type the confirmation text exactly', 'error');
+            return;
+        }
+
+        if (!confirm('Are you sure you want to delete all matters AND reset all settings?\n\nThis will:\n- Delete all matter records\n- Reset lifetime legal fees to $0\n- Reset drain rate to 0\n- Disable auto-drain\n- Reset drain timer\n\nYour admin account will be preserved.\n\nThis action CANNOT be undone!')) {
+            return;
+        }
+
+        try {
+            const btn = document.getElementById('wipe-matters-settings-btn');
+            btn.disabled = true;
+            btn.textContent = 'Wiping...';
+
+            const response = await api.wipeMattersAndSettings(confirmation);
+
+            showToast(response.message || `Successfully deleted ${response.matters_deleted} matters and reset settings`, 'success');
+
+            document.getElementById('wipe-matters-settings-confirmation').value = '';
+            btn.disabled = true;
+            btn.textContent = 'Wipe + Reset';
+        } catch (error) {
+            showToast(`Error: ${error.message}`, 'error');
+            const btn = document.getElementById('wipe-matters-settings-btn');
+            btn.disabled = true;
+            btn.textContent = 'Wipe + Reset';
         }
     });
 

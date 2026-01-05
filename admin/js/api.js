@@ -210,6 +210,13 @@ class AdminAPI {
         });
     }
 
+    async wipeMattersAndSettings(confirmation) {
+        return this.request('/data/wipe-matters-and-settings', {
+            method: 'POST',
+            body: JSON.stringify({ confirmation })
+        });
+    }
+
     async wipeAllData(confirmation) {
         return this.request('/data/wipe', {
             method: 'POST',

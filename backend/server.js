@@ -11,10 +11,34 @@ import { dirname, join, resolve } from 'path';
 import { readFileSync, existsSync } from 'fs';
 import { execSync } from 'child_process';
 import dotenv from 'dotenv';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 // Initialize __filename and __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Cache for commit push status (stale-while-revalidate)
+const commitPushCache = {
+  hash: null,
+  pushed: false,
+  timestamp: 0,
+  refreshing: false
+};
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Default application settings (canonical source of truth)
+ * Used for fresh installs and settings reset operations
+ */
+const DEFAULT_APP_SETTINGS = {
+  lifetime_spent: '0',
+  drain_rate_cents_per_second: '0',
+  auto_drain_enabled: 'false'
+  // Note: drain_start_time and last_matter_date are set dynamically to current time
+};
 
 // Load environment variables from .env file in backend directory
 dotenv.config({ path: join(__dirname, '.env') });
@@ -216,13 +240,46 @@ export async function createServer(options = {}) {
     try {
       commitHash = execSync('git rev-parse HEAD', { cwd: __dirname, encoding: 'utf8' }).trim();
       commitHashShort = execSync('git rev-parse --short HEAD', { cwd: __dirname, encoding: 'utf8' }).trim();
-      // Check if this commit exists on origin by looking for it in remote refs
-      try {
-        const result = execSync(`git branch -r --contains ${commitHash} 2>/dev/null`, { cwd: __dirname, encoding: 'utf8', shell: true }).trim();
-        commitPushed = !!result;
-      } catch {
-        // Commit not on remote or git command failed
-        commitPushed = false;
+
+      // Stale-while-revalidate: return cached value, refresh in background if stale
+      const now = Date.now();
+      const cacheValid = commitPushCache.hash === commitHash && commitPushCache.timestamp > 0;
+      const cacheStale = now - commitPushCache.timestamp > CACHE_TTL_MS;
+
+      if (cacheValid) {
+        // Use cached value
+        commitPushed = commitPushCache.pushed;
+
+        // If stale and not already refreshing, trigger background refresh
+        if (cacheStale && !commitPushCache.refreshing) {
+          commitPushCache.refreshing = true;
+          // Background fetch and check
+          execAsync('git fetch origin', { cwd: __dirname })
+            .then(() => execAsync(`git branch -r --contains ${commitHash} 2>/dev/null`, { cwd: __dirname, shell: true }))
+            .then(({ stdout }) => {
+              commitPushCache.pushed = !!stdout.trim();
+              commitPushCache.hash = commitHash;
+              commitPushCache.timestamp = Date.now();
+            })
+            .catch(() => {
+              // Keep existing cache value on error
+            })
+            .finally(() => {
+              commitPushCache.refreshing = false;
+            });
+        }
+      } else {
+        // No valid cache - do synchronous check (first request or hash changed)
+        try {
+          const result = execSync(`git branch -r --contains ${commitHash} 2>/dev/null`, { cwd: __dirname, encoding: 'utf8', shell: true }).trim();
+          commitPushed = !!result;
+        } catch {
+          commitPushed = false;
+        }
+        // Initialize cache
+        commitPushCache.hash = commitHash;
+        commitPushCache.pushed = commitPushed;
+        commitPushCache.timestamp = now;
       }
     } catch {
       // Not a git repo or git not available
@@ -1344,12 +1401,30 @@ export async function createServer(options = {}) {
       let sampleMatters = [];
 
       if (source && source !== 'generate') {
+        // Validate source name - only allow alphanumeric, dash, underscore
+        if (!/^[a-zA-Z0-9_\-]+$/.test(source)) {
+          return reply.code(400).send({
+            error: 'BAD_REQUEST',
+            message: 'Invalid source name'
+          });
+        }
+
         // Load from file
         const samplesDir = join(__dirname, 'samples');
         const filePath = join(samplesDir, `${source}.json`);
 
+        // Verify path is within samples directory (defense in depth)
+        const resolvedPath = resolve(filePath);
+        const expectedBase = resolve(samplesDir);
+        if (!resolvedPath.startsWith(expectedBase)) {
+          return reply.code(400).send({
+            error: 'BAD_REQUEST',
+            message: 'Invalid source path'
+          });
+        }
+
         try {
-          const fileContent = readFileSync(filePath, 'utf-8');
+          const fileContent = readFileSync(resolvedPath, 'utf-8');
           const data = JSON.parse(fileContent);
           sampleMatters = data.matters || [];
         } catch (err) {
@@ -1581,6 +1656,90 @@ export async function createServer(options = {}) {
     }
   });
 
+  // Wipe matters and settings - delete all matters and reset settings to defaults, but keep users
+  // Protected by env flag in production
+  fastify.post('/admin/api/data/wipe-matters-and-settings', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { confirmation } = request.body || {};
+
+    // Validate input length
+    try {
+      validateStringLength(confirmation, 'confirmation', INPUT_LIMITS.confirmationString);
+    } catch (error) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: error.message });
+    }
+
+    // Check if wipe is enabled (disabled in production unless explicitly enabled)
+    const nodeEnv = process.env.NODE_ENV || 'development';
+    const enableReset = process.env.ENABLE_WIPE_MATTERS_AND_SETTINGS === 'true' || process.env.ENABLE_DB_RESET === 'true';
+
+    if (nodeEnv === 'production' && !enableReset) {
+      return reply.code(403).send({
+        error: 'FORBIDDEN',
+        message: 'This operation is disabled in production. Set ENABLE_WIPE_MATTERS_AND_SETTINGS=true to enable.'
+      });
+    }
+
+    // Require exact confirmation string
+    if (confirmation !== 'WIPE SETTINGS') {
+      return reply.code(400).send({
+        error: 'BAD_REQUEST',
+        message: 'Confirmation string does not match. Please type "WIPE SETTINGS" to confirm.'
+      });
+    }
+
+    try {
+      // Log the wipe action
+      const userId = request.adminUser?.id || 'unknown';
+      const ip = request.ip || 'unknown';
+      fastify.log.warn({
+        action: 'WIPE_MATTERS_AND_SETTINGS',
+        user_id: userId,
+        ip_address: ip,
+        timestamp: new Date().toISOString()
+      }, 'Matters and settings wipe initiated');
+
+      // Count matters before deletion
+      const matterCount = mattersDb.getAll().length;
+
+      // 1. Delete all matters
+      const matters = mattersDb.getAll();
+      for (const matter of matters) {
+        mattersDb.delete(matter.id);
+      }
+
+      // 2. Reset all configurable settings to defaults
+      for (const [key, value] of Object.entries(DEFAULT_APP_SETTINGS)) {
+        settingsDb.set(key, value);
+      }
+      // Set dynamic defaults
+      settingsDb.set('drain_start_time', new Date().toISOString());
+      settingsDb.set('last_matter_date', null);
+
+      fastify.log.info({
+        action: 'WIPE_MATTERS_AND_SETTINGS_COMPLETE',
+        matters_deleted: matterCount,
+        settings_reset: true
+      }, 'Matters and settings wipe completed successfully');
+
+      return {
+        success: true,
+        message: `Successfully deleted ${matterCount} matter records and reset settings to defaults`,
+        matters_deleted: matterCount,
+        settings_reset: true
+      };
+    } catch (error) {
+      fastify.log.error({
+        action: 'WIPE_MATTERS_AND_SETTINGS_FAILED',
+        error: error.message
+      }, 'Matters and settings wipe failed');
+
+      return reply.code(500).send({
+        error: 'SERVER_ERROR',
+        message: `Failed to wipe matters and settings: ${error.message}`
+      });
+    }
+  });
+
   // Wipe everything - complete database reset (requires confirmation)
   // Protected by env flag in production
   fastify.post('/admin/api/data/wipe', { preHandler: adminAuthMiddleware }, async (request, reply) => {
@@ -1654,11 +1813,12 @@ export async function createServer(options = {}) {
       adminBootstrapTokensDb.create(tokenHash, expiresAt, ip);
 
       // 6. Reset all settings to defaults (fresh install state)
-      settingsDb.set('lifetime_spent', '0');
+      for (const [key, value] of Object.entries(DEFAULT_APP_SETTINGS)) {
+        settingsDb.set(key, value);
+      }
+      // Set dynamic defaults
       settingsDb.set('last_matter_date', new Date().toISOString());
       settingsDb.set('drain_start_time', new Date().toISOString());
-      settingsDb.set('drain_rate_cents_per_second', '50');
-      settingsDb.set('auto_drain_enabled', 'true');
 
       fastify.log.info({
         action: 'WIPE_EVERYTHING_COMPLETE',

@@ -583,7 +583,7 @@ describe('Bootstrap and Wipe Everything Functionality', () => {
       // Set some custom values
       settingsDb.set('lifetime_spent', '999999');
       settingsDb.set('drain_rate_cents_per_second', '100');
-      settingsDb.set('auto_drain_enabled', 'false');
+      settingsDb.set('auto_drain_enabled', 'true');
 
       const response = await fastify.inject({
         method: 'POST',
@@ -596,10 +596,10 @@ describe('Bootstrap and Wipe Everything Functionality', () => {
 
       assert.strictEqual(response.statusCode, 200);
 
-      // Verify defaults are restored
+      // Verify defaults are restored (drain_rate=0, auto_drain=false)
       assert.strictEqual(settingsDb.get('lifetime_spent'), '0');
-      assert.strictEqual(settingsDb.get('drain_rate_cents_per_second'), '50');
-      assert.strictEqual(settingsDb.get('auto_drain_enabled'), 'true');
+      assert.strictEqual(settingsDb.get('drain_rate_cents_per_second'), '0');
+      assert.strictEqual(settingsDb.get('auto_drain_enabled'), 'false');
       assert(settingsDb.get('drain_start_time')); // Should be set to current time
       assert(settingsDb.get('last_matter_date')); // Should be set to current time
     });
@@ -762,6 +762,191 @@ describe('Bootstrap and Wipe Everything Functionality', () => {
       const body = JSON.parse(response.body);
       assert.strictEqual(body.success, true);
       assert.strictEqual(body.matters_deleted, 0);
+    });
+  });
+
+  describe('Wipe Matters and Settings API', () => {
+    test('should reject wipe matters and settings without auth', async () => {
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/data/wipe-matters-and-settings',
+        payload: { confirmation: 'WIPE SETTINGS' }
+      });
+
+      assert.strictEqual(response.statusCode, 401);
+    });
+
+    test('should reject wipe with wrong confirmation string', async () => {
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/data/wipe-matters-and-settings',
+        headers: {
+          cookie: authCookie
+        },
+        payload: { confirmation: 'WIPE MATTERS' }
+      });
+
+      assert.strictEqual(response.statusCode, 400);
+      const body = JSON.parse(response.body);
+      assert.strictEqual(body.error, 'BAD_REQUEST');
+      assert(body.message.includes('WIPE SETTINGS'));
+    });
+
+    test('should successfully wipe matters and reset settings', async () => {
+      const { mattersDb, settingsDb } = fastify.db;
+
+      // Add some test data
+      mattersDb.add(new Date().toISOString(), 'Test matter 1', 10, 10000);
+      mattersDb.add(new Date().toISOString(), 'Test matter 2', 5, 20000);
+      settingsDb.set('lifetime_spent', '50000');
+      settingsDb.set('drain_rate_cents_per_second', '100');
+      settingsDb.set('auto_drain_enabled', 'true');
+
+      // Verify data exists
+      assert.strictEqual(mattersDb.getAll().length, 2);
+      assert.strictEqual(settingsDb.get('lifetime_spent'), '50000');
+      assert.strictEqual(settingsDb.get('drain_rate_cents_per_second'), '100');
+      assert.strictEqual(settingsDb.get('auto_drain_enabled'), 'true');
+
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/data/wipe-matters-and-settings',
+        headers: {
+          cookie: authCookie
+        },
+        payload: { confirmation: 'WIPE SETTINGS' }
+      });
+
+      assert.strictEqual(response.statusCode, 200);
+      const body = JSON.parse(response.body);
+      assert.strictEqual(body.success, true);
+      assert.strictEqual(body.matters_deleted, 2);
+      assert.strictEqual(body.settings_reset, true);
+
+      // Verify matters were wiped
+      assert.strictEqual(mattersDb.getAll().length, 0);
+
+      // Verify settings were reset to defaults (drain_rate=0, auto_drain=false)
+      assert.strictEqual(settingsDb.get('lifetime_spent'), '0');
+      assert.strictEqual(settingsDb.get('drain_rate_cents_per_second'), '0');
+      assert.strictEqual(settingsDb.get('auto_drain_enabled'), 'false');
+      assert(settingsDb.get('drain_start_time')); // Should be set to current time
+    });
+
+    test('should preserve admin users and sessions', async () => {
+      const { mattersDb, adminUsersDb, adminSessionsDb } = fastify.db;
+
+      // Add some matters
+      mattersDb.add(new Date().toISOString(), 'Test matter', 10, 10000);
+
+      // Count admins and sessions before
+      const adminsBefore = adminUsersDb.getAll().length;
+      const sessionsBefore = adminSessionsDb.getAll().length;
+
+      assert(adminsBefore > 0);
+      assert(sessionsBefore > 0);
+
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/data/wipe-matters-and-settings',
+        headers: {
+          cookie: authCookie
+        },
+        payload: { confirmation: 'WIPE SETTINGS' }
+      });
+
+      assert.strictEqual(response.statusCode, 200);
+
+      // Verify admins and sessions are preserved
+      assert.strictEqual(adminUsersDb.getAll().length, adminsBefore);
+      assert.strictEqual(adminSessionsDb.getAll().length, sessionsBefore);
+    });
+
+    test('should reset last_matter_date to null', async () => {
+      const { mattersDb, settingsDb } = fastify.db;
+
+      // Set a last_matter_date
+      settingsDb.set('last_matter_date', '2024-01-15T12:00:00.000Z');
+
+      // Add a matter
+      mattersDb.add(new Date().toISOString(), 'Test matter', 10, 10000);
+
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/data/wipe-matters-and-settings',
+        headers: {
+          cookie: authCookie
+        },
+        payload: { confirmation: 'WIPE SETTINGS' }
+      });
+
+      assert.strictEqual(response.statusCode, 200);
+
+      // Verify last_matter_date was reset
+      const lastMatterDate = settingsDb.get('last_matter_date');
+      assert(lastMatterDate === null || lastMatterDate === 'null', `Expected null but got: ${lastMatterDate}`);
+    });
+
+    test('should handle empty matters gracefully', async () => {
+      const { mattersDb, settingsDb } = fastify.db;
+
+      // Ensure no matters exist
+      assert.strictEqual(mattersDb.getAll().length, 0);
+
+      // Set some non-default settings
+      settingsDb.set('lifetime_spent', '99999');
+
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/data/wipe-matters-and-settings',
+        headers: {
+          cookie: authCookie
+        },
+        payload: { confirmation: 'WIPE SETTINGS' }
+      });
+
+      assert.strictEqual(response.statusCode, 200);
+      const body = JSON.parse(response.body);
+      assert.strictEqual(body.success, true);
+      assert.strictEqual(body.matters_deleted, 0);
+      assert.strictEqual(body.settings_reset, true);
+
+      // Settings should still be reset
+      assert.strictEqual(settingsDb.get('lifetime_spent'), '0');
+    });
+
+    test('should allow existing user to still authenticate after wipe', async () => {
+      const { mattersDb, settingsDb } = fastify.db;
+
+      // Add data and modify settings
+      mattersDb.add(new Date().toISOString(), 'Test matter', 10, 10000);
+      settingsDb.set('lifetime_spent', '50000');
+
+      // Perform wipe
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/data/wipe-matters-and-settings',
+        headers: {
+          cookie: authCookie
+        },
+        payload: { confirmation: 'WIPE SETTINGS' }
+      });
+
+      assert.strictEqual(response.statusCode, 200);
+
+      // Verify user can still make authenticated requests
+      const meResponse = await fastify.inject({
+        method: 'GET',
+        url: '/admin/api/auth/me',
+        headers: {
+          cookie: authCookie
+        }
+      });
+
+      assert.strictEqual(meResponse.statusCode, 200);
+      const meBody = JSON.parse(meResponse.body);
+      assert(meBody.user, 'Response should contain user object');
+      assert.strictEqual(meBody.user.username, 'testadmin');
     });
   });
 
