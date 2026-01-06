@@ -75,7 +75,7 @@ export async function createServer(options = {}) {
   } = options;
 
   // Create database instance
-  const { settingsDb, mattersDb, adminUsersDb, adminSessionsDb, adminBootstrapTokensDb } = await createDatabase(dbPath);
+  const { settingsDb, mattersDb, adminUsersDb, adminSessionsDb, adminBootstrapTokensDb, privateNotesDb } = await createDatabase(dbPath);
 
   const fastify = Fastify({
     logger,
@@ -1033,14 +1033,15 @@ export async function createServer(options = {}) {
     const endIndex = startIndex + parseInt(limit);
     const paginatedMatters = matters.slice(startIndex, endIndex);
 
-    // Convert costs from cents to dollars for output
-    const mattersInDollars = paginatedMatters.map(inc => ({
+    // Convert costs from cents to dollars and include note counts
+    const mattersWithDetails = paginatedMatters.map(inc => ({
       ...inc,
-      cost: inc.cost / 100 // Convert cents to dollars
+      cost: inc.cost / 100, // Convert cents to dollars
+      private_notes_count: privateNotesDb.getCountByMatterId(inc.id)
     }));
 
     return {
-      matters: mattersInDollars,
+      matters: mattersWithDetails,
       total: matters.length,
       page: parseInt(page),
       limit: parseInt(limit),
@@ -1195,6 +1196,175 @@ export async function createServer(options = {}) {
     reply.header('Content-Disposition', `attachment; filename="matters-${new Date().toISOString().split('T')[0]}.csv"`);
 
     return csv;
+  });
+
+  // Get single matter with private notes (admin only)
+  fastify.get('/admin/api/matters/:id', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { id } = request.params;
+
+    const matter = mattersDb.getById(parseInt(id));
+    if (!matter) {
+      return reply.code(404).send({ error: 'NOT_FOUND', message: 'Matter not found' });
+    }
+
+    // Get private notes for this matter
+    const privateNotes = privateNotesDb.getByMatterId(parseInt(id));
+
+    return {
+      ...matter,
+      cost: matter.cost / 100, // Convert cents to dollars
+      private_notes: privateNotes
+    };
+  });
+
+  // Update single matter (admin)
+  fastify.put('/admin/api/matters/:id', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { id } = request.params;
+    const { matter_date, note, cost } = request.body || {};
+
+    const existing = mattersDb.getById(parseInt(id));
+    if (!existing) {
+      return reply.code(404).send({ error: 'NOT_FOUND', message: 'Matter not found' });
+    }
+
+    // Validate input lengths
+    try {
+      validateStringLength(note, 'note', INPUT_LIMITS.note);
+    } catch (error) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: error.message });
+    }
+
+    try {
+      const matterDate = matter_date ? new Date(matter_date).toISOString() : existing.matter_date;
+      const matterNote = note !== undefined ? note : existing.note;
+      // Cost comes in as dollars from admin form - convert to cents for storage
+      const costCents = cost !== undefined ? Math.round(parseFloat(cost) * 100) : existing.cost;
+
+      mattersDb.update(parseInt(id), matterDate, matterNote, costCents);
+
+      return { success: true };
+    } catch (error) {
+      return reply.code(500).send({ error: 'SERVER_ERROR', message: error.message });
+    }
+  });
+
+  // Delete single matter (admin)
+  fastify.delete('/admin/api/matters/:id', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { id } = request.params;
+
+    const existing = mattersDb.getById(parseInt(id));
+    if (!existing) {
+      return reply.code(404).send({ error: 'NOT_FOUND', message: 'Matter not found' });
+    }
+
+    try {
+      // Private notes are deleted automatically via ON DELETE CASCADE
+      mattersDb.delete(parseInt(id));
+      return { success: true };
+    } catch (error) {
+      return reply.code(500).send({ error: 'SERVER_ERROR', message: error.message });
+    }
+  });
+
+  // =====================
+  // Private Notes API
+  // =====================
+
+  // Get all private notes for a matter
+  fastify.get('/admin/api/matters/:matterId/notes', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { matterId } = request.params;
+
+    const matter = mattersDb.getById(parseInt(matterId));
+    if (!matter) {
+      return reply.code(404).send({ error: 'NOT_FOUND', message: 'Matter not found' });
+    }
+
+    const notes = privateNotesDb.getByMatterId(parseInt(matterId));
+    return { notes };
+  });
+
+  // Add a private note to a matter
+  fastify.post('/admin/api/matters/:matterId/notes', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { matterId } = request.params;
+    const { note_content } = request.body || {};
+
+    if (!note_content || note_content.trim() === '') {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: 'note_content is required' });
+    }
+
+    // Validate input length
+    try {
+      validateStringLength(note_content, 'note_content', INPUT_LIMITS.note);
+    } catch (error) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: error.message });
+    }
+
+    const matter = mattersDb.getById(parseInt(matterId));
+    if (!matter) {
+      return reply.code(404).send({ error: 'NOT_FOUND', message: 'Matter not found' });
+    }
+
+    try {
+      const userId = request.adminUser?.id || null;
+      const result = privateNotesDb.create(parseInt(matterId), note_content.trim(), userId);
+
+      reply.code(201);
+      return {
+        success: true,
+        note: privateNotesDb.getById(result.id)
+      };
+    } catch (error) {
+      return reply.code(500).send({ error: 'SERVER_ERROR', message: error.message });
+    }
+  });
+
+  // Update a private note
+  fastify.put('/admin/api/notes/:noteId', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { noteId } = request.params;
+    const { note_content } = request.body || {};
+
+    if (!note_content || note_content.trim() === '') {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: 'note_content is required' });
+    }
+
+    // Validate input length
+    try {
+      validateStringLength(note_content, 'note_content', INPUT_LIMITS.note);
+    } catch (error) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: error.message });
+    }
+
+    const existing = privateNotesDb.getById(parseInt(noteId));
+    if (!existing) {
+      return reply.code(404).send({ error: 'NOT_FOUND', message: 'Note not found' });
+    }
+
+    try {
+      privateNotesDb.update(parseInt(noteId), note_content.trim());
+      return {
+        success: true,
+        note: privateNotesDb.getById(parseInt(noteId))
+      };
+    } catch (error) {
+      return reply.code(500).send({ error: 'SERVER_ERROR', message: error.message });
+    }
+  });
+
+  // Delete a private note
+  fastify.delete('/admin/api/notes/:noteId', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { noteId } = request.params;
+
+    const existing = privateNotesDb.getById(parseInt(noteId));
+    if (!existing) {
+      return reply.code(404).send({ error: 'NOT_FOUND', message: 'Note not found' });
+    }
+
+    try {
+      privateNotesDb.delete(parseInt(noteId));
+      return { success: true };
+    } catch (error) {
+      return reply.code(500).send({ error: 'SERVER_ERROR', message: error.message });
+    }
   });
 
   // Get all settings
@@ -1689,6 +1859,45 @@ Return ONLY a JSON array of strings, no other text. Example format:
     ];
   }
 
+  // Static private notes fallback (for when Claude API is not configured)
+  const staticPrivateNotes = [
+    // Call logs
+    'Client called to discuss case status. Expressed satisfaction with progress.',
+    'Left voicemail for opposing counsel regarding settlement terms.',
+    'Conference call with co-counsel - agreed on discovery timeline.',
+    'Client unable to reach by phone, sent follow-up email instead.',
+    // Case updates
+    'Received new documents from discovery. Will review by end of week.',
+    'Motion deadline extended by 2 weeks per court order.',
+    'Judge assigned to case: Hon. Williams. Known for strict deadlines.',
+    'Expert witness confirmed availability for trial dates.',
+    // Strategy notes
+    'Consider mediation before trial - client open to settlement in $X range.',
+    'Key witness may be unreliable - need backup documentation.',
+    'Opposing counsel tends to delay. Build buffer into all deadlines.',
+    'Strong precedent found in similar case from 2022. Could be persuasive.',
+    // Client communications
+    'Client requested weekly status updates instead of bi-weekly.',
+    'Billing concerns raised - provided detailed breakdown of hours.',
+    'Client traveling next month. Need to schedule depositions around availability.',
+    'Introduced client to paralegal who will handle routine inquiries.',
+    // Internal warnings
+    'CAUTION: Client has missed two payment deadlines. Monitor closely.',
+    'Note: Previous counsel had conflicts with this client. Handle with care.',
+    'Watch for statute of limitations - approaching fast.',
+    'Insurance coverage may be disputed. Verify before proceeding.',
+    // Observations
+    'Opposing counsel seems disorganized. May work in our favor.',
+    'Witness testimony conflicts with deposition. Possible impeachment opportunity.',
+    'Judge seemed receptive to our argument at preliminary hearing.',
+    'Court reporter noted for transcription errors - request expedited review.',
+    // General commentary
+    'Good outcome today. Client happy with result.',
+    'Need to follow up on outstanding items before next hearing.',
+    'Case more complex than initially estimated. Discuss fee adjustment.',
+    'All documents filed. Awaiting court response.'
+  ];
+
   // Helper function to generate descriptions using Claude API (with SDK)
   async function generateClaudeDescriptions(count, overrideSpiceLevel = null) {
     const claudeApiKey = settingsDb.get('claude_api_key');
@@ -1725,6 +1934,69 @@ Return ONLY a JSON array of strings, no other text. Example format:
     }
   }
 
+  // Helper function to generate private notes using Claude API
+  async function generateClaudePrivateNotes(count, overrideSpiceLevel = null) {
+    const claudeApiKey = settingsDb.get('claude_api_key');
+    const model = settingsDb.get('claude_model');
+
+    if (!claudeApiKey || !model) {
+      return null;
+    }
+
+    try {
+      const client = new Anthropic({ apiKey: claudeApiKey });
+      const spiceLevel = overrideSpiceLevel || settingsDb.get('ai_spice_level') || '1';
+
+      // Build prompt based on spice level
+      const spiceInstructions = {
+        '1': 'Professional, formal internal notes. Standard legal documentation style.',
+        '2': 'Dry humor with subtle wit. Keep it professional but with understated observations.',
+        '3': 'Witty internal notes with clever observations about cases, clients, and opposing counsel.',
+        '4': 'Dramatic internal notes with theatrical observations and slightly absurd commentary.',
+        '5': 'Unhinged internal notes. Wildly creative, absurd observations that would never be shared externally.',
+        '6': 'CHAOTIC EVIL: Maximum snark. Every note drips with sarcasm about clients, opposing counsel, judges, and the legal system itself.',
+        '7': 'ELDRITCH HORROR: Internal notes written by a cosmic entity consuming law firms. Reality-questioning observations about the nature of law itself.',
+        '8': 'THE FINAL FORM: Transcendent chaos. Notes that combine existential dread, cosmic horror, time paradoxes, and bureaucratic nightmares. Sentient case files. Emotional support motions.'
+      };
+
+      const instruction = spiceInstructions[spiceLevel] || spiceInstructions['1'];
+
+      const prompt = `Generate ${count} unique internal private notes that lawyers would write about their legal matters. These are internal-only notes not shared with clients.
+
+Types to include:
+- Call logs and communication records
+- Case status updates
+- Strategy notes and observations
+- Client behavior notes
+- Warnings about deadlines or issues
+- Observations about opposing counsel or judges
+- General commentary and follow-ups
+
+Tone: ${instruction}
+
+Return ONLY a JSON array of strings, no other text. Example format:
+["Note 1 text here", "Note 2 text here", ...]`;
+
+      const response = await client.messages.create({
+        model,
+        max_tokens: 4096,
+        messages: [{ role: 'user', content: prompt }]
+      });
+
+      const content = response.content?.[0]?.text;
+      if (!content) return null;
+
+      const jsonMatch = content.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) return null;
+
+      const notes = JSON.parse(jsonMatch[0]);
+      return Array.isArray(notes) ? notes : null;
+    } catch (err) {
+      console.error('Claude API error (private notes):', err.message);
+      return null;
+    }
+  }
+
   // Populate sample data from file or generate new
   fastify.post('/admin/api/data/populate-sample', { preHandler: adminAuthMiddleware }, async (request, reply) => {
     try {
@@ -1738,11 +2010,17 @@ Return ONLY a JSON array of strings, no other text. Example format:
         maxCostDollars,
         wholeDollarsOnly = true,
         useAiDescriptions = false,
-        spiceLevelOverride = null  // Allow per-generation spice level override
+        spiceLevelOverride = null,  // Allow per-generation spice level override
+        // Private notes options
+        generatePrivateNotes = false,
+        notesPercentage = 30,  // Percentage of matters that get notes (0-100)
+        minNotesPerMatter = 1,
+        maxNotesPerMatter = 3
       } = request.body || {};
 
       let sampleMatters = [];
       let usedAi = false;
+      let notesGenerated = 0;
 
       if (source && source !== 'generate') {
         // Validate source name - only allow alphanumeric, dash, underscore
@@ -1851,20 +2129,69 @@ Return ONLY a JSON array of strings, no other text. Example format:
       let totalCost = 0;
       const initialLastDate = settingsDb.get('last_matter_date');
       let lastDate = new Date(initialLastDate || sampleMatters[0]?.matter_date || Date.now());
+      const createdMatterIds = [];
 
       for (const matter of sampleMatters) {
         const matterDate = new Date(matter.matter_date);
         const daysSince = Math.floor((matterDate - lastDate) / (1000 * 60 * 60 * 24));
 
-        mattersDb.add(
+        const result = mattersDb.add(
           matter.matter_date,
           matter.note,
           Math.max(0, daysSince),
           matter.cost
         );
 
+        createdMatterIds.push(result.id);
         totalCost += matter.cost;
         lastDate = matterDate;
+      }
+
+      // Generate private notes if requested
+      if (generatePrivateNotes && createdMatterIds.length > 0) {
+        // Clamp percentage to 0-100
+        const pct = Math.max(0, Math.min(100, notesPercentage));
+        const minNotes = Math.max(1, minNotesPerMatter);
+        const maxNotes = Math.max(minNotes, maxNotesPerMatter);
+
+        // Determine which matters get notes
+        const mattersWithNotes = createdMatterIds.filter(() => Math.random() * 100 < pct);
+
+        if (mattersWithNotes.length > 0) {
+          // Calculate total notes needed
+          const noteCounts = mattersWithNotes.map(() =>
+            Math.floor(Math.random() * (maxNotes - minNotes + 1)) + minNotes
+          );
+          const totalNotesNeeded = noteCounts.reduce((a, b) => a + b, 0);
+
+          // Get notes (AI or static)
+          let notePool = [];
+          if (useAiDescriptions) {
+            const aiNotes = await generateClaudePrivateNotes(totalNotesNeeded, spiceLevelOverride);
+            if (aiNotes && aiNotes.length > 0) {
+              notePool = aiNotes;
+            }
+          }
+
+          // Fall back to static notes if AI didn't work
+          if (notePool.length === 0) {
+            notePool = staticPrivateNotes;
+          }
+
+          // Create notes for each selected matter
+          let noteIndex = 0;
+          for (let i = 0; i < mattersWithNotes.length; i++) {
+            const matterId = mattersWithNotes[i];
+            const noteCount = noteCounts[i];
+
+            for (let j = 0; j < noteCount; j++) {
+              const noteContent = notePool[noteIndex % notePool.length];
+              privateNotesDb.create(matterId, noteContent, null);
+              noteIndex++;
+              notesGenerated++;
+            }
+          }
+        }
       }
 
       // Update settings
@@ -1882,7 +2209,8 @@ Return ONLY a JSON array of strings, no other text. Example format:
         matters_added: sampleMatters.length,
         total_cost_added: totalCost / 100,
         source: (source === 'generate' || !source) ? 'generated' : source,
-        used_ai_descriptions: usedAi
+        used_ai_descriptions: usedAi,
+        private_notes_generated: notesGenerated
       };
     } catch (error) {
       return reply.code(500).send({
@@ -2010,6 +2338,9 @@ Return ONLY a JSON array of strings, no other text. Example format:
       // Count matters before deletion
       const matterCount = mattersDb.getAll().length;
 
+      // Delete all private notes first (CASCADE should handle this, but be explicit)
+      privateNotesDb.deleteAll();
+
       // Delete all matters
       const matters = mattersDb.getAll();
       for (const matter of matters) {
@@ -2026,7 +2357,7 @@ Return ONLY a JSON array of strings, no other text. Example format:
 
       return {
         success: true,
-        message: `Successfully deleted ${matterCount} matter records`,
+        message: `Successfully deleted ${matterCount} matter records and all private notes`,
         matters_deleted: matterCount
       };
     } catch (error) {
@@ -2083,13 +2414,16 @@ Return ONLY a JSON array of strings, no other text. Example format:
       // Count matters before deletion
       const matterCount = mattersDb.getAll().length;
 
-      // 1. Delete all matters
+      // 1. Delete all private notes first
+      privateNotesDb.deleteAll();
+
+      // 2. Delete all matters
       const matters = mattersDb.getAll();
       for (const matter of matters) {
         mattersDb.delete(matter.id);
       }
 
-      // 2. Reset all configurable settings to defaults
+      // 3. Reset all configurable settings to defaults
       for (const [key, value] of Object.entries(DEFAULT_APP_SETTINGS)) {
         settingsDb.set(key, value);
       }
@@ -2105,7 +2439,7 @@ Return ONLY a JSON array of strings, no other text. Example format:
 
       return {
         success: true,
-        message: `Successfully deleted ${matterCount} matter records and reset settings to defaults`,
+        message: `Successfully deleted ${matterCount} matter records, all private notes, and reset settings to defaults`,
         matters_deleted: matterCount,
         settings_reset: true
       };

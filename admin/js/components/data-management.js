@@ -1093,6 +1093,53 @@ function setupEventListeners() {
                             : `<p class="text-xs text-gray-500 dark:text-gray-400 ml-6">Using: <span class="font-medium">${getSpiceLevelName(aiSettings.spiceLevel)}</span> spice level. <span class="text-purple-600 dark:text-purple-400">Change in AI Integration section above.</span></p>`
                         }
                     </div>
+
+                    <!-- Private Notes Generation -->
+                    <div class="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                        <p class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                            Private Notes
+                            <span class="text-xs font-normal text-amber-600 dark:text-amber-400 ml-1">(Admin Only)</span>
+                        </p>
+
+                        <div class="mb-3">
+                            <label class="flex items-center cursor-pointer">
+                                <input type="checkbox" id="modal-generate-notes"
+                                    class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 dark:bg-gray-700 dark:border-gray-600">
+                                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Generate private notes for matters</span>
+                            </label>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 ml-6">Internal notes visible only to admin users</p>
+                        </div>
+
+                        <div id="notes-options" class="hidden ml-6 space-y-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Percentage of matters with notes</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="range" id="modal-notes-percentage" min="0" max="100" value="30"
+                                        class="w-full h-2 bg-gray-200 rounded-lg cursor-pointer dark:bg-gray-700">
+                                    <span id="notes-percentage-display" class="text-sm text-gray-600 dark:text-gray-400 w-12 text-right">30%</span>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Min notes per matter</label>
+                                    <input type="number" id="modal-min-notes" value="1" min="1" max="10"
+                                        class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Max notes per matter</label>
+                                    <input type="number" id="modal-max-notes" value="3" min="1" max="10"
+                                        class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                </div>
+                            </div>
+
+                            <p class="text-xs text-gray-500 dark:text-gray-400">
+                                ${isClaudeKeyValidated && aiSettings.selectedModel
+                                    ? 'Uses AI for note content when "Use AI" is enabled, otherwise uses static fallback notes.'
+                                    : 'Will use static fallback notes (configure Claude API for AI-generated notes).'}
+                            </p>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Status area for generation progress -->
@@ -1119,6 +1166,26 @@ function setupEventListeners() {
                 { text: 'Generate', type: 'primary', value: 'generate' }
             ],
             onOpen: (modal) => {
+                // Wire up private notes checkbox toggle
+                const notesCheckbox = modal.querySelector('#modal-generate-notes');
+                const notesOptions = modal.querySelector('#notes-options');
+                notesCheckbox?.addEventListener('change', (e) => {
+                    if (e.target.checked) {
+                        notesOptions?.classList.remove('hidden');
+                    } else {
+                        notesOptions?.classList.add('hidden');
+                    }
+                });
+
+                // Wire up percentage slider display
+                const percentageSlider = modal.querySelector('#modal-notes-percentage');
+                const percentageDisplay = modal.querySelector('#notes-percentage-display');
+                percentageSlider?.addEventListener('input', (e) => {
+                    if (percentageDisplay) {
+                        percentageDisplay.textContent = `${e.target.value}%`;
+                    }
+                });
+
                 // Wire up the quick generate button
                 const quickBtn = modal.querySelector('#modal-quick-generate-btn');
                 quickBtn?.addEventListener('click', async () => {
@@ -1161,7 +1228,12 @@ function setupEventListeners() {
                             minCost: parseFloat(modal.querySelector('#modal-min-cost')?.value || 100),
                             maxCost: parseFloat(modal.querySelector('#modal-max-cost')?.value || 50000),
                             wholeDollars: modal.querySelector('#modal-whole-dollars')?.checked ?? true,
-                            useAi: modal.querySelector('#modal-use-ai')?.checked ?? false
+                            useAi: modal.querySelector('#modal-use-ai')?.checked ?? false,
+                            // Private notes options
+                            generateNotes: modal.querySelector('#modal-generate-notes')?.checked ?? false,
+                            notesPercentage: parseInt(modal.querySelector('#modal-notes-percentage')?.value || 30),
+                            minNotes: parseInt(modal.querySelector('#modal-min-notes')?.value || 1),
+                            maxNotes: parseInt(modal.querySelector('#modal-max-notes')?.value || 3)
                         };
                     }, { capture: true }); // Use capture to run before the modal's click handler
                 });
@@ -1170,7 +1242,7 @@ function setupEventListeners() {
 
         // Handle Generate button click
         if (result === 'generate' && capturedFormValues) {
-            const { count: modalCount, startDate, endDate, minCost, maxCost, wholeDollars, useAi } = capturedFormValues;
+            const { count: modalCount, startDate, endDate, minCost, maxCost, wholeDollars, useAi, generateNotes, notesPercentage, minNotes, maxNotes } = capturedFormValues;
 
             // Validation
             if (modalCount < 1 || modalCount > 1000) {
@@ -1187,9 +1259,10 @@ function setupEventListeners() {
             }
 
             // Show persistent loading toast FIRST (before any button manipulation)
-            const loadingMsg = useAi
-                ? `Generating ${modalCount} matters with AI (${getSpiceLevelName(aiSettings.spiceLevel)})... please wait`
-                : `Generating ${modalCount} matters... please wait`;
+            let loadingMsg = `Generating ${modalCount} matters`;
+            if (useAi) loadingMsg += ` with AI (${getSpiceLevelName(aiSettings.spiceLevel)})`;
+            if (generateNotes) loadingMsg += ` + notes`;
+            loadingMsg += '... please wait';
             showPersistentToast(loadingMsg, 'loading');
 
             const btn = document.getElementById('populate-sample-btn');
@@ -1209,13 +1282,19 @@ function setupEventListeners() {
                     maxCostDollars: maxCost,
                     wholeDollarsOnly: wholeDollars,
                     useAiDescriptions: useAi,
-                    spiceLevelOverride: useAi ? aiSettings.spiceLevel : undefined
+                    spiceLevelOverride: useAi ? aiSettings.spiceLevel : undefined,
+                    // Private notes options
+                    generatePrivateNotes: generateNotes,
+                    notesPercentage: generateNotes ? notesPercentage : undefined,
+                    minNotesPerMatter: generateNotes ? minNotes : undefined,
+                    maxNotesPerMatter: generateNotes ? maxNotes : undefined
                 });
 
                 // Dismiss loading toast and show success
                 dismissPersistentToast();
                 const aiNote = response.used_ai_descriptions ? ` (AI @ ${getSpiceLevelName(aiSettings.spiceLevel)})` : '';
-                showToast(`Successfully added ${response.matters_added} sample matters ($${response.total_cost_added.toFixed(2)})${aiNote}`, 'success');
+                const notesNote = response.private_notes_generated ? ` + ${response.private_notes_generated} notes` : '';
+                showToast(`Successfully added ${response.matters_added} sample matters ($${response.total_cost_added.toFixed(2)})${aiNote}${notesNote}`, 'success');
             } catch (error) {
                 dismissPersistentToast();
                 showToast(`Error: ${error.message}`, 'error');

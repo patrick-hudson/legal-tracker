@@ -4,6 +4,92 @@ All notable changes to LEGAL MATTER (Legal Expense Governance Allocation Ledger 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-01-05
+
+### Added
+
+#### Admin-Only Private Notes (Major Feature)
+- **Private Notes System**: Internal notes visible only to admin users, attached to matters
+  - One-to-many relationship: each matter can have multiple private notes
+  - Notes include content, timestamp, and creator tracking
+  - Automatic cascade delete when parent matter is deleted
+
+#### Database Schema
+- **`private_notes` table**: New table with columns:
+  - `id` (PRIMARY KEY)
+  - `matter_id` (FOREIGN KEY to matters with ON DELETE CASCADE)
+  - `note_content` (TEXT)
+  - `created_by_user_id` (FOREIGN KEY to admin_users)
+  - `created_at`, `updated_at` (DATETIME)
+
+#### New API Endpoints
+- `GET /admin/api/matters/:id` - Get single matter with private notes included
+- `PUT /admin/api/matters/:id` - Update single matter
+- `DELETE /admin/api/matters/:id` - Delete matter (cascade deletes notes)
+- `GET /admin/api/matters/:matterId/notes` - List all notes for a matter
+- `POST /admin/api/matters/:matterId/notes` - Add a note to a matter
+- `PUT /admin/api/notes/:noteId` - Update a note
+- `DELETE /admin/api/notes/:noteId` - Delete a note
+
+#### Admin UI Enhancements
+- **Matter Detail View**: New dedicated page for viewing/editing individual matters
+  - Accessible via clickable table rows or "View" link in matters list
+  - Shows all matter fields with edit/delete functionality
+  - Private Notes section with add/edit/delete capabilities
+  - Search and sort for private notes (by date, author, recently updated)
+  - "Admin Only" badge clearly marks notes as internal
+  - Back navigation to matters list
+- **Dynamic Routing**: Router now supports parameterized routes (e.g., `/matters/:id`)
+- **Clickable Matter Rows**: Table rows in matters list are now clickable for quick navigation
+
+#### Modular Column System for Matters Table
+- **Configurable Columns**: Matters table now supports customizable columns
+  - "Columns" button in the toolbar opens configuration dropdown
+  - Toggle visibility of columns: ID, Date & Time, Note, Cost, Private Notes indicator
+  - Checkbox and Actions columns are always visible (not hideable)
+- **Column Reordering**: Drag-and-drop or use up/down arrows to reorder columns
+- **Persistent Preferences**: Column order and visibility saved to localStorage
+- **Reset to Default**: Button to restore default column configuration
+
+#### Private Notes Indicator Column
+- **Notes Column**: New column in matters list showing private notes count
+  - Lock icon header indicates admin-only content
+  - Amber chat bubble icon appears when matter has notes
+  - Count badge shows when matter has 2+ notes
+  - Hover tooltip shows exact note count
+
+#### Sample Data Generation with Notes
+- **Private Notes Generation**: Option to generate private notes alongside sample matters
+  - Percentage slider (0-100%) to control what fraction of matters get notes
+  - Min/max notes per matter configuration (default: 1-3)
+  - Uses Claude AI for note content when AI is enabled, falls back to static notes
+  - 28 static fallback notes covering various legal scenarios
+- **Generation Progress**: Loading toast shows "+ notes" when generating with notes enabled
+- **Success Feedback**: Toast message displays count of notes generated
+
+#### Tests
+- **20+ new tests** for private notes functionality covering:
+  - CRUD operations (create, read, update, delete)
+  - Access control (admin-only, public API exclusion)
+  - Error handling (404s, validation)
+  - Cascade delete behavior
+  - Sample data generation with notes
+  - Wipe operations include notes
+
+### Changed
+- **Matters List**: Added "View" action link and clickable rows
+- **Matters Table**: Refactored to use column configuration object
+  - Each column defined with: key, label, sortable, hideable, render functions
+  - Dynamic header and row generation based on visible columns
+- **Wipe Operations**: All wipe endpoints now also delete private notes
+- **API Client** (`admin/js/api.js`): Added all private notes methods and updated `populateSampleData()` with notes options
+- **Router** (`admin/js/router.js`): Added dynamic route pattern matching for matter detail pages
+
+### Removed
+- **Days Since Previous Field**: Removed from matter detail view due to limited utility
+
+---
+
 ## [0.5.1] - 2026-01-05
 
 ### Added
@@ -366,6 +452,7 @@ Initial development phase establishing core functionality.
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 0.6.0 | 2026-01-05 | Admin-only private notes, matter detail view, sample data notes generation |
 | 0.5.1 | 2026-01-05 | Level 8 "THE FINAL FORM", persistent loading toast, spice level fixes |
 | 0.5.0 | 2026-01-05 | Claude AI Integration, 8 spice levels, AI-powered descriptions |
 | 0.4.0 | 2026-01-05 | Fix cost display 100x bug *(MINOR bump for v0.3.3)* |

@@ -95,6 +95,17 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
       is_active INTEGER DEFAULT 1
     );
 
+    CREATE TABLE IF NOT EXISTS private_notes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      matter_id INTEGER NOT NULL,
+      note_content TEXT NOT NULL,
+      created_by_user_id INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (matter_id) REFERENCES matters(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by_user_id) REFERENCES admin_users(id)
+    );
+
     -- Initialize default settings if they don't exist
     INSERT OR IGNORE INTO settings (key, value) VALUES ('lifetime_spent', '0');
     INSERT OR IGNORE INTO settings (key, value) VALUES ('last_matter_date', datetime('now'));
@@ -476,7 +487,107 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
     }
   };
 
-  return { db, settingsDb, mattersDb, adminUsersDb, adminSessionsDb, adminBootstrapTokensDb, saveDatabase };
+  const privateNotesDb = {
+    getByMatterId(matterId) {
+      const result = db.exec(`
+        SELECT pn.*, u.username as created_by_username
+        FROM private_notes pn
+        LEFT JOIN admin_users u ON pn.created_by_user_id = u.id
+        WHERE pn.matter_id = ?
+        ORDER BY pn.created_at DESC
+      `, [matterId]);
+      if (result.length > 0) {
+        const columns = result[0].columns;
+        return result[0].values.map(row => {
+          const obj = {};
+          columns.forEach((col, i) => {
+            obj[col] = row[i];
+          });
+          return obj;
+        });
+      }
+      return [];
+    },
+
+    getById(id) {
+      const result = db.exec(`
+        SELECT pn.*, u.username as created_by_username
+        FROM private_notes pn
+        LEFT JOIN admin_users u ON pn.created_by_user_id = u.id
+        WHERE pn.id = ?
+      `, [id]);
+      if (result.length > 0 && result[0].values.length > 0) {
+        const columns = result[0].columns;
+        const row = result[0].values[0];
+        const obj = {};
+        columns.forEach((col, i) => {
+          obj[col] = row[i];
+        });
+        return obj;
+      }
+      return null;
+    },
+
+    create(matterId, noteContent, createdByUserId = null) {
+      const now = new Date().toISOString();
+      db.run(`
+        INSERT INTO private_notes (matter_id, note_content, created_by_user_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+      `, [matterId, noteContent, createdByUserId, now, now]);
+
+      const result = db.exec('SELECT last_insert_rowid() as id');
+      const id = result[0].values[0][0];
+
+      saveDatabase();
+      return { id };
+    },
+
+    update(id, noteContent) {
+      const now = new Date().toISOString();
+      db.run(`
+        UPDATE private_notes SET note_content = ?, updated_at = ? WHERE id = ?
+      `, [noteContent, now, id]);
+      saveDatabase();
+    },
+
+    delete(id) {
+      db.run('DELETE FROM private_notes WHERE id = ?', [id]);
+      saveDatabase();
+    },
+
+    deleteByMatterId(matterId) {
+      db.run('DELETE FROM private_notes WHERE matter_id = ?', [matterId]);
+      saveDatabase();
+    },
+
+    deleteAll() {
+      db.run('DELETE FROM private_notes');
+      saveDatabase();
+    },
+
+    getCountByMatterId(matterId) {
+      const result = db.exec('SELECT COUNT(*) as count FROM private_notes WHERE matter_id = ?', [matterId]);
+      return result[0]?.values[0]?.[0] || 0;
+    },
+
+    bulkCreate(notes) {
+      // notes is an array of { matterId, noteContent, createdByUserId }
+      const now = new Date().toISOString();
+      const insertedIds = [];
+      for (const note of notes) {
+        db.run(`
+          INSERT INTO private_notes (matter_id, note_content, created_by_user_id, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?)
+        `, [note.matterId, note.noteContent, note.createdByUserId || null, now, now]);
+        const result = db.exec('SELECT last_insert_rowid() as id');
+        insertedIds.push(result[0].values[0][0]);
+      }
+      saveDatabase();
+      return insertedIds;
+    }
+  };
+
+  return { db, settingsDb, mattersDb, adminUsersDb, adminSessionsDb, adminBootstrapTokensDb, privateNotesDb, saveDatabase };
 }
 
 // Create default database instance for backwards compatibility

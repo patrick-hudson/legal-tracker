@@ -116,6 +116,41 @@ class AdminAPI {
         });
     }
 
+    async deleteMatter(id) {
+        return this.request(`/matters/${id}`, {
+            method: 'DELETE'
+        });
+    }
+
+    async getMatter(id) {
+        return this.request(`/matters/${id}`);
+    }
+
+    // Private Notes
+    async getPrivateNotes(matterId) {
+        return this.request(`/matters/${matterId}/notes`);
+    }
+
+    async createPrivateNote(matterId, noteContent) {
+        return this.request(`/matters/${matterId}/notes`, {
+            method: 'POST',
+            body: JSON.stringify({ note_content: noteContent })
+        });
+    }
+
+    async updatePrivateNote(noteId, noteContent) {
+        return this.request(`/notes/${noteId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ note_content: noteContent })
+        });
+    }
+
+    async deletePrivateNote(noteId) {
+        return this.request(`/notes/${noteId}`, {
+            method: 'DELETE'
+        });
+    }
+
     async exportMatters(format = 'csv') {
         const response = await fetch(`${this.baseURL}/matters/export?format=${format}`, {
             credentials: 'same-origin'
@@ -237,7 +272,12 @@ class AdminAPI {
             maxCostDollars,
             wholeDollarsOnly,
             useAiDescriptions,
-            spiceLevelOverride
+            spiceLevelOverride,
+            // Private notes options
+            generatePrivateNotes,
+            notesPercentage,
+            minNotesPerMatter,
+            maxNotesPerMatter
         } = options;
 
         return this.request('/data/populate-sample', {
@@ -251,7 +291,11 @@ class AdminAPI {
                 maxCostDollars,
                 wholeDollarsOnly,
                 useAiDescriptions,
-                spiceLevelOverride
+                spiceLevelOverride,
+                generatePrivateNotes,
+                notesPercentage,
+                minNotesPerMatter,
+                maxNotesPerMatter
             })
         });
     }

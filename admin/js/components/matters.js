@@ -18,7 +18,167 @@ let currentSort = 'matter_date';
 let currentOrder = 'DESC';
 let selectedMatters = new Set();
 
+// Column configuration - defines all available columns
+const COLUMN_DEFINITIONS = {
+    checkbox: {
+        key: 'checkbox',
+        label: '',
+        sortable: false,
+        hideable: false,
+        headerClass: 'px-4 py-3 w-12',
+        cellClass: 'px-4 py-3',
+        renderHeader: () => `<input type="checkbox" id="select-all" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">`,
+        renderCell: (matter) => `<input type="checkbox" class="matter-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500" data-id="${matter.id}">`,
+        stopPropagation: true
+    },
+    id: {
+        key: 'id',
+        label: 'ID',
+        sortable: true,
+        sortKey: 'id',
+        hideable: true,
+        headerClass: 'px-6 py-3',
+        cellClass: 'px-6 py-4 font-medium text-gray-900 dark:text-white',
+        renderCell: (matter) => matter.id
+    },
+    matter_date: {
+        key: 'matter_date',
+        label: 'Date & Time',
+        sortable: true,
+        sortKey: 'matter_date',
+        hideable: true,
+        headerClass: 'px-6 py-3',
+        cellClass: 'px-6 py-4',
+        renderCell: (matter) => formatDate(matter.matter_date, { format: 'datetime', placeholder: PLACEHOLDER.DASH })
+    },
+    note: {
+        key: 'note',
+        label: 'Note',
+        sortable: false,
+        hideable: true,
+        headerClass: 'px-6 py-3',
+        cellClass: 'px-6 py-4',
+        renderCell: (matter) => safeEscapeHtml(matter.note, 'No note')
+    },
+    cost: {
+        key: 'cost',
+        label: 'Cost',
+        sortable: true,
+        sortKey: 'cost',
+        hideable: true,
+        headerClass: 'px-6 py-3',
+        cellClass: 'px-6 py-4 font-medium text-gray-900 dark:text-white',
+        renderCell: (matter) => formatCurrency(matter.cost)
+    },
+    private_notes: {
+        key: 'private_notes',
+        label: 'Notes',
+        sortable: false,
+        hideable: true,
+        headerClass: 'px-3 py-3 text-center w-16',
+        cellClass: 'px-3 py-4 text-center',
+        renderHeader: () => `<svg class="w-4 h-4 mx-auto text-gray-500" fill="currentColor" viewBox="0 0 20 20" title="Private Notes"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/></svg>`,
+        renderCell: (matter) => matter.private_notes_count > 0 ? `
+            <span class="inline-flex items-center justify-center" title="${matter.private_notes_count} private note${matter.private_notes_count > 1 ? 's' : ''}">
+                <svg class="w-4 h-4 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M18 13V5a2 2 0 00-2-2H4a2 2 0 00-2 2v8a2 2 0 002 2h3l3 3 3-3h3a2 2 0 002-2zM5 7a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1zm1 3a1 1 0 100 2h3a1 1 0 100-2H6z"/>
+                </svg>
+                ${matter.private_notes_count > 1 ? `<span class="ml-0.5 text-xs text-amber-600 font-medium">${matter.private_notes_count}</span>` : ''}
+            </span>` : ''
+    },
+    actions: {
+        key: 'actions',
+        label: 'Actions',
+        sortable: false,
+        hideable: false,
+        headerClass: 'px-6 py-3',
+        cellClass: 'px-6 py-4',
+        renderCell: (matter) => `
+            <div class="flex gap-2">
+                <a href="#/matters/${matter.id}" class="text-blue-600 hover:text-blue-800 dark:text-blue-400">View</a>
+                <button class="text-red-600 hover:text-red-800 dark:text-red-400" onclick="deleteMatter(${matter.id})">Delete</button>
+            </div>`,
+        stopPropagation: true
+    }
+};
+
+// Default column order
+const DEFAULT_COLUMN_ORDER = ['checkbox', 'id', 'matter_date', 'note', 'cost', 'private_notes', 'actions'];
+const DEFAULT_HIDDEN_COLUMNS = [];
+
+// Storage keys
+const STORAGE_KEY_ORDER = 'matters_column_order';
+const STORAGE_KEY_HIDDEN = 'matters_hidden_columns';
+
+// Get column preferences from localStorage
+function getColumnPreferences() {
+    let order = DEFAULT_COLUMN_ORDER;
+    let hidden = DEFAULT_HIDDEN_COLUMNS;
+
+    try {
+        const savedOrder = localStorage.getItem(STORAGE_KEY_ORDER);
+        const savedHidden = localStorage.getItem(STORAGE_KEY_HIDDEN);
+
+        if (savedOrder) {
+            const parsed = JSON.parse(savedOrder);
+            // Validate and merge with defaults (add any new columns)
+            const validOrder = parsed.filter(key => COLUMN_DEFINITIONS[key]);
+            const missingColumns = DEFAULT_COLUMN_ORDER.filter(key => !validOrder.includes(key));
+            order = [...validOrder, ...missingColumns];
+        }
+
+        if (savedHidden) {
+            hidden = JSON.parse(savedHidden).filter(key => COLUMN_DEFINITIONS[key]?.hideable);
+        }
+    } catch (e) {
+        console.warn('Failed to load column preferences:', e);
+    }
+
+    return { order, hidden };
+}
+
+// Save column preferences to localStorage
+function saveColumnPreferences(order, hidden) {
+    try {
+        localStorage.setItem(STORAGE_KEY_ORDER, JSON.stringify(order));
+        localStorage.setItem(STORAGE_KEY_HIDDEN, JSON.stringify(hidden));
+    } catch (e) {
+        console.warn('Failed to save column preferences:', e);
+    }
+}
+
+// Get visible columns in order
+function getVisibleColumns() {
+    const { order, hidden } = getColumnPreferences();
+    return order.filter(key => !hidden.includes(key));
+}
+
+// Generate table header HTML based on column configuration
+function generateTableHeader() {
+    const visibleColumns = getVisibleColumns();
+    return visibleColumns.map(key => {
+        const col = COLUMN_DEFINITIONS[key];
+        const sortableClass = col.sortable ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600' : '';
+        const sortAttr = col.sortable ? `data-sort="${col.sortKey}"` : '';
+        const content = col.renderHeader ? col.renderHeader() : col.label;
+        return `<th scope="col" class="${col.headerClass} ${sortableClass}" ${sortAttr}>${content}</th>`;
+    }).join('');
+}
+
+// Generate table row HTML for a matter
+function generateTableRow(matter) {
+    const visibleColumns = getVisibleColumns();
+    const cells = visibleColumns.map(key => {
+        const col = COLUMN_DEFINITIONS[key];
+        const stopProp = col.stopPropagation ? 'onclick="event.stopPropagation()"' : '';
+        return `<td class="${col.cellClass}" ${stopProp}>${col.renderCell(matter)}</td>`;
+    }).join('');
+    return `<tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover-row cursor-pointer" data-matter-id="${matter.id}">${cells}</tr>`;
+}
+
 export async function renderMatters(container) {
+    const visibleColumns = getVisibleColumns();
+
     container.innerHTML = `
         <div class="mb-4">
             <div class="flex justify-between items-center mb-4">
@@ -44,6 +204,27 @@ export async function renderMatters(container) {
                 <div class="flex-1">
                     <input type="text" id="search-input" placeholder="Search matters..." class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white">
                 </div>
+                <div class="relative">
+                    <button id="column-settings-btn" class="px-4 py-2.5 text-gray-700 bg-white border border-gray-300 hover:bg-gray-100 rounded-lg text-sm font-medium dark:bg-gray-800 dark:text-white dark:border-gray-600 dark:hover:bg-gray-700 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                        </svg>
+                        Columns
+                    </button>
+                    <div id="column-settings-dropdown" class="hidden absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
+                        <div class="p-3 border-b border-gray-200 dark:border-gray-700">
+                            <span class="text-sm font-semibold text-gray-900 dark:text-white">Configure Columns</span>
+                        </div>
+                        <div id="column-list" class="p-2 max-h-64 overflow-y-auto">
+                            <!-- Column toggles will be inserted here -->
+                        </div>
+                        <div class="p-2 border-t border-gray-200 dark:border-gray-700">
+                            <button id="reset-columns-btn" class="w-full px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
+                                Reset to Default
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Bulk Actions -->
@@ -67,26 +248,11 @@ export async function renderMatters(container) {
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
-                        <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
-                            <tr>
-                                <th scope="col" class="px-4 py-3">
-                                    <input type="checkbox" id="select-all" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
-                                </th>
-                                <th scope="col" class="px-6 py-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" data-sort="id">
-                                    ID
-                                </th>
-                                <th scope="col" class="px-6 py-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" data-sort="matter_date">
-                                    Date & Time
-                                </th>
-                                <th scope="col" class="px-6 py-3">Note</th>
-                                <th scope="col" class="px-6 py-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600" data-sort="cost">
-                                    Cost
-                                </th>
-                                <th scope="col" class="px-6 py-3">Actions</th>
-                            </tr>
+                        <thead id="matters-thead" class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+                            <tr>${generateTableHeader()}</tr>
                         </thead>
                         <tbody id="matters-tbody">
-                            <tr><td colspan="6" class="px-6 py-4 text-center"><div class="spinner mx-auto"></div></td></tr>
+                            <tr><td colspan="${visibleColumns.length}" class="px-6 py-4 text-center"><div class="spinner mx-auto"></div></td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -114,7 +280,7 @@ export async function renderMatters(container) {
     document.getElementById('add-single-btn').addEventListener('click', showAddSingleModal);
     document.getElementById('add-multiple-btn').addEventListener('click', showAddMultipleModal);
     document.getElementById('export-csv-btn').addEventListener('click', handleExportCSV);
-    document.getElementById('select-all').addEventListener('change', handleSelectAll);
+    document.getElementById('select-all')?.addEventListener('change', handleSelectAll);
     document.getElementById('deselect-all-btn')?.addEventListener('click', handleDeselectAll);
     document.getElementById('delete-selected-btn')?.addEventListener('click', handleDeleteSelected);
 
@@ -122,6 +288,204 @@ export async function renderMatters(container) {
     document.querySelectorAll('[data-sort]').forEach(header => {
         header.addEventListener('click', () => handleSort(header.dataset.sort));
     });
+
+    // Column settings
+    setupColumnSettings();
+}
+
+// Setup column settings dropdown
+function setupColumnSettings() {
+    const btn = document.getElementById('column-settings-btn');
+    const dropdown = document.getElementById('column-settings-dropdown');
+    const columnList = document.getElementById('column-list');
+    const resetBtn = document.getElementById('reset-columns-btn');
+
+    // Toggle dropdown
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dropdown.classList.toggle('hidden');
+        if (!dropdown.classList.contains('hidden')) {
+            renderColumnList();
+        }
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!dropdown.contains(e.target) && e.target !== btn) {
+            dropdown.classList.add('hidden');
+        }
+    });
+
+    // Reset columns
+    resetBtn.addEventListener('click', () => {
+        saveColumnPreferences(DEFAULT_COLUMN_ORDER, DEFAULT_HIDDEN_COLUMNS);
+        refreshTable();
+        renderColumnList();
+    });
+
+    // Render column list
+    function renderColumnList() {
+        const { order, hidden } = getColumnPreferences();
+
+        columnList.innerHTML = order.map((key, index) => {
+            const col = COLUMN_DEFINITIONS[key];
+            if (!col.hideable) return ''; // Don't show non-hideable columns
+
+            const isHidden = hidden.includes(key);
+            const displayLabel = col.label || key.replace('_', ' ');
+
+            return `
+                <div class="column-item flex items-center justify-between p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-move" data-key="${key}" draggable="true">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-4 h-4 text-gray-400 drag-handle" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
+                        </svg>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" class="column-toggle w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500" data-key="${key}" ${!isHidden ? 'checked' : ''}>
+                            <span class="text-sm text-gray-700 dark:text-gray-300 capitalize">${displayLabel}</span>
+                        </label>
+                    </div>
+                    <div class="flex gap-1">
+                        <button class="move-up p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 ${index === 0 ? 'invisible' : ''}" data-key="${key}" title="Move up">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                            </svg>
+                        </button>
+                        <button class="move-down p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 ${index === order.length - 1 ? 'invisible' : ''}" data-key="${key}" title="Move down">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).filter(Boolean).join('');
+
+        // Add toggle event listeners
+        columnList.querySelectorAll('.column-toggle').forEach(checkbox => {
+            checkbox.addEventListener('change', (e) => {
+                const key = e.target.dataset.key;
+                const { order, hidden } = getColumnPreferences();
+
+                if (e.target.checked) {
+                    // Remove from hidden
+                    const newHidden = hidden.filter(k => k !== key);
+                    saveColumnPreferences(order, newHidden);
+                } else {
+                    // Add to hidden
+                    saveColumnPreferences(order, [...hidden, key]);
+                }
+
+                refreshTable();
+            });
+        });
+
+        // Add move up/down event listeners
+        columnList.querySelectorAll('.move-up').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const key = btn.dataset.key;
+                const { order, hidden } = getColumnPreferences();
+                const index = order.indexOf(key);
+
+                if (index > 0) {
+                    [order[index - 1], order[index]] = [order[index], order[index - 1]];
+                    saveColumnPreferences(order, hidden);
+                    refreshTable();
+                    renderColumnList();
+                }
+            });
+        });
+
+        columnList.querySelectorAll('.move-down').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const key = btn.dataset.key;
+                const { order, hidden } = getColumnPreferences();
+                const index = order.indexOf(key);
+
+                if (index < order.length - 1) {
+                    [order[index], order[index + 1]] = [order[index + 1], order[index]];
+                    saveColumnPreferences(order, hidden);
+                    refreshTable();
+                    renderColumnList();
+                }
+            });
+        });
+
+        // Setup drag and drop
+        setupDragAndDrop();
+    }
+}
+
+// Setup drag and drop for column reordering
+function setupDragAndDrop() {
+    const columnList = document.getElementById('column-list');
+    let draggedItem = null;
+
+    columnList.querySelectorAll('.column-item').forEach(item => {
+        item.addEventListener('dragstart', (e) => {
+            draggedItem = item;
+            item.classList.add('opacity-50');
+            e.dataTransfer.effectAllowed = 'move';
+        });
+
+        item.addEventListener('dragend', () => {
+            item.classList.remove('opacity-50');
+            draggedItem = null;
+        });
+
+        item.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        });
+
+        item.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (draggedItem && draggedItem !== item) {
+                const { order, hidden } = getColumnPreferences();
+                const fromKey = draggedItem.dataset.key;
+                const toKey = item.dataset.key;
+                const fromIndex = order.indexOf(fromKey);
+                const toIndex = order.indexOf(toKey);
+
+                // Remove from old position and insert at new position
+                order.splice(fromIndex, 1);
+                order.splice(toIndex, 0, fromKey);
+
+                saveColumnPreferences(order, hidden);
+                refreshTable();
+
+                // Re-render the list to update arrow visibility
+                const columnList = document.getElementById('column-list');
+                if (columnList) {
+                    setupColumnSettings();
+                }
+            }
+        });
+    });
+}
+
+// Refresh the table with current column configuration
+function refreshTable() {
+    const thead = document.getElementById('matters-thead');
+    if (thead) {
+        thead.innerHTML = `<tr>${generateTableHeader()}</tr>`;
+
+        // Re-attach sort listeners
+        thead.querySelectorAll('[data-sort]').forEach(header => {
+            header.addEventListener('click', () => handleSort(header.dataset.sort));
+        });
+
+        // Re-attach select-all listener
+        const selectAll = document.getElementById('select-all');
+        if (selectAll) {
+            selectAll.addEventListener('change', handleSelectAll);
+        }
+    }
+
+    // Reload matters to regenerate rows
+    loadMatters();
 }
 
 async function loadMatters() {
@@ -136,27 +500,31 @@ async function loadMatters() {
 
         const tbody = document.getElementById('matters-tbody');
         const { matters, total, page, limit } = response;
+        const visibleColumns = getVisibleColumns();
 
         if (matters.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">No matters found</td></tr>';
+            tbody.innerHTML = `<tr><td colspan="${visibleColumns.length}" class="px-6 py-4 text-center text-gray-500">No matters found</td></tr>`;
             updatePagination(0, 0, 0);
             return;
         }
 
-        tbody.innerHTML = matters.map(matter => `
-            <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover-row">
-                <td class="px-4 py-3">
-                    <input type="checkbox" class="matter-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500" data-id="${matter.id}">
-                </td>
-                <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">${matter.id}</td>
-                <td class="px-6 py-4">${formatDate(matter.matter_date, { format: 'datetime', placeholder: PLACEHOLDER.DASH })}</td>
-                <td class="px-6 py-4">${safeEscapeHtml(matter.note, 'No note')}</td>
-                <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">${formatCurrency(matter.cost)}</td>
-                <td class="px-6 py-4">
-                    <button class="text-red-600 hover:text-red-800 dark:text-red-400" onclick="deleteMatter(${matter.id})">Delete</button>
-                </td>
-            </tr>
-        `).join('');
+        tbody.innerHTML = matters.map(matter => generateTableRow(matter)).join('');
+
+        // Add row click navigation (but not for interactive elements)
+        document.querySelectorAll('[data-matter-id]').forEach(row => {
+            row.addEventListener('click', (e) => {
+                // Don't navigate if clicking on interactive elements
+                const target = e.target;
+                if (target.tagName === 'INPUT' ||
+                    target.tagName === 'BUTTON' ||
+                    target.tagName === 'A' ||
+                    target.closest('button') ||
+                    target.closest('a')) {
+                    return;
+                }
+                window.location.hash = `/matters/${row.dataset.matterId}`;
+            });
+        });
 
         // Add checkbox event listeners
         document.querySelectorAll('.matter-checkbox').forEach(checkbox => {
@@ -170,7 +538,8 @@ async function loadMatters() {
 
     } catch (error) {
         const tbody = document.getElementById('matters-tbody');
-        tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-4 text-center text-red-600">Error: ${formatErrorMessage(error)}</td></tr>`;
+        const visibleColumns = getVisibleColumns();
+        tbody.innerHTML = `<tr><td colspan="${visibleColumns.length}" class="px-6 py-4 text-center text-red-600">Error: ${formatErrorMessage(error)}</td></tr>`;
     }
 }
 

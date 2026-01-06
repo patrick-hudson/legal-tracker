@@ -6,6 +6,7 @@
 import auth from './auth.js';
 import { renderDashboard } from './components/dashboard.js';
 import { renderMatters } from './components/matters.js';
+import { renderMatterDetail } from './components/matter-detail.js';
 import { renderAnalytics } from './components/analytics.js';
 import { renderSecurity } from './components/security.js';
 import { renderTrackerSettings } from './components/tracker-settings.js';
@@ -23,6 +24,10 @@ class Router {
             '/data-management': renderDataManagement,
             '/system-info': renderSystemInfo
         };
+        // Dynamic routes with patterns
+        this.dynamicRoutes = [
+            { pattern: /^\/matters\/(\d+)$/, handler: renderMatterDetail }
+        ];
         this.defaultRoute = '/dashboard';
     }
 
@@ -60,16 +65,36 @@ class Router {
 
         // Get current route
         const hash = window.location.hash.slice(1) || this.defaultRoute;
-        const route = this.routes[hash] || this.routes[this.defaultRoute];
 
         // Update active nav link
         this.updateActiveLink();
+
+        // Check for static route first
+        let route = this.routes[hash];
+        let params = null;
+
+        // If no static route, check dynamic routes
+        if (!route) {
+            for (const dynamicRoute of this.dynamicRoutes) {
+                const match = hash.match(dynamicRoute.pattern);
+                if (match) {
+                    route = dynamicRoute.handler;
+                    params = match.slice(1); // Capture groups as params
+                    break;
+                }
+            }
+        }
+
+        // Fall back to default route
+        if (!route) {
+            route = this.routes[this.defaultRoute];
+        }
 
         // Render the route
         const contentArea = document.getElementById('main-content');
         if (contentArea && route) {
             try {
-                await route(contentArea);
+                await route(contentArea, params);
             } catch (error) {
                 console.error('Route render error:', error);
                 contentArea.innerHTML = `

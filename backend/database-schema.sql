@@ -56,3 +56,16 @@ CREATE TABLE IF NOT EXISTS admin_bootstrap_tokens (
   ip_address TEXT,
   is_active INTEGER DEFAULT 1
 );
+
+-- Private notes table for admin-only matter annotations
+-- One-to-many relationship: each matter can have multiple private notes
+CREATE TABLE IF NOT EXISTS private_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  matter_id INTEGER NOT NULL,
+  note_content TEXT NOT NULL,
+  created_by_user_id INTEGER,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (matter_id) REFERENCES matters(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by_user_id) REFERENCES admin_users(id)
+);
