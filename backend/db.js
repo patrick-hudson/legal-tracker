@@ -195,6 +195,23 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
       return null;
     },
 
+    getByIds(ids) {
+      if (!ids || ids.length === 0) return [];
+      const placeholders = ids.map(() => '?').join(',');
+      const result = db.exec(`SELECT * FROM matters WHERE id IN (${placeholders})`, ids);
+      if (result.length > 0) {
+        const columns = result[0].columns;
+        return result[0].values.map(row => {
+          const obj = {};
+          columns.forEach((col, i) => {
+            obj[col] = row[i];
+          });
+          return obj;
+        });
+      }
+      return [];
+    },
+
     add(matterDate, note, daysSince, cost = 0) {
       db.run(`
         INSERT INTO matters (matter_date, note, days_since, cost)

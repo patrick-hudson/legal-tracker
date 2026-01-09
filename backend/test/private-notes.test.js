@@ -404,6 +404,234 @@ describe('Private Notes Tests', () => {
     });
   });
 
+  describe('CSV Export with Selection and Private Notes', () => {
+    let exportMatterIds = [];
+
+    before(async () => {
+      // Create several matters for export tests
+      for (let i = 0; i < 5; i++) {
+        const response = await fetch(`${baseURL}/admin/api/matters`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cookie': adminCookie
+          },
+          body: JSON.stringify({
+            matter_date: `2024-11-${10 + i}T10:00:00.000Z`,
+            note: `Export test matter ${i}`,
+            cost: 100 + (i * 10)
+          })
+        });
+        const data = await response.json();
+        exportMatterIds.push(data.matter.id);
+      }
+
+      // Add private notes to first 3 matters
+      for (let i = 0; i < 3; i++) {
+        await fetch(`${baseURL}/admin/api/matters/${exportMatterIds[i]}/notes`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cookie': adminCookie
+          },
+          body: JSON.stringify({ note_content: `Private note for matter ${i}` })
+        });
+      }
+    });
+
+    it('should export all matters when no IDs specified', async () => {
+      const response = await fetch(`${baseURL}/admin/api/matters/export`, {
+        headers: { 'Cookie': adminCookie }
+      });
+
+      assert.strictEqual(response.status, 200);
+      assert.strictEqual(response.headers.get('content-type'), 'text/csv');
+
+      const csv = await response.text();
+      const lines = csv.trim().split('\n');
+
+      // Should have header + at least 5 data rows (our test matters)
+      assert.ok(lines.length >= 6, `Expected at least 6 lines (header + 5 matters), got ${lines.length}`);
+
+      // Header should not include private_notes
+      assert.strictEqual(lines[0], 'id,matter_date,note,days_since,cost,created_at');
+    });
+
+    it('should export only selected matters when IDs specified', async () => {
+      const selectedIds = [exportMatterIds[0], exportMatterIds[2]];
+      const response = await fetch(`${baseURL}/admin/api/matters/export?ids=${selectedIds.join(',')}`, {
+        headers: { 'Cookie': adminCookie }
+      });
+
+      assert.strictEqual(response.status, 200);
+      const csv = await response.text();
+      const lines = csv.trim().split('\n');
+
+      // Should have header + 2 data rows
+      assert.strictEqual(lines.length, 3, `Expected 3 lines (header + 2 matters), got ${lines.length}`);
+
+      // Verify the exported IDs match
+      const exportedIds = lines.slice(1).map(line => parseInt(line.split(',')[0]));
+      assert.deepStrictEqual(exportedIds.sort(), selectedIds.sort());
+    });
+
+    it('should include private notes column when includePrivateNotes=true', async () => {
+      const response = await fetch(`${baseURL}/admin/api/matters/export?ids=${exportMatterIds[0]}&includePrivateNotes=true`, {
+        headers: { 'Cookie': adminCookie }
+      });
+
+      assert.strictEqual(response.status, 200);
+      const csv = await response.text();
+      const lines = csv.trim().split('\n');
+
+      // Header should include private_notes
+      assert.ok(lines[0].includes('private_notes'), 'Header should include private_notes column');
+      assert.strictEqual(lines[0], 'id,matter_date,note,days_since,cost,created_at,private_notes');
+
+      // Data row should contain the private note
+      assert.ok(lines[1].includes('Private note for matter 0'), 'CSV should contain the private note content');
+    });
+
+    it('should not include private notes column when includePrivateNotes=false or not specified', async () => {
+      const response = await fetch(`${baseURL}/admin/api/matters/export?ids=${exportMatterIds[0]}`, {
+        headers: { 'Cookie': adminCookie }
+      });
+
+      assert.strictEqual(response.status, 200);
+      const csv = await response.text();
+      const lines = csv.trim().split('\n');
+
+      // Header should NOT include private_notes
+      assert.ok(!lines[0].includes('private_notes'), 'Header should not include private_notes column');
+    });
+
+    it('should handle matters with no private notes in export', async () => {
+      // Export matter index 4 which has no private notes
+      const response = await fetch(`${baseURL}/admin/api/matters/export?ids=${exportMatterIds[4]}&includePrivateNotes=true`, {
+        headers: { 'Cookie': adminCookie }
+      });
+
+      assert.strictEqual(response.status, 200);
+      const csv = await response.text();
+      const lines = csv.trim().split('\n');
+
+      // Should still have the column, but empty
+      assert.ok(lines[0].includes('private_notes'));
+      // Last field should be empty (just quotes)
+      assert.ok(lines[1].endsWith('""'), 'Private notes field should be empty for matter without notes');
+    });
+
+    it('should concatenate multiple notes for a matter with pipe separator', async () => {
+      // Add a second note to the first matter
+      await fetch(`${baseURL}/admin/api/matters/${exportMatterIds[0]}/notes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
+        body: JSON.stringify({ note_content: 'Second private note' })
+      });
+
+      const response = await fetch(`${baseURL}/admin/api/matters/export?ids=${exportMatterIds[0]}&includePrivateNotes=true`, {
+        headers: { 'Cookie': adminCookie }
+      });
+
+      assert.strictEqual(response.status, 200);
+      const csv = await response.text();
+
+      // Should contain both notes separated by |
+      assert.ok(csv.includes('Private note for matter 0'), 'Should include first note');
+      assert.ok(csv.includes('Second private note'), 'Should include second note');
+      assert.ok(csv.includes(' | '), 'Notes should be separated by pipe');
+    });
+
+    it('should export all matters when empty ids parameter is provided', async () => {
+      const response = await fetch(`${baseURL}/admin/api/matters/export?ids=`, {
+        headers: { 'Cookie': adminCookie }
+      });
+
+      assert.strictEqual(response.status, 200);
+      const csv = await response.text();
+      const lines = csv.trim().split('\n');
+
+      // Should export all matters (at least the 5 we created)
+      assert.ok(lines.length >= 6, 'Should export all matters when ids is empty');
+    });
+
+    it('should handle invalid ids gracefully', async () => {
+      const response = await fetch(`${baseURL}/admin/api/matters/export?ids=invalid,abc,999999`, {
+        headers: { 'Cookie': adminCookie }
+      });
+
+      assert.strictEqual(response.status, 200);
+      const csv = await response.text();
+      const lines = csv.trim().split('\n');
+
+      // Should only have header row since no valid/existing IDs
+      // (999999 is valid integer but doesn't exist, invalid and abc are filtered out)
+      assert.ok(lines.length >= 1, 'Should have at least header');
+    });
+
+    it('should export as JSON when format=json', async () => {
+      const response = await fetch(`${baseURL}/admin/api/matters/export?format=json`, {
+        headers: { 'Cookie': adminCookie }
+      });
+
+      assert.strictEqual(response.status, 200);
+      assert.ok(response.headers.get('content-type').includes('application/json'), 'Content-Type should be application/json');
+
+      const data = await response.json();
+      assert.ok(Array.isArray(data), 'JSON export should be an array');
+      assert.ok(data.length >= 5, 'Should have at least 5 matters');
+
+      // Check structure of first matter
+      const matter = data[0];
+      assert.ok(matter.id !== undefined, 'Matter should have id');
+      assert.ok(matter.matter_date !== undefined, 'Matter should have matter_date');
+      assert.ok(matter.note !== undefined, 'Matter should have note');
+      assert.ok(matter.cost !== undefined, 'Matter should have cost');
+      assert.ok(matter.created_at !== undefined, 'Matter should have created_at');
+      // Should NOT have private_notes unless requested
+      assert.strictEqual(matter.private_notes, undefined, 'Should not include private_notes by default');
+    });
+
+    it('should export JSON with private notes when includePrivateNotes=true', async () => {
+      const response = await fetch(`${baseURL}/admin/api/matters/export?format=json&ids=${exportMatterIds[0]}&includePrivateNotes=true`, {
+        headers: { 'Cookie': adminCookie }
+      });
+
+      assert.strictEqual(response.status, 200);
+      const data = await response.json();
+
+      assert.strictEqual(data.length, 1, 'Should export only 1 matter');
+      const matter = data[0];
+
+      // Should have private_notes as an array
+      assert.ok(Array.isArray(matter.private_notes), 'private_notes should be an array');
+      assert.ok(matter.private_notes.length >= 1, 'Should have at least 1 private note');
+
+      // Check structure of private note
+      const note = matter.private_notes[0];
+      assert.ok(note.id !== undefined, 'Note should have id');
+      assert.ok(note.note_content !== undefined, 'Note should have note_content');
+      assert.ok(note.created_at !== undefined, 'Note should have created_at');
+    });
+
+    it('should export selected matters as JSON', async () => {
+      const selectedIds = [exportMatterIds[1], exportMatterIds[3]];
+      const response = await fetch(`${baseURL}/admin/api/matters/export?format=json&ids=${selectedIds.join(',')}`, {
+        headers: { 'Cookie': adminCookie }
+      });
+
+      assert.strictEqual(response.status, 200);
+      const data = await response.json();
+
+      assert.strictEqual(data.length, 2, 'Should export only 2 matters');
+      const exportedIds = data.map(m => m.id).sort();
+      assert.deepStrictEqual(exportedIds, selectedIds.sort(), 'Should match selected IDs');
+    });
+  });
+
   describe('Wipe Operations Include Notes', () => {
     let wipeMatterId;
 

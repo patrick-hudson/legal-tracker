@@ -1183,17 +1183,89 @@ export async function createServer(options = {}) {
     return { success: true, deleted };
   });
 
-  // Export matters as CSV
+  // Export matters as CSV or JSON
   fastify.get('/admin/api/matters/export', { preHandler: adminAuthMiddleware }, async (request, reply) => {
-    const matters = mattersDb.getAll();
+    const { ids, includePrivateNotes, format = 'csv' } = request.query;
 
-    let csv = 'id,matter_date,note,days_since,cost,created_at\n';
+    // Get matters - either selected IDs or all
+    let matters;
+    if (ids) {
+      const idList = ids.split(',').map(id => parseInt(id, 10)).filter(id => !isNaN(id));
+      matters = idList.length > 0 ? mattersDb.getByIds(idList) : mattersDb.getAll();
+    } else {
+      matters = mattersDb.getAll();
+    }
+
+    // Use detailed timestamp: YYYY-MM-DD_HH-MM-SS to prevent duplicate filenames
+    const now = new Date();
+    const timestamp = now.toISOString().replace('T', '_').replace(/:/g, '-').split('.')[0];
+
+    // JSON format
+    if (format === 'json') {
+      const exportData = matters.map(matter => {
+        const exportMatter = {
+          id: matter.id,
+          matter_date: matter.matter_date,
+          note: matter.note,
+          days_since: matter.days_since || 0,
+          cost: matter.cost || 0,
+          created_at: matter.created_at
+        };
+
+        if (includePrivateNotes === 'true') {
+          const notes = privateNotesDb.getByMatterId(matter.id);
+          exportMatter.private_notes = notes.map(n => ({
+            id: n.id,
+            note_content: n.note_content,
+            created_by: n.created_by_username || null,
+            created_at: n.created_at,
+            updated_at: n.updated_at
+          }));
+        }
+
+        return exportMatter;
+      });
+
+      reply.header('Content-Type', 'application/json');
+      reply.header('Content-Disposition', `attachment; filename="matters-${timestamp}.json"`);
+
+      return JSON.stringify(exportData, null, 2);
+    }
+
+    // CSV format (default)
+    const headers = ['id', 'matter_date', 'note', 'days_since', 'cost', 'created_at'];
+    if (includePrivateNotes === 'true') {
+      headers.push('private_notes');
+    }
+
+    let csv = headers.join(',') + '\n';
+
     for (const matter of matters) {
-      csv += `${matter.id},"${matter.matter_date}","${(matter.note || '').replace(/"/g, '""')}",${matter.days_since || 0},${matter.cost || 0},"${matter.created_at}"\n`;
+      const row = [
+        matter.id,
+        `"${matter.matter_date}"`,
+        `"${(matter.note || '').replace(/"/g, '""')}"`,
+        matter.days_since || 0,
+        matter.cost || 0,
+        `"${matter.created_at}"`
+      ];
+
+      if (includePrivateNotes === 'true') {
+        const notes = privateNotesDb.getByMatterId(matter.id);
+        // Concatenate all notes with separator (newlines replaced with | for CSV compatibility)
+        const notesText = notes.map(n => {
+          const author = n.created_by_username ? `[${n.created_by_username}]` : '';
+          const date = n.created_at ? `(${n.created_at.split('T')[0]})` : '';
+          return `${author}${date}: ${n.note_content}`.replace(/[\r\n]+/g, ' ');
+        }).join(' | ');
+        row.push(`"${notesText.replace(/"/g, '""')}"`);
+      }
+
+      csv += row.join(',') + '\n';
     }
 
     reply.header('Content-Type', 'text/csv');
-    reply.header('Content-Disposition', `attachment; filename="matters-${new Date().toISOString().split('T')[0]}.csv"`);
+    reply.header('Content-Disposition', `attachment; filename="matters-${timestamp}.csv"`);
 
     return csv;
   });

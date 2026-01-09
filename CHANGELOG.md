@@ -4,6 +4,69 @@ All notable changes to LEGAL MATTER (Legal Expense Governance Allocation Ledger 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-01-09
+
+### Added
+
+#### Enhanced Export Functionality
+- **HTML Export Format**: Export matters as a self-contained HTML document
+  - Fully styled, printable document with embedded CSS (no external dependencies)
+  - Dark/light theme toggle button with localStorage persistence
+  - Expandable private notes sections - click to show/hide notes per matter
+  - Professional table layout with alternating row colors
+  - Print-friendly styles (theme toggle hidden, all notes expanded in print)
+  - Footer with application branding
+- **JSON Export Format**: Export matters as JSON in addition to CSV
+  - Format selector (CSV/JSON/HTML radio buttons) in export modal
+  - JSON output includes properly structured data with nested private notes array
+  - Private notes in JSON include: id, note_content, created_by, created_at, updated_at
+- **Row Selection Export**: Export respects table row selection
+  - "Export selected matters only" checkbox when rows are selected
+  - Blue info banner shows count of selected matters
+  - Uncheck to export all matters instead
+- **Private Notes in Export**: Option to include private notes in exports (default: checked)
+  - CSV: Notes concatenated with pipe separator, includes author and date metadata
+  - JSON: Full note objects as nested array per matter
+- **Auto-Clear Selection**: Selection automatically clears after successful export
+  - All checkboxes unchecked
+  - Bulk actions bar hidden
+
+#### New API Parameters
+- `GET /admin/api/matters/export` now accepts:
+  - `format` - 'csv' (default) or 'json'
+  - `ids` - Comma-separated list of matter IDs to export
+  - `includePrivateNotes` - 'true' to include private notes
+
+#### Tests
+- **4 new tests** for JSON export functionality:
+  - JSON format validation and structure
+  - JSON with private notes
+  - Selected matters JSON export
+  - Content-type verification
+
+### Changed
+- **Export Button Label**: Changed from "Export CSV" to "Export" since both CSV and JSON formats are supported
+- **Export Modal**: Renamed from "Export Matters to CSV" to "Export Matters"
+- **Export Button**: Now triggers configurable export modal instead of direct CSV download
+- **Private Notes Option**: "Include private notes" checkbox now only appears when selected matters actually have private notes
+- **Export Filenames**: Now use detailed timestamps (YYYY-MM-DD_HH-MM-SS) to prevent duplicate filenames on consecutive exports
+- **Export Respects Column Visibility**: Export now only includes columns currently visible in the table
+  - Hidden columns via "Columns" dropdown are excluded from CSV/JSON export
+  - Column order in export matches current table column order
+- **Sort Indicators**: Column headers now show sort direction arrows when sorted
+
+### Fixed
+- **Columns Button**: Fixed columns settings dropdown not responding to clicks
+  - Prevented duplicate event listener accumulation
+  - Fixed document click listener for closing dropdown
+- **Column Sorting**: Fixed sorting breaking after first click
+  - Header now properly regenerates with sort indicators after each sort
+  - Event listeners correctly re-attached after header update
+- **Null Safety**: Added defensive null checks for select-all checkbox operations
+  - Prevents errors when checkbox column is hidden
+
+---
+
 ## [0.6.0] - 2026-01-05
 
 ### Added

@@ -151,8 +151,16 @@ class AdminAPI {
         });
     }
 
-    async exportMatters(format = 'csv') {
-        const response = await fetch(`${this.baseURL}/matters/export?format=${format}`, {
+    async exportMatters(options = {}) {
+        const { ids, includePrivateNotes, format = 'csv' } = options;
+        const params = new URLSearchParams();
+
+        if (format) params.set('format', format);
+        if (ids && ids.length > 0) params.set('ids', ids.join(','));
+        if (includePrivateNotes) params.set('includePrivateNotes', 'true');
+
+        const queryString = params.toString();
+        const response = await fetch(`${this.baseURL}/matters/export${queryString ? '?' + queryString : ''}`, {
             credentials: 'same-origin'
         });
 
