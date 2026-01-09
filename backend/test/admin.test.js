@@ -18,7 +18,8 @@ describe('Admin Portal Tests', () => {
     server = await createServer({
       logger: false,
       dbPath: ':memory:',
-      requireAuth: false
+      requireAuth: false,
+      disableRateLimit: true
     });
 
     const address = await server.listen({ port: 0, host: '127.0.0.1' });
@@ -158,9 +159,6 @@ describe('Admin Portal Tests', () => {
       assert.strictEqual(data.success, true);
       assert.ok(data.message.includes('successfully'));
 
-      // Wait to avoid rate limit
-      await new Promise(resolve => setTimeout(resolve, 13000));
-
       // Re-login with new password to get fresh cookie for subsequent tests
       const loginResponse = await fetch(`${baseURL}/admin/api/auth/login`, {
         method: 'POST',
@@ -222,9 +220,6 @@ describe('Admin Portal Tests', () => {
       // Update adminCookie for subsequent tests
       const setCookie = response.headers.get('set-cookie');
       adminCookie = setCookie.split(';')[0];
-
-      // Wait to avoid rate limit for next test
-      await new Promise(resolve => setTimeout(resolve, 13000));
     });
 
     it('should not be able to login with old password after change', async () => {
@@ -330,10 +325,6 @@ describe('Admin Portal Tests', () => {
     it('should allow changing password multiple times in sequence', async () => {
       const username = 'testadmin';
 
-      // Wait before this test to avoid hitting rate limit from previous logins
-      // Need to wait long enough to ensure we're past the 60-second window
-      await new Promise(resolve => setTimeout(resolve, 35000));
-
       // Change from securepass789 to thirdpass
       let currentPassword = 'securepass789';
       let newPassword = 'thirdpass789';
@@ -350,9 +341,6 @@ describe('Admin Portal Tests', () => {
       });
 
       assert.strictEqual(response.status, 200);
-
-      // Wait to avoid rate limit (login has 5 requests per minute limit)
-      await new Promise(resolve => setTimeout(resolve, 13000));
 
       // Verify login works with new password
       response = await fetch(`${baseURL}/admin/api/auth/login`, {
@@ -386,9 +374,6 @@ describe('Admin Portal Tests', () => {
 
       assert.strictEqual(response.status, 200);
 
-      // Wait to avoid rate limit
-      await new Promise(resolve => setTimeout(resolve, 13000));
-
       // Re-login with restored password for subsequent tests
       response = await fetch(`${baseURL}/admin/api/auth/login`, {
         method: 'POST',
@@ -405,11 +390,6 @@ describe('Admin Portal Tests', () => {
   });
 
   describe('Admin Matter Management', () => {
-    // Add delay before this test suite to avoid rate limit from previous logins
-    before(async () => {
-      await new Promise(resolve => setTimeout(resolve, 15000));
-    });
-
     it('should create single matter via admin API', async () => {
       const response = await fetch(`${baseURL}/admin/api/matters`, {
         method: 'POST',

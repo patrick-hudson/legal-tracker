@@ -65,6 +65,7 @@ dotenv.config({ path: join(__dirname, '.env') });
  * @param {boolean} options.requireAuth - Require authentication (default: from env)
  * @param {string[]} options.allowedIPs - Allowed IP addresses (default: from env)
  * @param {string} options.apiKey - API key for authentication (default: from env)
+ * @param {boolean} options.disableRateLimit - Disable rate limiting (default: false, useful for tests)
  * @returns {Object} Fastify server instance
  */
 export async function createServer(options = {}) {
@@ -74,7 +75,8 @@ export async function createServer(options = {}) {
     requireAuth = process.env.REQUIRE_AUTH === 'true',
     allowedIPs = process.env.ALLOWED_IPS?.split(',').map(ip => ip.trim()) || [],
     apiKey = process.env.API_KEY || null,
-    corsOrigin = process.env.CORS_ORIGIN || true
+    corsOrigin = process.env.CORS_ORIGIN || true,
+    disableRateLimit = false
   } = options;
 
   // Create database instance
@@ -106,11 +108,14 @@ export async function createServer(options = {}) {
   await fastify.register(fastifyCookie);
 
   // Rate limiting - protect against brute force attacks
-  await fastify.register(rateLimit, {
-    global: false, // Don't apply globally, only to specific routes
-    max: 100, // Max requests per time window
-    timeWindow: '1 minute'
-  });
+  // Can be disabled for tests to avoid delays from rate limit workarounds
+  if (!disableRateLimit) {
+    await fastify.register(rateLimit, {
+      global: false, // Don't apply globally, only to specific routes
+      max: 100, // Max requests per time window
+      timeWindow: '1 minute'
+    });
+  }
 
   // Multipart form support for file uploads
   await fastify.register(fastifyMultipart, {

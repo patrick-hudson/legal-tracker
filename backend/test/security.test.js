@@ -27,7 +27,8 @@ test('Security Vulnerability Tests', async (t) => {
   t.before(async () => {
     fastify = await createServer({
       logger: false,
-      dbPath: ':memory:'
+      dbPath: ':memory:',
+      disableRateLimit: true
     });
     await fastify.listen({ port: 0 });
   });

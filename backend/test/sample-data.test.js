@@ -17,7 +17,8 @@ describe('Sample Data Management', () => {
     app = await createServer({
       dbPath: ':memory:',
       logger: false,
-      requireAuth: false
+      requireAuth: false,
+      disableRateLimit: true
     });
 
     await app.ready();

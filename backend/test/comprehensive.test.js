@@ -24,7 +24,8 @@ describe('Comprehensive E2E Tests (Isolated)', () => {
     server = await createServer({
       logger: false,
       dbPath: ':memory:', // Fresh in-memory DB for each test
-      requireAuth: false
+      requireAuth: false,
+      disableRateLimit: true
     });
 
     const address = await server.listen({ port: 0, host: '127.0.0.1' });

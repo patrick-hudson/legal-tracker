@@ -11,7 +11,8 @@ describe('Legal Tracker API Integration Tests', () => {
     server = await createServer({
       logger: false, // Suppress logs during tests
       dbPath: ':memory:', // Use in-memory database for tests
-      requireAuth: false // Disable auth for easier testing
+      requireAuth: false, // Disable auth for easier testing
+      disableRateLimit: true
     });
 
     // Start server on random port

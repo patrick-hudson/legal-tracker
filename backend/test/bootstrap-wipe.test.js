@@ -20,7 +20,7 @@ describe('Bootstrap and Wipe Everything Functionality', () => {
 
   beforeEach(async () => {
     // Create server with in-memory database for each test
-    fastify = await createServer({ dbPath: ':memory:', logger: false });
+    fastify = await createServer({ dbPath: ':memory:', logger: false, disableRateLimit: true });
 
     // Create an admin user for testing
     const { adminUsersDb } = fastify.db;
@@ -953,7 +953,7 @@ describe('Bootstrap and Wipe Everything Functionality', () => {
   describe('Integration: Wipe to Bootstrap Flow', () => {
     test('should create bootstrap token when fresh DB on startup', async () => {
       // Create a fresh server with no admins
-      const freshServer = await createServer({ dbPath: ':memory:', logger: false });
+      const freshServer = await createServer({ dbPath: ':memory:', logger: false, disableRateLimit: true });
       const { adminUsersDb, adminBootstrapTokensDb } = freshServer.db;
 
       // Deactivate all admins

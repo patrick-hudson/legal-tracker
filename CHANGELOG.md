@@ -148,6 +148,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Switched from individual event listeners per row to event delegation on tbody
   - Prevents issues with duplicate event listeners when table is refreshed
 
+### Changed
+
+- **Test Infrastructure**: Improved test performance by adding `disableRateLimit` option to `createServer()`
+  - Rate limiting can now be disabled for tests that don't need it
+  - Removed 13-35 second delays that were working around rate limits
+  - Test suite runs in ~29 seconds (down from ~110 seconds)
+  - Created dedicated `rate-limit.test.js` for testing rate limiting in isolation
+  - All test files updated to use `disableRateLimit: true`
+
 ---
 
 ## [0.7.2] - 2026-01-09
@@ -684,6 +693,14 @@ Initial development phase establishing core functionality.
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 0.9.2 | 2026-01-09 | Collapsible sections, improved timeline display |
+| 0.9.1 | 2026-01-09 | Counsel tracking, timeline view, interaction types |
+| 0.9.0 | 2026-01-09 | Counsel tracking, timeline view, interaction types |
+| 0.8.1 | 2026-01-09 | Attachment preview, Flowbite tooltips |
+| 0.8.0 | 2026-01-09 | Matter attachments, S3 storage, AI document generation |
+| 0.7.2 | 2026-01-09 | Persistent row selection |
+| 0.7.1 | 2026-01-09 | Delete rows in Add Multiple modal |
+| 0.7.0 | 2026-01-09 | Enhanced export, column customization, sortable table |
 | 0.6.0 | 2026-01-05 | Admin-only private notes, matter detail view, sample data notes generation |
 | 0.5.1 | 2026-01-05 | Level 8 "THE FINAL FORM", persistent loading toast, spice level fixes |
 | 0.5.0 | 2026-01-05 | Claude AI Integration, 8 spice levels, AI-powered descriptions |

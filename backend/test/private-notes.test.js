@@ -19,7 +19,8 @@ describe('Private Notes Tests', () => {
     server = await createServer({
       logger: false,
       dbPath: ':memory:',
-      requireAuth: false
+      requireAuth: false,
+      disableRateLimit: true
     });
 
     const address = await server.listen({ port: 0, host: '127.0.0.1' });
@@ -351,11 +352,6 @@ describe('Private Notes Tests', () => {
   });
 
   describe('Sample Data Generation with Notes', () => {
-    before(async () => {
-      // Wait to avoid rate limits from previous tests
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    });
-
     it('should generate sample data with private notes', async () => {
       const response = await fetch(`${baseURL}/admin/api/data/populate-sample`, {
         method: 'POST',
