@@ -5,12 +5,20 @@
  * All logging functions fail gracefully - logging errors should not break main operations.
  */
 
-// Log levels
+// Log levels with numeric severity (lower = more severe)
 export const LOG_LEVELS = {
   ERROR: 'ERROR',
   WARNING: 'WARNING',
   INFO: 'INFO',
   DEBUG: 'DEBUG'
+};
+
+// Numeric severity for comparison (lower = more severe, always logged)
+const LOG_LEVEL_SEVERITY = {
+  ERROR: 0,
+  WARNING: 1,
+  INFO: 2,
+  DEBUG: 3
 };
 
 // Action types
@@ -50,6 +58,28 @@ let settingsDb = null;
 export function initAudit(dbHelpers) {
   auditLogDb = dbHelpers.auditLogDb;
   settingsDb = dbHelpers.settingsDb;
+}
+
+/**
+ * Check if a log level should be recorded based on the configured minimum level
+ * @param {string} level - The level of the log entry (ERROR, WARNING, INFO, DEBUG)
+ * @returns {boolean} True if the level should be logged
+ */
+function shouldLog(level) {
+  if (!settingsDb) {
+    // If settings not available, default to INFO level (log ERROR, WARNING, INFO)
+    return LOG_LEVEL_SEVERITY[level] <= LOG_LEVEL_SEVERITY.INFO;
+  }
+
+  try {
+    const configuredLevel = settingsDb.get('audit_log_level') || 'INFO';
+    const configuredSeverity = LOG_LEVEL_SEVERITY[configuredLevel] ?? LOG_LEVEL_SEVERITY.INFO;
+    const entrySeverity = LOG_LEVEL_SEVERITY[level] ?? LOG_LEVEL_SEVERITY.INFO;
+    return entrySeverity <= configuredSeverity;
+  } catch {
+    // On error, default to INFO level
+    return LOG_LEVEL_SEVERITY[level] <= LOG_LEVEL_SEVERITY.INFO;
+  }
 }
 
 /**
@@ -93,6 +123,11 @@ export function getUserContext(request) {
 function log(entry) {
   if (!auditLogDb) {
     console.warn('Audit logging not initialized - skipping log entry');
+    return null;
+  }
+
+  // Check if this level should be logged based on configured minimum
+  if (!shouldLog(entry.level)) {
     return null;
   }
 
@@ -189,7 +224,7 @@ export function logInfo({ userId, username, actionType, entityType, entityId, su
 }
 
 /**
- * Log a debug event (only if debug mode is enabled)
+ * Log a debug event (only logged if minimum level is DEBUG)
  * @param {Object} options - Debug details
  * @param {number} [options.userId] - User involved
  * @param {string} [options.username] - Username for display
@@ -203,22 +238,7 @@ export function logInfo({ userId, username, actionType, entityType, entityId, su
  * @param {string} [options.ipAddress] - Client IP address
  */
 export function logDebug({ userId, username, actionType, entityType, entityId, summary, request, response, durationMs, ipAddress }) {
-  // Check if debug mode is enabled (will be implemented in chunk 3)
-  // For now, skip debug logs
-  if (!settingsDb) {
-    return null;
-  }
-
-  try {
-    const debugEnabled = settingsDb.get('audit_debug_enabled');
-    if (debugEnabled !== 'true') {
-      return null;
-    }
-  } catch {
-    // If we can't check the setting, skip debug logs
-    return null;
-  }
-
+  // Level check is now handled by the base log() function via shouldLog()
   return log({
     level: LOG_LEVELS.DEBUG,
     user_id: userId,

@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Audit Log Level Configuration**: Added setting to control minimum audit log level
+  - New dropdown in System Info page under "Audit Log Settings"
+  - Options: Error only, Warning and above, Info and above (default), Debug (all events)
+  - Lower levels include all higher severity events
+  - Setting persisted via `audit_log_level` setting key
+
 ---
 
 ## [0.10.1] - 2026-01-09
@@ -744,7 +752,7 @@ Initial development phase establishing core functionality.
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| Unreleased | - | |
+| Unreleased | - | Audit log level configuration |
 | 0.10.1 | 2026-01-09 | Fix frontend buttons |
 | 0.10.0 | 2026-01-09 | Audit logging system |
 | 0.9.4 | 2026-01-09 | GitHub Release creation with changelog notes |

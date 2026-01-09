@@ -67,6 +67,34 @@ export async function renderSystemInfo(container) {
                     </div>
                 </div>
 
+                <!-- Audit Log Settings -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Audit Log Settings</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Minimum Log Level</label>
+                            <select id="audit-log-level-select" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                <option value="ERROR">Error only</option>
+                                <option value="WARNING">Warning and above</option>
+                                <option value="INFO">Info and above (default)</option>
+                                <option value="DEBUG">Debug (all events)</option>
+                            </select>
+                            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                Controls which events are recorded to the audit log. Lower levels include all higher level events.
+                            </p>
+                        </div>
+                        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                            <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Log Levels</h4>
+                            <ul class="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                                <li><span class="inline-block w-16 font-medium text-red-600 dark:text-red-400">ERROR</span> Exceptions and failures</li>
+                                <li><span class="inline-block w-16 font-medium text-yellow-600 dark:text-yellow-400">WARNING</span> Suspicious activity, near-failures</li>
+                                <li><span class="inline-block w-16 font-medium text-blue-600 dark:text-blue-400">INFO</span> CRUD operations, settings changes, auth events</li>
+                                <li><span class="inline-block w-16 font-medium text-gray-600 dark:text-gray-400">DEBUG</span> Detailed diagnostics (may impact performance)</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Runtime Info -->
                 <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 lg:col-span-2">
                     <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Runtime Information</h3>
@@ -105,6 +133,13 @@ function setupEventListeners(currentSettings) {
         const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
         return isLocal ? 'Development (auto)' : 'Production (auto)';
     };
+
+    // Set audit log level from settings
+    const auditLogLevelSelect = document.getElementById('audit-log-level-select');
+    if (auditLogLevelSelect) {
+        const currentLevel = currentSettings.audit_log_level || 'INFO';
+        auditLogLevelSelect.value = currentLevel;
+    }
 
     // Load version info and environment
     (async () => {
@@ -176,6 +211,26 @@ function setupEventListeners(currentSettings) {
         } catch (error) {
             console.error('Failed to save environment:', error);
             showToast('Failed to save environment setting', 'error');
+        }
+    });
+
+    // Audit log level select change handler
+    document.getElementById('audit-log-level-select')?.addEventListener('change', async (e) => {
+        const value = e.target.value;
+
+        try {
+            const response = await fetch('/admin/api/settings/audit_log_level', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ value })
+            });
+
+            if (!response.ok) throw new Error('Failed to save');
+
+            showToast('Audit log level saved', 'success');
+        } catch (error) {
+            console.error('Failed to save audit log level:', error);
+            showToast('Failed to save audit log level', 'error');
         }
     });
 }
