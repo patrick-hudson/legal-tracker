@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+---
+
+## [0.11.2] - 2026-01-09
+
 ### Added
 
 - **Watchdog Process Manager**: Lightweight process manager for server lifecycle control
@@ -789,7 +793,8 @@ Initial development phase establishing core functionality.
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| Unreleased | - | Watchdog process manager |
+| Unreleased | - | |
+| 0.11.2 | 2026-01-09 | Watchdog process manager |
 | 0.11.1 | 2026-01-09 | Global error handling, console statements replaced |
 | 0.11.0 | 2026-01-09 | Audit log level configuration |
 | 0.10.1 | 2026-01-09 | Fix frontend buttons |
