@@ -1062,7 +1062,7 @@ export async function createServer(options = {}) {
 
   // Add single matter
   fastify.post('/admin/api/matters', { preHandler: adminAuthMiddleware }, async (request, reply) => {
-    const { matter_date, note, cost } = request.body || {};
+    const { matter_date, note, cost, lawyer_name, lawyer_firm, opposing_counsel_name, opposing_counsel_firm, case_number } = request.body || {};
 
     if (!matter_date) {
       return reply.code(400).send({ error: 'BAD_REQUEST', message: 'matter_date required' });
@@ -1088,7 +1088,8 @@ export async function createServer(options = {}) {
         matterDate.toISOString(),
         note || 'Matter',
         Math.max(0, daysSince),
-        costCents
+        costCents,
+        { lawyer_name, lawyer_firm, opposing_counsel_name, opposing_counsel_firm, case_number }
       );
 
       // Update last matter date
@@ -1304,10 +1305,61 @@ export async function createServer(options = {}) {
     };
   });
 
+  // Get matter timeline (aggregated notes and attachments sorted by date)
+  fastify.get('/admin/api/matters/:id/timeline', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { id } = request.params;
+    const { order = 'desc' } = request.query;
+
+    const matter = mattersDb.getById(parseInt(id));
+    if (!matter) {
+      return reply.code(404).send({ error: 'NOT_FOUND', message: 'Matter not found' });
+    }
+
+    // Get private notes
+    const privateNotes = privateNotesDb.getByMatterId(parseInt(id));
+
+    // Get attachments
+    const attachments = attachmentsDb.getByMatterId(parseInt(id));
+
+    // Build timeline entries
+    const timeline = [
+      ...privateNotes.map(note => ({
+        type: 'note',
+        id: note.id,
+        date: note.interaction_date || note.created_at,
+        interaction_type: note.interaction_type || 'note',
+        content: note.note_content,
+        created_by: note.created_by_username,
+        created_at: note.created_at,
+        updated_at: note.updated_at
+      })),
+      ...attachments.map(attachment => ({
+        type: 'attachment',
+        id: attachment.id,
+        date: attachment.document_date || attachment.created_at,
+        direction: attachment.direction || 'internal',
+        filename: attachment.original_filename,
+        content_type: attachment.content_type,
+        size_bytes: attachment.size_bytes,
+        created_by: attachment.created_by_username,
+        created_at: attachment.created_at
+      }))
+    ];
+
+    // Sort by date
+    timeline.sort((a, b) => {
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      return order === 'asc' ? dateA - dateB : dateB - dateA;
+    });
+
+    return { timeline };
+  });
+
   // Update single matter (admin)
   fastify.put('/admin/api/matters/:id', { preHandler: adminAuthMiddleware }, async (request, reply) => {
     const { id } = request.params;
-    const { matter_date, note, cost } = request.body || {};
+    const { matter_date, note, cost, lawyer_name, lawyer_firm, opposing_counsel_name, opposing_counsel_firm, case_number } = request.body || {};
 
     const existing = mattersDb.getById(parseInt(id));
     if (!existing) {
@@ -1327,7 +1379,13 @@ export async function createServer(options = {}) {
       // Cost comes in as dollars from admin form - convert to cents for storage
       const costCents = cost !== undefined ? Math.round(parseFloat(cost) * 100) : existing.cost;
 
-      mattersDb.update(parseInt(id), matterDate, matterNote, costCents);
+      mattersDb.update(parseInt(id), matterDate, matterNote, costCents, {
+        lawyer_name,
+        lawyer_firm,
+        opposing_counsel_name,
+        opposing_counsel_firm,
+        case_number
+      });
 
       return { success: true };
     } catch (error) {
@@ -1387,7 +1445,7 @@ export async function createServer(options = {}) {
   // Add a private note to a matter
   fastify.post('/admin/api/matters/:matterId/notes', { preHandler: adminAuthMiddleware }, async (request, reply) => {
     const { matterId } = request.params;
-    const { note_content } = request.body || {};
+    const { note_content, interaction_date, interaction_type } = request.body || {};
 
     if (!note_content || note_content.trim() === '') {
       return reply.code(400).send({ error: 'BAD_REQUEST', message: 'note_content is required' });
@@ -1407,7 +1465,10 @@ export async function createServer(options = {}) {
 
     try {
       const userId = request.adminUser?.id || null;
-      const result = privateNotesDb.create(parseInt(matterId), note_content.trim(), userId);
+      const result = privateNotesDb.create(parseInt(matterId), note_content.trim(), userId, {
+        interaction_date: interaction_date || null,
+        interaction_type: interaction_type || 'note'
+      });
 
       reply.code(201);
       return {
@@ -1422,7 +1483,7 @@ export async function createServer(options = {}) {
   // Update a private note
   fastify.put('/admin/api/notes/:noteId', { preHandler: adminAuthMiddleware }, async (request, reply) => {
     const { noteId } = request.params;
-    const { note_content } = request.body || {};
+    const { note_content, interaction_date, interaction_type } = request.body || {};
 
     if (!note_content || note_content.trim() === '') {
       return reply.code(400).send({ error: 'BAD_REQUEST', message: 'note_content is required' });
@@ -1441,7 +1502,10 @@ export async function createServer(options = {}) {
     }
 
     try {
-      privateNotesDb.update(parseInt(noteId), note_content.trim());
+      privateNotesDb.update(parseInt(noteId), note_content.trim(), {
+        interaction_date,
+        interaction_type
+      });
       return {
         success: true,
         note: privateNotesDb.getById(parseInt(noteId))
@@ -1495,8 +1559,23 @@ export async function createServer(options = {}) {
     }
 
     let file;
+    let documentDate = null;
+    let direction = 'internal';
+
     try {
-      file = await request.file();
+      // Parse multipart form data
+      const parts = request.parts();
+      for await (const part of parts) {
+        if (part.type === 'file') {
+          file = part;
+        } else if (part.type === 'field') {
+          if (part.fieldname === 'document_date' && part.value) {
+            documentDate = part.value;
+          } else if (part.fieldname === 'direction' && part.value) {
+            direction = part.value;
+          }
+        }
+      }
     } catch (error) {
       return reply.code(400).send({ error: 'BAD_REQUEST', message: 'No file uploaded' });
     }
@@ -1530,7 +1609,8 @@ export async function createServer(options = {}) {
         result.size_bytes,
         storage.type,
         result.storage_key,
-        request.adminUser?.id || null
+        request.adminUser?.id || null,
+        { document_date: documentDate, direction }
       );
 
       return {
@@ -1539,7 +1619,9 @@ export async function createServer(options = {}) {
           id: attachment.id,
           original_filename: sanitizeFilename(file.filename),
           content_type: file.mimetype,
-          size_bytes: result.size_bytes
+          size_bytes: result.size_bytes,
+          document_date: documentDate,
+          direction
         }
       };
     } catch (error) {
@@ -1599,6 +1681,27 @@ export async function createServer(options = {}) {
     } catch (error) {
       fastify.log.error({ error: error.message, attachmentId }, 'Attachment deletion failed');
       return reply.code(500).send({ error: 'DELETE_FAILED', message: error.message });
+    }
+  });
+
+  // Update attachment metadata
+  fastify.put('/admin/api/attachments/:attachmentId', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { attachmentId } = request.params;
+    const { document_date, direction } = request.body || {};
+
+    const attachment = attachmentsDb.getById(parseInt(attachmentId));
+    if (!attachment) {
+      return reply.code(404).send({ error: 'NOT_FOUND', message: 'Attachment not found' });
+    }
+
+    try {
+      attachmentsDb.update(parseInt(attachmentId), { document_date, direction });
+      return {
+        success: true,
+        attachment: attachmentsDb.getById(parseInt(attachmentId))
+      };
+    } catch (error) {
+      return reply.code(500).send({ error: 'SERVER_ERROR', message: error.message });
     }
   });
 
@@ -2199,41 +2302,85 @@ Return ONLY a JSON array of strings, no other text. Example format:
   // Static private notes fallback (for when Claude API is not configured)
   const staticPrivateNotes = [
     // Call logs
-    'Client called to discuss case status. Expressed satisfaction with progress.',
-    'Left voicemail for opposing counsel regarding settlement terms.',
-    'Conference call with co-counsel - agreed on discovery timeline.',
-    'Client unable to reach by phone, sent follow-up email instead.',
+    { content: 'Client called to discuss case status. Expressed satisfaction with progress.', type: 'phone_call' },
+    { content: 'Left voicemail for opposing counsel regarding settlement terms.', type: 'phone_call' },
+    { content: 'Conference call with co-counsel - agreed on discovery timeline.', type: 'phone_call' },
+    { content: 'Client unable to reach by phone, sent follow-up email instead.', type: 'email' },
     // Case updates
-    'Received new documents from discovery. Will review by end of week.',
-    'Motion deadline extended by 2 weeks per court order.',
-    'Judge assigned to case: Hon. Williams. Known for strict deadlines.',
-    'Expert witness confirmed availability for trial dates.',
+    { content: 'Received new documents from discovery. Will review by end of week.', type: 'note' },
+    { content: 'Motion deadline extended by 2 weeks per court order.', type: 'filing' },
+    { content: 'Judge assigned to case: Hon. Williams. Known for strict deadlines.', type: 'note' },
+    { content: 'Expert witness confirmed availability for trial dates.', type: 'note' },
     // Strategy notes
-    'Consider mediation before trial - client open to settlement in $X range.',
-    'Key witness may be unreliable - need backup documentation.',
-    'Opposing counsel tends to delay. Build buffer into all deadlines.',
-    'Strong precedent found in similar case from 2022. Could be persuasive.',
+    { content: 'Consider mediation before trial - client open to settlement in $X range.', type: 'meeting' },
+    { content: 'Key witness may be unreliable - need backup documentation.', type: 'note' },
+    { content: 'Opposing counsel tends to delay. Build buffer into all deadlines.', type: 'note' },
+    { content: 'Strong precedent found in similar case from 2022. Could be persuasive.', type: 'note' },
     // Client communications
-    'Client requested weekly status updates instead of bi-weekly.',
-    'Billing concerns raised - provided detailed breakdown of hours.',
-    'Client traveling next month. Need to schedule depositions around availability.',
-    'Introduced client to paralegal who will handle routine inquiries.',
+    { content: 'Client requested weekly status updates instead of bi-weekly.', type: 'email' },
+    { content: 'Billing concerns raised - provided detailed breakdown of hours.', type: 'email' },
+    { content: 'Client traveling next month. Need to schedule depositions around availability.', type: 'meeting' },
+    { content: 'Introduced client to paralegal who will handle routine inquiries.', type: 'meeting' },
+    // Court appearances
+    { content: 'Status conference attended. Next hearing set for 30 days.', type: 'court_appearance' },
+    { content: 'Motion hearing - argued for summary judgment. Decision pending.', type: 'court_appearance' },
+    // Letters
+    { content: 'Sent demand letter to opposing party. 30-day response deadline.', type: 'letter_sent' },
+    { content: 'Received response to discovery requests. Documents attached.', type: 'letter_received' },
     // Internal warnings
-    'CAUTION: Client has missed two payment deadlines. Monitor closely.',
-    'Note: Previous counsel had conflicts with this client. Handle with care.',
-    'Watch for statute of limitations - approaching fast.',
-    'Insurance coverage may be disputed. Verify before proceeding.',
+    { content: 'CAUTION: Client has missed two payment deadlines. Monitor closely.', type: 'note' },
+    { content: 'Note: Previous counsel had conflicts with this client. Handle with care.', type: 'note' },
+    { content: 'Watch for statute of limitations - approaching fast.', type: 'note' },
+    { content: 'Insurance coverage may be disputed. Verify before proceeding.', type: 'note' },
     // Observations
-    'Opposing counsel seems disorganized. May work in our favor.',
-    'Witness testimony conflicts with deposition. Possible impeachment opportunity.',
-    'Judge seemed receptive to our argument at preliminary hearing.',
-    'Court reporter noted for transcription errors - request expedited review.',
+    { content: 'Opposing counsel seems disorganized. May work in our favor.', type: 'note' },
+    { content: 'Witness testimony conflicts with deposition. Possible impeachment opportunity.', type: 'note' },
+    { content: 'Judge seemed receptive to our argument at preliminary hearing.', type: 'court_appearance' },
+    { content: 'Court reporter noted for transcription errors - request expedited review.', type: 'note' },
     // General commentary
-    'Good outcome today. Client happy with result.',
-    'Need to follow up on outstanding items before next hearing.',
-    'Case more complex than initially estimated. Discuss fee adjustment.',
-    'All documents filed. Awaiting court response.'
+    { content: 'Good outcome today. Client happy with result.', type: 'note' },
+    { content: 'Need to follow up on outstanding items before next hearing.', type: 'note' },
+    { content: 'Case more complex than initially estimated. Discuss fee adjustment.', type: 'meeting' },
+    { content: 'All documents filed. Awaiting court response.', type: 'filing' }
   ];
+
+  // Static lawyer names and firms for sample data generation
+  const staticLawyerData = {
+    lawyers: [
+      { name: 'Sarah Mitchell', firm: 'Mitchell & Associates' },
+      { name: 'James Chen', firm: 'Chen Law Group' },
+      { name: 'Rebecca Torres', firm: 'Torres Legal Partners' },
+      { name: 'Michael O\'Brien', firm: 'O\'Brien & Associates' },
+      { name: 'Elizabeth Park', firm: 'Park & Williams LLP' },
+      { name: 'David Kim', firm: 'Kim Legal Services' },
+      { name: 'Jennifer Adams', firm: 'Adams & Partners' },
+      { name: 'Robert Martinez', firm: 'Martinez Law Firm' },
+      { name: 'Amanda Foster', firm: 'Foster & Associates' },
+      { name: 'Christopher Lee', firm: 'Lee Legal Group' }
+    ],
+    opposingCounsel: [
+      { name: 'Marcus Thompson', firm: 'Thompson & Reed' },
+      { name: 'Angela White', firm: 'White Law Offices' },
+      { name: 'Steven Garcia', firm: 'Garcia & Associates' },
+      { name: 'Katherine Brown', firm: 'Brown Legal Partners' },
+      { name: 'William Davis', firm: 'Davis & Miller LLP' },
+      { name: 'Patricia Wilson', firm: 'Wilson Law Group' },
+      { name: 'Thomas Anderson', firm: 'Anderson & Smith' },
+      { name: 'Jessica Taylor', firm: 'Taylor Legal Services' },
+      { name: 'Daniel Robinson', firm: 'Robinson & Associates' },
+      { name: 'Michelle Clark', firm: 'Clark & Partners' }
+    ]
+  };
+
+  // Case number prefixes by type
+  const caseNumberPrefixes = ['CV', 'CR', 'FA', 'PR', 'BK', 'AP', 'MC'];
+
+  // Helper function to generate random case number
+  function generateCaseNumber(year) {
+    const prefix = caseNumberPrefixes[Math.floor(Math.random() * caseNumberPrefixes.length)];
+    const number = Math.floor(Math.random() * 99999).toString().padStart(5, '0');
+    return `${year}-${prefix}-${number}`;
+  }
 
   // Helper function to generate descriptions using Claude API (with SDK)
   async function generateClaudeDescriptions(count, overrideSpiceLevel = null) {
@@ -2355,7 +2502,11 @@ Return ONLY a JSON array of strings, no other text. Example format:
         maxNotesPerMatter = 3,
         // Attachment generation options
         generateAttachments = false,
-        attachmentsPercentage = 25  // Percentage of matters that get AI-generated document (0-100)
+        attachmentsPercentage = 25,  // Percentage of matters that get AI-generated document (0-100)
+        // Lawyer/counsel options
+        lawyerPercentage = 40,  // Percentage of matters with our lawyer info
+        opposingCounselPercentage = 30,  // Percentage of matters with opposing counsel info
+        caseNumberPercentage = 50  // Percentage of matters with case numbers
       } = request.body || {};
 
       let sampleMatters = [];
@@ -2455,10 +2606,35 @@ Return ONLY a JSON array of strings, no other text. Example format:
           const description = descriptions[i % descriptions.length] ||
             descriptions[Math.floor(Math.random() * descriptions.length)];
 
+          // Generate lawyer info based on percentage
+          let lawyerInfo = null;
+          if (Math.random() * 100 < lawyerPercentage) {
+            const lawyer = staticLawyerData.lawyers[Math.floor(Math.random() * staticLawyerData.lawyers.length)];
+            lawyerInfo = { name: lawyer.name, firm: lawyer.firm };
+          }
+
+          // Generate opposing counsel info based on percentage
+          let opposingInfo = null;
+          if (Math.random() * 100 < opposingCounselPercentage) {
+            const opposing = staticLawyerData.opposingCounsel[Math.floor(Math.random() * staticLawyerData.opposingCounsel.length)];
+            opposingInfo = { name: opposing.name, firm: opposing.firm };
+          }
+
+          // Generate case number based on percentage
+          let caseNumber = null;
+          if (Math.random() * 100 < caseNumberPercentage) {
+            caseNumber = generateCaseNumber(randomDate.getFullYear());
+          }
+
           sampleMatters.push({
             matter_date: randomDate.toISOString(),
             note: description,
-            cost: costCents
+            cost: costCents,
+            lawyer_name: lawyerInfo?.name || null,
+            lawyer_firm: lawyerInfo?.firm || null,
+            opposing_counsel_name: opposingInfo?.name || null,
+            opposing_counsel_firm: opposingInfo?.firm || null,
+            case_number: caseNumber
           });
         }
 
@@ -2480,7 +2656,14 @@ Return ONLY a JSON array of strings, no other text. Example format:
           matter.matter_date,
           matter.note,
           Math.max(0, daysSince),
-          matter.cost
+          matter.cost,
+          {
+            lawyer_name: matter.lawyer_name,
+            lawyer_firm: matter.lawyer_firm,
+            opposing_counsel_name: matter.opposing_counsel_name,
+            opposing_counsel_firm: matter.opposing_counsel_firm,
+            case_number: matter.case_number
+          }
         );
 
         createdMatterIds.push(result.id);
@@ -2525,9 +2708,27 @@ Return ONLY a JSON array of strings, no other text. Example format:
             const matterId = mattersWithNotes[i];
             const noteCount = noteCounts[i];
 
+            // Get the matter date for generating interaction dates
+            const matterData = mattersDb.getById(matterId);
+            const matterDate = matterData ? new Date(matterData.matter_date) : new Date();
+
             for (let j = 0; j < noteCount; j++) {
-              const noteContent = notePool[noteIndex % notePool.length];
-              privateNotesDb.create(matterId, noteContent, null);
+              const noteItem = notePool[noteIndex % notePool.length];
+
+              // Handle both old string format and new object format
+              const noteContent = typeof noteItem === 'object' ? noteItem.content : noteItem;
+              const interactionType = typeof noteItem === 'object' ? noteItem.type : 'note';
+
+              // Generate interaction date (0-60 days after matter date)
+              const daysAfter = Math.floor(Math.random() * 60);
+              const interactionDate = new Date(matterDate);
+              interactionDate.setDate(interactionDate.getDate() + daysAfter);
+              const interactionDateStr = interactionDate.toISOString().split('T')[0];
+
+              privateNotesDb.create(matterId, noteContent, null, {
+                interaction_date: interactionDateStr,
+                interaction_type: interactionType
+              });
               noteIndex++;
               notesGenerated++;
             }
@@ -2572,6 +2773,17 @@ Return ONLY a JSON array of strings, no other text. Example format:
                 { contentType: docResult.contentType }
               );
 
+              // Generate document date (0-30 days after matter date)
+              const matterDate = new Date(matterData.matter_date);
+              const daysAfter = Math.floor(Math.random() * 30);
+              const docDate = new Date(matterDate);
+              docDate.setDate(docDate.getDate() + daysAfter);
+              const documentDateStr = docDate.toISOString().split('T')[0];
+
+              // Random direction (weighted towards incoming and internal)
+              const directionOptions = ['incoming', 'incoming', 'outgoing', 'internal', 'internal'];
+              const direction = directionOptions[Math.floor(Math.random() * directionOptions.length)];
+
               // Create attachment record
               attachmentsDb.create(
                 matterId,
@@ -2580,7 +2792,11 @@ Return ONLY a JSON array of strings, no other text. Example format:
                 storageResult.size_bytes,
                 storage.type,
                 storageResult.storage_key,
-                null // No user for automated generation
+                null, // No user for automated generation
+                {
+                  document_date: documentDateStr,
+                  direction
+                }
               );
 
               attachmentsGenerated++;

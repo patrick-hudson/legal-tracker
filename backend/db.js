@@ -61,6 +61,11 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
       note TEXT,
       days_since INTEGER,
       cost REAL DEFAULT 0,
+      lawyer_name TEXT,
+      lawyer_firm TEXT,
+      opposing_counsel_name TEXT,
+      opposing_counsel_firm TEXT,
+      case_number TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -99,6 +104,8 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       matter_id INTEGER NOT NULL,
       note_content TEXT NOT NULL,
+      interaction_date DATETIME,
+      interaction_type TEXT DEFAULT 'note',
       created_by_user_id INTEGER,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -114,6 +121,8 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
       size_bytes INTEGER NOT NULL,
       storage_backend TEXT NOT NULL,
       storage_key TEXT NOT NULL,
+      document_date DATETIME,
+      direction TEXT DEFAULT 'internal',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       created_by_user_id INTEGER,
       FOREIGN KEY (matter_id) REFERENCES matters(id) ON DELETE CASCADE,
@@ -142,6 +151,46 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
   const drainEnabledExists = db.exec('SELECT value FROM settings WHERE key = ?', ['auto_drain_enabled']);
   if (!drainEnabledExists.length || !drainEnabledExists[0].values.length) {
     db.run(`INSERT INTO settings (key, value) VALUES ('auto_drain_enabled', 'false')`); // Default: disabled
+  }
+
+  // Migrations for existing databases
+  // Add new matter fields if they don't exist
+  const matterColumns = db.exec("PRAGMA table_info(matters)");
+  const matterColumnNames = matterColumns.length > 0 ? matterColumns[0].values.map(row => row[1]) : [];
+  if (!matterColumnNames.includes('lawyer_name')) {
+    db.run('ALTER TABLE matters ADD COLUMN lawyer_name TEXT');
+  }
+  if (!matterColumnNames.includes('lawyer_firm')) {
+    db.run('ALTER TABLE matters ADD COLUMN lawyer_firm TEXT');
+  }
+  if (!matterColumnNames.includes('opposing_counsel_name')) {
+    db.run('ALTER TABLE matters ADD COLUMN opposing_counsel_name TEXT');
+  }
+  if (!matterColumnNames.includes('opposing_counsel_firm')) {
+    db.run('ALTER TABLE matters ADD COLUMN opposing_counsel_firm TEXT');
+  }
+  if (!matterColumnNames.includes('case_number')) {
+    db.run('ALTER TABLE matters ADD COLUMN case_number TEXT');
+  }
+
+  // Add new private_notes fields if they don't exist
+  const noteColumns = db.exec("PRAGMA table_info(private_notes)");
+  const noteColumnNames = noteColumns.length > 0 ? noteColumns[0].values.map(row => row[1]) : [];
+  if (!noteColumnNames.includes('interaction_date')) {
+    db.run('ALTER TABLE private_notes ADD COLUMN interaction_date DATETIME');
+  }
+  if (!noteColumnNames.includes('interaction_type')) {
+    db.run("ALTER TABLE private_notes ADD COLUMN interaction_type TEXT DEFAULT 'note'");
+  }
+
+  // Add new matter_attachments fields if they don't exist
+  const attachmentColumns = db.exec("PRAGMA table_info(matter_attachments)");
+  const attachmentColumnNames = attachmentColumns.length > 0 ? attachmentColumns[0].values.map(row => row[1]) : [];
+  if (!attachmentColumnNames.includes('document_date')) {
+    db.run('ALTER TABLE matter_attachments ADD COLUMN document_date DATETIME');
+  }
+  if (!attachmentColumnNames.includes('direction')) {
+    db.run("ALTER TABLE matter_attachments ADD COLUMN direction TEXT DEFAULT 'internal'");
   }
 
   // Helper to save database to disk
@@ -226,11 +275,18 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
       return [];
     },
 
-    add(matterDate, note, daysSince, cost = 0) {
+    add(matterDate, note, daysSince, cost = 0, options = {}) {
+      const {
+        lawyer_name = null,
+        lawyer_firm = null,
+        opposing_counsel_name = null,
+        opposing_counsel_firm = null,
+        case_number = null
+      } = options;
       db.run(`
-        INSERT INTO matters (matter_date, note, days_since, cost)
-        VALUES (?, ?, ?, ?)
-      `, [matterDate, note, daysSince, cost]);
+        INSERT INTO matters (matter_date, note, days_since, cost, lawyer_name, lawyer_firm, opposing_counsel_name, opposing_counsel_firm, case_number)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [matterDate, note, daysSince, cost, lawyer_name, lawyer_firm, opposing_counsel_name, opposing_counsel_firm, case_number]);
 
       // Get last insert ID
       const result = db.exec('SELECT last_insert_rowid() as id');
@@ -240,10 +296,42 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
       return { id };
     },
 
-    update(id, matterDate, note, cost) {
-      db.run(`
-        UPDATE matters SET matter_date = ?, note = ?, cost = ? WHERE id = ?
-      `, [matterDate, note, cost, id]);
+    update(id, matterDate, note, cost, options = {}) {
+      const {
+        lawyer_name,
+        lawyer_firm,
+        opposing_counsel_name,
+        opposing_counsel_firm,
+        case_number
+      } = options;
+
+      // Build dynamic update - only update fields that are provided
+      const updates = ['matter_date = ?', 'note = ?', 'cost = ?'];
+      const params = [matterDate, note, cost];
+
+      if (lawyer_name !== undefined) {
+        updates.push('lawyer_name = ?');
+        params.push(lawyer_name);
+      }
+      if (lawyer_firm !== undefined) {
+        updates.push('lawyer_firm = ?');
+        params.push(lawyer_firm);
+      }
+      if (opposing_counsel_name !== undefined) {
+        updates.push('opposing_counsel_name = ?');
+        params.push(opposing_counsel_name);
+      }
+      if (opposing_counsel_firm !== undefined) {
+        updates.push('opposing_counsel_firm = ?');
+        params.push(opposing_counsel_firm);
+      }
+      if (case_number !== undefined) {
+        updates.push('case_number = ?');
+        params.push(case_number);
+      }
+
+      params.push(id);
+      db.run(`UPDATE matters SET ${updates.join(', ')} WHERE id = ?`, params);
       saveDatabase();
     },
 
@@ -559,12 +647,13 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
       return null;
     },
 
-    create(matterId, noteContent, createdByUserId = null) {
+    create(matterId, noteContent, createdByUserId = null, options = {}) {
       const now = new Date().toISOString();
+      const { interaction_date = null, interaction_type = 'note' } = options;
       db.run(`
-        INSERT INTO private_notes (matter_id, note_content, created_by_user_id, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?)
-      `, [matterId, noteContent, createdByUserId, now, now]);
+        INSERT INTO private_notes (matter_id, note_content, interaction_date, interaction_type, created_by_user_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `, [matterId, noteContent, interaction_date, interaction_type, createdByUserId, now, now]);
 
       const result = db.exec('SELECT last_insert_rowid() as id');
       const id = result[0].values[0][0];
@@ -573,11 +662,24 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
       return { id };
     },
 
-    update(id, noteContent) {
+    update(id, noteContent, options = {}) {
       const now = new Date().toISOString();
-      db.run(`
-        UPDATE private_notes SET note_content = ?, updated_at = ? WHERE id = ?
-      `, [noteContent, now, id]);
+      const { interaction_date, interaction_type } = options;
+
+      const updates = ['note_content = ?', 'updated_at = ?'];
+      const params = [noteContent, now];
+
+      if (interaction_date !== undefined) {
+        updates.push('interaction_date = ?');
+        params.push(interaction_date);
+      }
+      if (interaction_type !== undefined) {
+        updates.push('interaction_type = ?');
+        params.push(interaction_type);
+      }
+
+      params.push(id);
+      db.run(`UPDATE private_notes SET ${updates.join(', ')} WHERE id = ?`, params);
       saveDatabase();
     },
 
@@ -659,18 +761,40 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
       return null;
     },
 
-    create(matterId, filename, contentType, sizeBytes, storageBackend, storageKey, createdByUserId = null) {
+    create(matterId, filename, contentType, sizeBytes, storageBackend, storageKey, createdByUserId = null, options = {}) {
       const now = new Date().toISOString();
+      const { document_date = null, direction = 'internal' } = options;
       db.run(`
-        INSERT INTO matter_attachments (matter_id, original_filename, content_type, size_bytes, storage_backend, storage_key, created_at, created_by_user_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `, [matterId, filename, contentType, sizeBytes, storageBackend, storageKey, now, createdByUserId]);
+        INSERT INTO matter_attachments (matter_id, original_filename, content_type, size_bytes, storage_backend, storage_key, document_date, direction, created_at, created_by_user_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [matterId, filename, contentType, sizeBytes, storageBackend, storageKey, document_date, direction, now, createdByUserId]);
 
       const result = db.exec('SELECT last_insert_rowid() as id');
       const id = result[0].values[0][0];
 
       saveDatabase();
       return { id };
+    },
+
+    update(id, options = {}) {
+      const { document_date, direction } = options;
+      const updates = [];
+      const params = [];
+
+      if (document_date !== undefined) {
+        updates.push('document_date = ?');
+        params.push(document_date);
+      }
+      if (direction !== undefined) {
+        updates.push('direction = ?');
+        params.push(direction);
+      }
+
+      if (updates.length > 0) {
+        params.push(id);
+        db.run(`UPDATE matter_attachments SET ${updates.join(', ')} WHERE id = ?`, params);
+        saveDatabase();
+      }
     },
 
     delete(id) {

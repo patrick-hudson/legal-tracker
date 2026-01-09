@@ -131,17 +131,25 @@ class AdminAPI {
         return this.request(`/matters/${matterId}/notes`);
     }
 
-    async createPrivateNote(matterId, noteContent) {
+    async createPrivateNote(matterId, noteContent, options = {}) {
         return this.request(`/matters/${matterId}/notes`, {
             method: 'POST',
-            body: JSON.stringify({ note_content: noteContent })
+            body: JSON.stringify({
+                note_content: noteContent,
+                interaction_date: options.interaction_date,
+                interaction_type: options.interaction_type
+            })
         });
     }
 
-    async updatePrivateNote(noteId, noteContent) {
+    async updatePrivateNote(noteId, noteContent, options = {}) {
         return this.request(`/notes/${noteId}`, {
             method: 'PUT',
-            body: JSON.stringify({ note_content: noteContent })
+            body: JSON.stringify({
+                note_content: noteContent,
+                interaction_date: options.interaction_date,
+                interaction_type: options.interaction_type
+            })
         });
     }
 
@@ -156,9 +164,15 @@ class AdminAPI {
         return this.request(`/matters/${matterId}/attachments`);
     }
 
-    async uploadAttachment(matterId, file) {
+    async uploadAttachment(matterId, file, options = {}) {
         const formData = new FormData();
         formData.append('file', file);
+        if (options.document_date) {
+            formData.append('document_date', options.document_date);
+        }
+        if (options.direction) {
+            formData.append('direction', options.direction);
+        }
 
         const url = `${this.baseURL}/matters/${matterId}/attachments`;
         const response = await fetch(url, {
@@ -202,6 +216,18 @@ class AdminAPI {
         return this.request(`/attachments/${attachmentId}`, {
             method: 'DELETE'
         });
+    }
+
+    async updateAttachment(attachmentId, data) {
+        return this.request(`/attachments/${attachmentId}`, {
+            method: 'PUT',
+            body: JSON.stringify(data)
+        });
+    }
+
+    // Timeline
+    async getMatterTimeline(matterId, order = 'desc') {
+        return this.request(`/matters/${matterId}/timeline?order=${order}`);
     }
 
     // Storage Settings
@@ -360,7 +386,11 @@ class AdminAPI {
             maxNotesPerMatter,
             // Attachment generation options
             generateAttachments,
-            attachmentsPercentage
+            attachmentsPercentage,
+            // Lawyer/counsel options
+            lawyerPercentage,
+            opposingCounselPercentage,
+            caseNumberPercentage
         } = options;
 
         return this.request('/data/populate-sample', {
@@ -380,7 +410,10 @@ class AdminAPI {
                 minNotesPerMatter,
                 maxNotesPerMatter,
                 generateAttachments,
-                attachmentsPercentage
+                attachmentsPercentage,
+                lawyerPercentage,
+                opposingCounselPercentage,
+                caseNumberPercentage
             })
         });
     }

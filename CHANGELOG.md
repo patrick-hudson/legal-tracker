@@ -8,6 +8,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 
+#### Enhanced Matter Fields
+- **Counsel Tracking**: Add lawyer and opposing counsel information to matters
+  - Lawyer name and firm
+  - Opposing counsel name and firm
+  - Case/matter number (external reference)
+- **Edit Matter Modal**: Expanded with sections for counsel information
+- **Matter Detail View**: Display counsel information when populated
+
+#### Private Notes Enhancements
+- **Interaction Tracking**: New fields for private notes
+  - Interaction date (separate from created_at)
+  - Interaction type: Note, Phone Call, Email, Meeting, Court Appearance, Filing, Letter Sent, Letter Received, Other
+- **Add Note Modal**: Date picker and type dropdown
+- **Visual Icons**: Color-coded icons for each interaction type in timeline
+
+#### Attachment Metadata
+- **Document Tracking**: New fields for attachments
+  - Document date (when document was dated/received/sent)
+  - Direction: Incoming (received), Outgoing (sent), Internal
+- **Upload Modal**: Capture document date and direction during upload
+- **Direction Badges**: Visual indicators in timeline view
+
+#### Timeline View
+- **Unified Activity Timeline**: New section in matter detail view
+  - Aggregates private notes and attachments chronologically
+  - Sort by date (interaction date for notes, document date for attachments)
+  - Toggle between newest-first and oldest-first
+  - Visual distinction between notes and attachments
+  - Type badges for notes (phone call, email, meeting, etc.)
+  - Direction badges for attachments (incoming, outgoing, internal)
+  - Empty state for matters with no activity
+
 #### Matter Attachments System
 - **File Upload Support**: Upload PDF, DOC, DOCX, RTF, and TXT files to matters
   - Max file size: 25MB
@@ -52,6 +84,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - One document per matter (random type)
   - Warning about API call volume for large datasets
 
+#### Sample Data Enhancements
+- **Counsel Information Generation**: Auto-populate lawyer and opposing counsel info
+  - Configurable percentage of matters with our lawyer info (default: 40%)
+  - Configurable percentage of matters with opposing counsel info (default: 30%)
+  - Static pool of realistic lawyer names and firm names
+- **Case Number Generation**: Auto-generate case/matter numbers
+  - Configurable percentage of matters with case numbers (default: 50%)
+  - Format: YYYY-PREFIX-##### (e.g., 2025-CV-12345)
+  - Prefixes: CV, CR, FA, PR, BK, AP, MC
+- **Private Notes Enhancements**: Notes now include interaction metadata
+  - Random interaction dates (0-60 days after matter date)
+  - Interaction type based on note content (phone call, email, meeting, etc.)
+  - Static pool of notes with pre-assigned types
+- **Attachment Metadata**: Generated attachments include tracking fields
+  - Document date (0-30 days after matter date)
+  - Direction (weighted: incoming 40%, internal 40%, outgoing 20%)
+
 #### Database Schema
 - New `matter_attachments` table with:
   - Foreign key to matters (cascade delete)
@@ -72,7 +121,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 - Matter detail endpoint now includes attachments array
 - Matter delete now cleans up attachment files from storage
-- Sample data populate endpoint accepts `generateAttachments` and `attachmentsPercentage` options
+- Sample data populate endpoint accepts new options:
+  - `generateAttachments` and `attachmentsPercentage` for document generation
+  - `lawyerPercentage`, `opposingCounselPercentage`, `caseNumberPercentage` for counsel/case number generation
+- Private notes now support `interaction_date` and `interaction_type` fields
+- Attachments now support `document_date` and `direction` fields
+- Edit attachment modal added to modify document metadata
 
 ---
 
