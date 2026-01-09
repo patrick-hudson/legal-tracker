@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+---
+
+## [0.11.1] - 2026-01-09
+
 ### Added
 
 - **Global Error Handling**: Comprehensive error and warning logging
@@ -773,7 +777,8 @@ Initial development phase establishing core functionality.
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| Unreleased | - | Global error handling, console statements replaced |
+| Unreleased | - | |
+| 0.11.1 | 2026-01-09 | Global error handling, console statements replaced |
 | 0.11.0 | 2026-01-09 | Audit log level configuration |
 | 0.10.1 | 2026-01-09 | Fix frontend buttons |
 | 0.10.0 | 2026-01-09 | Audit logging system |
