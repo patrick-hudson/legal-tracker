@@ -112,9 +112,10 @@ async function loadAuditLog(container) {
 function renderRow(entry) {
     const isExpanded = expandedRows.has(entry.id);
     const hasDetails = entry.details || entry.request || entry.response || entry.stack_trace;
+    const isError = entry.level === 'ERROR';
 
     return `
-        <tr class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 ${hasDetails ? 'cursor-pointer' : ''}" data-entry-id="${entry.id}">
+        <tr class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 ${hasDetails ? 'cursor-pointer' : ''} ${isError ? 'border-l-4 border-l-red-500' : ''}" data-entry-id="${entry.id}">
             <td class="px-4 py-3">
                 ${hasDetails ? `
                     <svg class="w-4 h-4 transition-transform ${isExpanded ? 'rotate-90' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -184,8 +185,13 @@ function renderDetailsRow(entry) {
                     ` : ''}
                     ${entry.stack_trace ? `
                         <div>
-                            <span class="font-medium text-red-700 dark:text-red-400">Stack Trace:</span>
-                            <pre class="mt-1 p-3 bg-red-50 dark:bg-red-900/20 rounded text-xs overflow-x-auto text-red-800 dark:text-red-300">${escapeHtml(entry.stack_trace)}</pre>
+                            <div class="flex items-center justify-between">
+                                <span class="font-medium text-red-700 dark:text-red-400">Stack Trace:</span>
+                                <button class="copy-stack-trace-btn px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600" data-stack-trace="${escapeHtml(entry.stack_trace).replace(/"/g, '&quot;')}">
+                                    Copy
+                                </button>
+                            </div>
+                            <pre class="mt-1 p-3 bg-red-50 dark:bg-red-900/20 rounded text-xs overflow-x-auto text-red-800 dark:text-red-300 whitespace-pre-wrap font-mono">${escapeHtml(entry.stack_trace)}</pre>
                         </div>
                     ` : ''}
                 </div>
@@ -232,6 +238,23 @@ function setupEventListeners(container) {
     const tbody = document.getElementById('audit-log-body');
     if (tbody) {
         tbody.addEventListener('click', async (e) => {
+            // Handle copy stack trace button
+            const copyBtn = e.target.closest('.copy-stack-trace-btn');
+            if (copyBtn) {
+                e.stopPropagation();
+                const stackTrace = copyBtn.dataset.stackTrace;
+                try {
+                    await navigator.clipboard.writeText(stackTrace);
+                    const originalText = copyBtn.textContent;
+                    copyBtn.textContent = 'Copied!';
+                    setTimeout(() => { copyBtn.textContent = originalText; }, 2000);
+                } catch (err) {
+                    copyBtn.textContent = 'Failed';
+                    setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000);
+                }
+                return;
+            }
+
             const row = e.target.closest('tr[data-entry-id]');
             if (!row) return;
 

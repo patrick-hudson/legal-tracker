@@ -149,6 +149,27 @@ export async function createServer(options = {}) {
     reply.header('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
   });
 
+  // Global error handler - log all route errors to audit log
+  fastify.setErrorHandler((error, request, reply) => {
+    // Log the error to audit log
+    logErrorFromRequest(request, {
+      error,
+      entityType: ENTITY_TYPES.SYSTEM,
+      summary: `Route error: ${error.message}`,
+      details: {
+        url: request.url,
+        method: request.method,
+        statusCode: error.statusCode || 500
+      }
+    });
+
+    // Send the error response (preserve original behavior)
+    reply.status(error.statusCode || 500).send({
+      error: error.code || 'INTERNAL_ERROR',
+      message: error.message
+    });
+  });
+
   // Serve frontend static files
   await fastify.register(fastifyStatic, {
     root: join(__dirname, '..', 'frontend'),
@@ -2202,8 +2223,6 @@ export async function createServer(options = {}) {
     const claudeApiKey = settingsDb.get('claude_api_key');
     const model = settingsDb.get('claude_model');
 
-    console.log('[preview-descriptions] Received spiceLevel:', spiceLevel, 'type:', typeof spiceLevel);
-
     if (!claudeApiKey) {
       return reply.code(400).send({ error: 'NO_API_KEY', message: 'No Claude API key configured' });
     }
@@ -2214,8 +2233,6 @@ export async function createServer(options = {}) {
     try {
       const client = new Anthropic({ apiKey: claudeApiKey });
       const prompt = buildDescriptionPrompt(count, spiceLevel, customPrompt);
-      console.log('[preview-descriptions] Built prompt with spiceLevel:', spiceLevel);
-      console.log('[preview-descriptions] Prompt preview:', prompt.substring(0, 200));
 
       const response = await client.messages.create({
         model,
@@ -2528,7 +2545,11 @@ Return ONLY a JSON array of strings, no other text. Example format:
     const descriptionsContent = readFileSync(descriptionsPath, 'utf-8');
     staticDescriptions = JSON.parse(descriptionsContent).descriptions || [];
   } catch (err) {
-    console.warn('Could not load matter descriptions:', err.message);
+    logWarning({
+      entityType: ENTITY_TYPES.SYSTEM,
+      summary: 'Could not load matter descriptions, using fallback',
+      details: { error: err.message }
+    });
     // Fallback descriptions
     staticDescriptions = [
       'Contract review and negotiation',
@@ -2658,7 +2679,11 @@ Return ONLY a JSON array of strings, no other text. Example format:
       const descriptions = JSON.parse(jsonMatch[0]);
       return Array.isArray(descriptions) ? descriptions : null;
     } catch (err) {
-      console.error('Claude API error:', err.message);
+      logError({
+        error: err,
+        entityType: ENTITY_TYPES.CLAUDE_API,
+        summary: 'Claude API error generating descriptions'
+      });
       return null;
     }
   }
@@ -2721,7 +2746,11 @@ Return ONLY a JSON array of strings, no other text. Example format:
       const notes = JSON.parse(jsonMatch[0]);
       return Array.isArray(notes) ? notes : null;
     } catch (err) {
-      console.error('Claude API error (private notes):', err.message);
+      logError({
+        error: err,
+        entityType: ENTITY_TYPES.CLAUDE_API,
+        summary: 'Claude API error generating private notes'
+      });
       return null;
     }
   }
@@ -3554,6 +3583,27 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const HOST = process.env.HOST || '0.0.0.0';
 
   const fastify = await createServer();
+
+  // Process-level exception handlers
+  process.on('uncaughtException', (error) => {
+    logError({
+      error,
+      entityType: ENTITY_TYPES.SYSTEM,
+      summary: `Uncaught exception: ${error.message}`
+    });
+    fastify.log.error(error, 'Uncaught exception');
+    process.exit(1);
+  });
+
+  process.on('unhandledRejection', (reason) => {
+    const error = reason instanceof Error ? reason : new Error(String(reason));
+    logError({
+      error,
+      entityType: ENTITY_TYPES.SYSTEM,
+      summary: `Unhandled promise rejection: ${error.message}`
+    });
+    fastify.log.error(error, 'Unhandled rejection');
+  });
 
   try {
     await fastify.listen({ port: PORT, host: HOST });

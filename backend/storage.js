@@ -10,6 +10,7 @@ import { mkdir, stat, unlink, readdir } from 'fs/promises';
 import { randomUUID } from 'crypto';
 import { pipeline } from 'stream/promises';
 import { Readable } from 'stream';
+import { logWarning, ENTITY_TYPES } from './audit.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -429,7 +430,11 @@ export function createStorage(settingsDb) {
 
         // Validate required fields
         if (!config.accessKeyId || !config.secretAccessKey || !config.bucket) {
-            console.warn('S3 storage not fully configured, falling back to filesystem');
+            logWarning({
+                entityType: ENTITY_TYPES.SYSTEM,
+                summary: 'S3 storage not fully configured, falling back to filesystem',
+                details: { missingConfig: !config.accessKeyId ? 'accessKeyId' : !config.secretAccessKey ? 'secretAccessKey' : 'bucket' }
+            });
             return new FilesystemStorage();
         }
 

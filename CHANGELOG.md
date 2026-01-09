@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Global Error Handling**: Comprehensive error and warning logging
+  - Fastify global error handler catches all route errors with stack traces
+  - Process-level handlers for uncaught exceptions and unhandled rejections
+  - Errors logged to audit log before crashing for debugging
+  - Error entries visually distinguished with red left border in audit log UI
+  - Copy button for stack traces in expanded audit log view
+
+### Changed
+
+- **Console statements replaced**: Converted console.log/error/warn to audit logging
+  - Claude API errors now logged to audit log
+  - S3 storage fallback warning logged to audit log
+  - Matter descriptions loading failure logged as warning
+  - Audit system fallbacks still use console (intentional for bootstrap)
+
 ---
 
 ## [0.11.0] - 2026-01-09
@@ -756,7 +773,7 @@ Initial development phase establishing core functionality.
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| Unreleased | - | |
+| Unreleased | - | Global error handling, console statements replaced |
 | 0.11.0 | 2026-01-09 | Audit log level configuration |
 | 0.10.1 | 2026-01-09 | Fix frontend buttons |
 | 0.10.0 | 2026-01-09 | Audit logging system |

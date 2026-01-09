@@ -122,6 +122,7 @@ export function getUserContext(request) {
  */
 function log(entry) {
   if (!auditLogDb) {
+    // Using console.warn as fallback when audit system not initialized
     console.warn('Audit logging not initialized - skipping log entry');
     return null;
   }
@@ -134,7 +135,7 @@ function log(entry) {
   try {
     return auditLogDb.create(entry);
   } catch (error) {
-    // Logging should never break the main operation
+    // Using console.error as fallback - logging failures should not break main operations
     console.error('Failed to write audit log entry:', error.message);
     return null;
   }
