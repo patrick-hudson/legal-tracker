@@ -95,10 +95,20 @@ export async function renderSystemInfo(container) {
                     </div>
                 </div>
 
+                <!-- Watchdog / Process Manager -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Process Manager</h3>
+                    <div id="watchdog-status" class="space-y-4">
+                        <div class="flex items-center justify-center h-24">
+                            <div class="spinner"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Runtime Info -->
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 lg:col-span-2">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
                     <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Runtime Information</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div class="space-y-3 text-sm">
                         <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
                             <span class="text-gray-600 dark:text-gray-400 block mb-1">Current Hostname</span>
                             <span class="text-gray-900 dark:text-white font-mono">${window.location.hostname}</span>
@@ -233,6 +243,132 @@ function setupEventListeners(currentSettings) {
             showToast('Failed to save audit log level', 'error');
         }
     });
+
+    // Load watchdog status
+    loadWatchdogStatus();
+}
+
+async function loadWatchdogStatus() {
+    const container = document.getElementById('watchdog-status');
+    if (!container) return;
+
+    try {
+        const response = await fetch('/admin/api/watchdog/status');
+
+        if (!response.ok) {
+            if (response.status === 503) {
+                // Watchdog not running
+                container.innerHTML = `
+                    <div class="text-center py-4">
+                        <div class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300 mb-3">
+                            <span class="w-2 h-2 bg-gray-400 rounded-full mr-2"></span>
+                            Not Running
+                        </div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            Start with: <code class="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">node watchdog.js</code>
+                        </p>
+                    </div>
+                `;
+                return;
+            }
+            throw new Error('Failed to fetch status');
+        }
+
+        const status = await response.json();
+
+        container.innerHTML = `
+            <div class="space-y-3 text-sm">
+                <div class="flex items-center justify-between">
+                    <span class="text-gray-600 dark:text-gray-400">Status</span>
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status.running ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'}">
+                        <span class="w-2 h-2 ${status.running ? 'bg-green-400' : 'bg-red-400'} rounded-full mr-1.5"></span>
+                        ${status.running ? 'Running' : 'Stopped'}
+                    </span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-gray-600 dark:text-gray-400">Uptime</span>
+                    <span class="text-gray-900 dark:text-white font-medium">${status.uptimeFormatted || '-'}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-gray-600 dark:text-gray-400">Restarts</span>
+                    <span class="text-gray-900 dark:text-white font-medium">${status.restartCount}</span>
+                </div>
+                ${status.lastRestartReason ? `
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-600 dark:text-gray-400">Last Restart</span>
+                        <span class="text-gray-900 dark:text-white font-medium">${status.lastRestartReason}</span>
+                    </div>
+                ` : ''}
+                ${status.pendingChanges > 0 ? `
+                    <div class="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                        <div class="flex items-center text-yellow-800 dark:text-yellow-300">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                            </svg>
+                            <span class="font-medium">${status.pendingChanges} pending change${status.pendingChanges !== 1 ? 's' : ''}</span>
+                        </div>
+                        <ul class="mt-2 text-xs text-yellow-700 dark:text-yellow-400 space-y-1 max-h-24 overflow-y-auto">
+                            ${status.modifiedFiles.slice(0, 5).map(f => `<li class="truncate">${f.type}: ${f.path}</li>`).join('')}
+                            ${status.modifiedFiles.length > 5 ? `<li class="text-yellow-600 dark:text-yellow-500">...and ${status.modifiedFiles.length - 5} more</li>` : ''}
+                        </ul>
+                    </div>
+                ` : ''}
+                <div class="pt-3 border-t border-gray-200 dark:border-gray-700">
+                    <button id="restart-server-btn" class="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 dark:bg-blue-500 dark:hover:bg-blue-600 dark:focus:ring-blue-800 disabled:opacity-50 disabled:cursor-not-allowed">
+                        Restart Server
+                    </button>
+                </div>
+            </div>
+        `;
+
+        // Setup restart button handler
+        document.getElementById('restart-server-btn')?.addEventListener('click', handleRestart);
+
+    } catch (error) {
+        console.error('Failed to load watchdog status:', error);
+        container.innerHTML = `
+            <div class="text-center py-4 text-red-500 dark:text-red-400">
+                <p class="text-sm">Failed to load status</p>
+                <button id="retry-watchdog-btn" class="mt-2 text-xs text-blue-600 dark:text-blue-400 hover:underline">Retry</button>
+            </div>
+        `;
+        document.getElementById('retry-watchdog-btn')?.addEventListener('click', loadWatchdogStatus);
+    }
+}
+
+async function handleRestart() {
+    const btn = document.getElementById('restart-server-btn');
+    if (!btn) return;
+
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Restarting...';
+
+    try {
+        const response = await fetch('/admin/api/watchdog/restart', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: 'manual (admin UI)' })
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to restart');
+        }
+
+        showToast('Server restart initiated', 'success');
+
+        // Wait a moment then reload status
+        btn.textContent = 'Restarting...';
+        setTimeout(() => {
+            loadWatchdogStatus();
+        }, 3000);
+
+    } catch (error) {
+        console.error('Failed to restart server:', error);
+        showToast('Failed to restart server', 'error');
+        btn.disabled = false;
+        btn.textContent = originalText;
+    }
 }
 
 function showToast(message, type = 'info') {

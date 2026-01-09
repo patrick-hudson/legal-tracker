@@ -214,6 +214,48 @@ pm2 save
 pm2 startup
 ```
 
+### Watchdog Process Manager (Built-in)
+
+LEGAL MATTER includes a built-in watchdog process manager as an alternative to PM2:
+
+```bash
+# Start via watchdog (instead of npm start)
+node watchdog.js
+```
+
+**Features:**
+- Automatic crash recovery (2-second delay before restart)
+- File change detection (shows modified files needing restart)
+- Admin UI integration (System Info page shows status and restart button)
+- Audit log integration (all restarts are logged with reasons)
+- HTTP API for programmatic control
+
+**Watchdog API Endpoints (port 3001 by default):**
+
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/status` | GET | No | Server status, uptime, pending changes |
+| `/restart` | POST | API Key | Trigger server restart |
+| `/changes` | GET | No | List modified files since last restart |
+
+**Environment Variables:**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `WATCHDOG_PORT` | `3001` | Port for watchdog HTTP API |
+| `WATCHDOG_API_KEY` | `API_KEY` | API key for restart endpoint |
+| `WATCHDOG_URL` | — | Full URL to watchdog (for non-localhost setups) |
+
+**Admin UI Integration:**
+
+The System Info page shows:
+- Server running status (green/red indicator)
+- Uptime and restart count
+- Pending file changes (yellow warning banner)
+- One-click "Restart Server" button
+
+> **Note:** When running via watchdog, the server will automatically restart on crash. To stop completely, press Ctrl+C in the watchdog terminal.
+
 ### Nginx Reverse Proxy
 
 <details>

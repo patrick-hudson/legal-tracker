@@ -635,6 +635,111 @@ export async function createServer(options = {}) {
   // Create admin auth middleware
   const adminAuthMiddleware = createAdminAuthMiddleware(adminSessionsDb, adminUsersDb);
 
+  // ============ WATCHDOG PROXY ENDPOINTS ============
+  // These proxy requests to the watchdog process manager (if running)
+  // WATCHDOG_URL can be set to a full URL (e.g., http://watchdog:3001) or just port for localhost
+
+  const WATCHDOG_URL = process.env.WATCHDOG_URL || `http://localhost:${process.env.WATCHDOG_PORT || 3001}`;
+
+  // Get watchdog status
+  fastify.get('/admin/api/watchdog/status', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 2000);
+
+      const response = await fetch(`${WATCHDOG_URL}/status`, {
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        return reply.code(response.status).send({ error: 'Watchdog error' });
+      }
+
+      const data = await response.json();
+      return { ...data, watchdogRunning: true };
+    } catch (err) {
+      // Watchdog not running or unreachable
+      return {
+        watchdogRunning: false,
+        running: true, // Server is running (we're responding)
+        message: 'Watchdog not running - server started directly'
+      };
+    }
+  });
+
+  // Trigger server restart via watchdog
+  fastify.post('/admin/api/watchdog/restart', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { reason } = request.body || {};
+    const watchdogApiKey = process.env.WATCHDOG_API_KEY || process.env.API_KEY || 'watchdog-dev-key';
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+
+      const response = await fetch(`${WATCHDOG_URL}/restart`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': watchdogApiKey
+        },
+        body: JSON.stringify({ reason: reason || 'admin_request' }),
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        return reply.code(response.status).send({ error: err.error || 'Watchdog error' });
+      }
+
+      // Log the restart request
+      logInfoFromRequest(request, {
+        actionType: ACTION_TYPES.SETTINGS_CHANGE,
+        entityType: ENTITY_TYPES.SYSTEM,
+        summary: 'Requested server restart via watchdog',
+        details: { reason: reason || 'admin_request' }
+      });
+
+      return await response.json();
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        return reply.code(503).send({
+          error: 'WATCHDOG_UNAVAILABLE',
+          message: 'Watchdog not running or unreachable'
+        });
+      }
+      return reply.code(503).send({
+        error: 'WATCHDOG_UNAVAILABLE',
+        message: 'Watchdog not running - cannot restart server'
+      });
+    }
+  });
+
+  // Get pending file changes from watchdog
+  fastify.get('/admin/api/watchdog/changes', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 2000);
+
+      const response = await fetch(`${WATCHDOG_URL}/changes`, {
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        return reply.code(response.status).send({ error: 'Watchdog error' });
+      }
+
+      return await response.json();
+    } catch (err) {
+      return reply.code(503).send({
+        error: 'WATCHDOG_UNAVAILABLE',
+        message: 'Watchdog not running'
+      });
+    }
+  });
+
   // ============ BOOTSTRAP ENDPOINTS (No auth required) ============
 
   // Check if bootstrap is needed

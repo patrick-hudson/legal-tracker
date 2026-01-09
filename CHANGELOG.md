@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Watchdog Process Manager**: Lightweight process manager for server lifecycle control
+  - HTTP API on port 3001 with status, restart, and file changes endpoints
+  - Automatic crash recovery with 2-second delay before restart
+  - File change detection tracks modifications since last restart
+  - Audit log integration logs all restart events with reasons
+  - Admin UI shows server status, uptime, restart count, and pending changes
+  - One-click restart button in System Info page
+  - Yellow warning banner shows modified files needing restart
+  - Graceful shutdown on SIGINT/SIGTERM
+
 ---
 
 ## [0.11.1] - 2026-01-09
@@ -777,7 +789,7 @@ Initial development phase establishing core functionality.
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| Unreleased | - | |
+| Unreleased | - | Watchdog process manager |
 | 0.11.1 | 2026-01-09 | Global error handling, console statements replaced |
 | 0.11.0 | 2026-01-09 | Audit log level configuration |
 | 0.10.1 | 2026-01-09 | Fix frontend buttons |
