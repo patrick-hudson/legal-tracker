@@ -587,6 +587,16 @@ function getFileIcon(contentType) {
     }
 }
 
+function isPreviewable(contentType) {
+    const previewableTypes = [
+        'application/pdf',
+        'text/plain',
+        'text/rtf',
+        'application/rtf'
+    ];
+    return previewableTypes.includes(contentType);
+}
+
 function renderAttachmentsList(attachments) {
     if (attachments.length === 0) {
         return `
@@ -615,17 +625,37 @@ function renderAttachmentsList(attachments) {
                             ${attachment.created_by_username ? ` &bull; ${escapeHtml(attachment.created_by_username)}` : ''}
                         </p>
                     </div>
-                    <div class="flex gap-2 flex-shrink-0">
-                        <button class="download-attachment-btn p-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900 rounded" data-id="${attachment.id}" data-filename="${escapeHtml(attachment.original_filename)}" title="Download">
+                    <div class="flex gap-1 flex-shrink-0">
+                        ${isPreviewable(attachment.content_type) ? `
+                        <button class="preview-attachment-btn p-2 text-gray-600 hover:text-gray-800 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600 rounded" data-id="${attachment.id}" data-filename="${escapeHtml(attachment.original_filename)}" data-content-type="${attachment.content_type}" data-tooltip-target="tooltip-preview-${attachment.id}">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                            </svg>
+                        </button>
+                        <div id="tooltip-preview-${attachment.id}" role="tooltip" class="absolute z-10 invisible inline-block px-3 py-2 text-sm font-medium text-white transition-opacity duration-300 bg-gray-900 rounded-lg shadow-sm opacity-0 tooltip dark:bg-gray-700">
+                            Preview
+                            <div class="tooltip-arrow" data-popper-arrow></div>
+                        </div>
+                        ` : ''}
+                        <button class="download-attachment-btn p-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900 rounded" data-id="${attachment.id}" data-filename="${escapeHtml(attachment.original_filename)}" data-tooltip-target="tooltip-download-${attachment.id}">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                             </svg>
                         </button>
-                        <button class="delete-attachment-btn p-2 text-red-600 hover:text-red-800 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900 rounded" data-id="${attachment.id}" title="Delete">
+                        <div id="tooltip-download-${attachment.id}" role="tooltip" class="absolute z-10 invisible inline-block px-3 py-2 text-sm font-medium text-white transition-opacity duration-300 bg-gray-900 rounded-lg shadow-sm opacity-0 tooltip dark:bg-gray-700">
+                            Download
+                            <div class="tooltip-arrow" data-popper-arrow></div>
+                        </div>
+                        <button class="delete-attachment-btn p-2 text-red-600 hover:text-red-800 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900 rounded" data-id="${attachment.id}" data-tooltip-target="tooltip-delete-${attachment.id}">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                             </svg>
                         </button>
+                        <div id="tooltip-delete-${attachment.id}" role="tooltip" class="absolute z-10 invisible inline-block px-3 py-2 text-sm font-medium text-white transition-opacity duration-300 bg-gray-900 rounded-lg shadow-sm opacity-0 tooltip dark:bg-gray-700">
+                            Delete
+                            <div class="tooltip-arrow" data-popper-arrow></div>
+                        </div>
                     </div>
                 </div>
             `).join('')}
@@ -638,10 +668,18 @@ function attachAttachmentEventListeners(matterId, container) {
     if (!attachmentsContainer) return;
 
     attachmentsContainer.addEventListener('click', async (e) => {
+        const previewBtn = e.target.closest('.preview-attachment-btn');
         const downloadBtn = e.target.closest('.download-attachment-btn');
         const deleteBtn = e.target.closest('.delete-attachment-btn');
 
-        if (downloadBtn) {
+        if (previewBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            const attachmentId = previewBtn.dataset.id;
+            const filename = previewBtn.dataset.filename;
+            const contentType = previewBtn.dataset.contentType;
+            await handleAttachmentPreview(attachmentId, filename, contentType);
+        } else if (downloadBtn) {
             e.preventDefault();
             e.stopPropagation();
             const attachmentId = downloadBtn.dataset.id;
@@ -654,6 +692,11 @@ function attachAttachmentEventListeners(matterId, container) {
             await handleAttachmentDelete(attachmentId, matterId, container);
         }
     });
+
+    // Initialize Flowbite tooltips for dynamically created content
+    if (typeof window.initFlowbite === 'function') {
+        window.initFlowbite();
+    }
 }
 
 async function handleAttachmentUpload(e, matterId, container) {
@@ -696,6 +739,95 @@ async function handleAttachmentDownload(attachmentId, filename) {
         await api.downloadAttachment(attachmentId, filename);
     } catch (error) {
         showToast(`Download failed: ${error.message}`, 'error');
+    }
+}
+
+async function handleAttachmentPreview(attachmentId, filename, contentType) {
+    try {
+        // Fetch the file content using the API's fetch method with proper auth
+        const response = await fetch(`/admin/api/attachments/${attachmentId}/download`, {
+            credentials: 'same-origin'
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to fetch file');
+        }
+
+        // Create and show preview modal
+        const modalId = 'attachment-preview-modal';
+        let modal = document.getElementById(modalId);
+        if (modal) {
+            modal.remove();
+        }
+
+        let previewContent = '';
+
+        if (contentType === 'application/pdf') {
+            // For PDFs, create an embedded viewer
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            previewContent = `
+                <iframe src="${url}" class="w-full h-full border-0" style="min-height: 70vh;"></iframe>
+            `;
+        } else if (contentType === 'text/plain' || contentType === 'text/rtf' || contentType === 'application/rtf') {
+            // For text files, display the content
+            const text = await response.text();
+            previewContent = `
+                <pre class="w-full h-full overflow-auto p-4 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm font-mono whitespace-pre-wrap" style="min-height: 70vh; max-height: 70vh;">${escapeHtml(text)}</pre>
+            `;
+        }
+
+        modal = document.createElement('div');
+        modal.id = modalId;
+        modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50';
+        modal.innerHTML = `
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-5xl mx-4 max-h-[90vh] flex flex-col">
+                <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white truncate flex-1 mr-4">${escapeHtml(filename)}</h3>
+                    <button id="close-preview-btn" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700" data-tooltip-target="tooltip-close-preview">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                    <div id="tooltip-close-preview" role="tooltip" class="absolute z-10 invisible inline-block px-3 py-2 text-sm font-medium text-white transition-opacity duration-300 bg-gray-900 rounded-lg shadow-sm opacity-0 tooltip dark:bg-gray-700">
+                        Close
+                        <div class="tooltip-arrow" data-popper-arrow></div>
+                    </div>
+                </div>
+                <div class="flex-1 overflow-hidden p-4">
+                    ${previewContent}
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        // Initialize tooltips
+        if (typeof window.initFlowbite === 'function') {
+            window.initFlowbite();
+        }
+
+        // Close handlers
+        const closeBtn = document.getElementById('close-preview-btn');
+        closeBtn?.addEventListener('click', () => modal.remove());
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.remove();
+            }
+        });
+
+        // ESC key to close
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                modal.remove();
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+
+    } catch (error) {
+        showToast(`Preview failed: ${error.message}`, 'error');
     }
 }
 

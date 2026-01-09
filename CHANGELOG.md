@@ -17,8 +17,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Attachments UI**: New "Attachments" section in matter detail view
   - File list with icons by type (PDF red, DOC blue, others gray)
   - Shows filename, size, upload date, and uploader
+  - Preview button for PDF and text files (opens in modal)
   - Download button per attachment (streams file)
   - Delete button with confirmation modal
+  - Flowbite-style tooltips on all action buttons
   - Empty state with helpful guidance
 
 #### Storage Abstraction Layer

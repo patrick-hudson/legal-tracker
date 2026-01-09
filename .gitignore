@@ -28,6 +28,9 @@ backend/data/*.sqlite3
 # Sample data files (generated)
 backend/samples/*.json
 
+# Uploads (file attachments)
+backend/data/uploads/
+
 # Test output
 coverage/
 .nyc_output/

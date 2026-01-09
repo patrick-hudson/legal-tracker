@@ -130,7 +130,7 @@ export async function createServer(options = {}) {
   // Security headers middleware
   fastify.addHook('onSend', async (_request, reply) => {
     // Content Security Policy
-    reply.header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none';");
+    reply.header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src blob:; object-src blob:; frame-ancestors 'none';");
 
     // Other security headers
     reply.header('X-Content-Type-Options', 'nosniff');
