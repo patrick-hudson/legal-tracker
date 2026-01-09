@@ -109,6 +109,7 @@ const DEFAULT_HIDDEN_COLUMNS = [];
 // Storage keys
 const STORAGE_KEY_ORDER = 'matters_column_order';
 const STORAGE_KEY_HIDDEN = 'matters_hidden_columns';
+const STORAGE_KEY_SELECTION = 'matters_selected_ids';
 
 // Track if document click listener for column dropdown is attached
 let columnDropdownListenerAttached = false;
@@ -153,6 +154,37 @@ function saveColumnPreferences(order, hidden) {
     }
 }
 
+// Save selection state to sessionStorage
+function saveSelectionState() {
+    try {
+        sessionStorage.setItem(STORAGE_KEY_SELECTION, JSON.stringify([...selectedMatters]));
+    } catch (e) {
+        console.warn('Failed to save selection state:', e);
+    }
+}
+
+// Load selection state from sessionStorage
+function loadSelectionState() {
+    try {
+        const saved = sessionStorage.getItem(STORAGE_KEY_SELECTION);
+        if (saved) {
+            const ids = JSON.parse(saved);
+            selectedMatters = new Set(ids);
+        }
+    } catch (e) {
+        console.warn('Failed to load selection state:', e);
+    }
+}
+
+// Clear selection state from sessionStorage
+function clearSelectionState() {
+    try {
+        sessionStorage.removeItem(STORAGE_KEY_SELECTION);
+    } catch (e) {
+        console.warn('Failed to clear selection state:', e);
+    }
+}
+
 // Get visible columns in order
 function getVisibleColumns() {
     const { order, hidden } = getColumnPreferences();
@@ -192,6 +224,9 @@ function generateTableRow(matter) {
 }
 
 export async function renderMatters(container) {
+    // Restore selection state from sessionStorage
+    loadSelectionState();
+
     const visibleColumns = getVisibleColumns();
 
     container.innerHTML = `
@@ -565,10 +600,18 @@ async function loadMatters() {
             });
         });
 
-        // Add checkbox event listeners
+        // Add checkbox event listeners and restore selection state
         document.querySelectorAll('.matter-checkbox').forEach(checkbox => {
             checkbox.addEventListener('change', handleCheckboxChange);
+            // Restore checked state if this matter was previously selected
+            const id = parseInt(checkbox.dataset.id);
+            if (selectedMatters.has(id)) {
+                checkbox.checked = true;
+            }
         });
+
+        // Update bulk actions bar for restored selections
+        updateBulkActions();
 
         // Update pagination
         const start = (page - 1) * limit + 1;
@@ -591,6 +634,7 @@ function handleCheckboxChange(e) {
         const selectAll = document.getElementById('select-all');
         if (selectAll) selectAll.checked = false;
     }
+    saveSelectionState();
     updateBulkActions();
 }
 
@@ -605,11 +649,13 @@ function handleSelectAll(e) {
             selectedMatters.delete(id);
         }
     });
+    saveSelectionState();
     updateBulkActions();
 }
 
 function handleDeselectAll() {
     selectedMatters.clear();
+    clearSelectionState();
     document.querySelectorAll('.matter-checkbox').forEach(cb => cb.checked = false);
     const selectAll = document.getElementById('select-all');
     if (selectAll) selectAll.checked = false;
