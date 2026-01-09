@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+---
+
+## [0.11.3] - 2026-01-09
+
 ### Added
 
 - **Watchdog Process Manager**: Lightweight process manager for server lifecycle control
