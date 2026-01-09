@@ -4,6 +4,76 @@ All notable changes to LEGAL MATTER (Legal Expense Governance Allocation Ledger 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+#### Matter Attachments System
+- **File Upload Support**: Upload PDF, DOC, DOCX, RTF, and TXT files to matters
+  - Max file size: 25MB
+  - Server-side file type validation (extension and MIME type)
+  - Filename sanitization to prevent path traversal attacks
+  - Upload progress indicator with status feedback
+- **Attachments UI**: New "Attachments" section in matter detail view
+  - File list with icons by type (PDF red, DOC blue, others gray)
+  - Shows filename, size, upload date, and uploader
+  - Download button per attachment (streams file)
+  - Delete button with confirmation modal
+  - Empty state with helpful guidance
+
+#### Storage Abstraction Layer
+- **Dual Backend Support**: Filesystem and S3-compatible storage backends
+  - Filesystem backend (default): Stores files in `./data/uploads`
+  - S3 backend: Supports AWS S3, MinIO, Backblaze B2, Wasabi
+- **S3 Settings UI**: New "File Storage" section on Security page
+  - Storage backend toggle (Filesystem / S3)
+  - S3 configuration: Access Key, Secret Key, Bucket, Region, Endpoint
+  - Path-style addressing toggle for MinIO compatibility
+  - "Test Connection" button with validation feedback
+  - Settings cannot be saved until test passes
+- **Comprehensive Setup Guide**: Expandable help modal with instructions for:
+  - AWS S3 setup (bucket creation, IAM policy, access keys)
+  - MinIO self-hosted setup
+  - Backblaze B2 setup
+  - Wasabi setup
+  - Troubleshooting common errors
+
+#### LLM-Generated Legal Documents
+- **AI Document Generation**: Generate realistic PDF legal documents via Claude API
+  - Document types: Demand letters, Cease & Desist, Complaints, Motions to Dismiss, Settlement Offers, Invoices, Retainer Agreements, Deposition Summaries
+  - Spice level affects document tone (Professional to Eldritch Horror)
+  - Proper legal formatting with headers, case numbers, signature blocks
+- **Placeholder Documents**: Static fallback PDFs when Claude API is not configured
+- **Sample Data Integration**: Generate AI attachments during sample data population
+  - "Generate AI legal documents" checkbox in sample data modal
+  - Configurable percentage of matters that receive documents
+  - One document per matter (random type)
+  - Warning about API call volume for large datasets
+
+#### Database Schema
+- New `matter_attachments` table with:
+  - Foreign key to matters (cascade delete)
+  - Original filename, content type, size tracking
+  - Storage backend and storage key for file retrieval
+  - Created by user tracking
+
+#### API Endpoints
+- `GET /admin/api/matters/:id/attachments` - List attachments for matter
+- `POST /admin/api/matters/:id/attachments` - Upload attachment (multipart/form-data)
+- `GET /admin/api/attachments/:id/download` - Stream file download
+- `DELETE /admin/api/attachments/:id` - Delete attachment from storage and DB
+- `GET /admin/api/settings/storage` - Get storage configuration
+- `PUT /admin/api/settings/storage` - Update storage settings
+- `POST /admin/api/settings/storage/test` - Test storage connection
+
+### Changed
+
+- Matter detail endpoint now includes attachments array
+- Matter delete now cleans up attachment files from storage
+- Sample data populate endpoint accepts `generateAttachments` and `attachmentsPercentage` options
+
+---
+
 ## [0.7.2] - 2026-01-09
 
 ### Added

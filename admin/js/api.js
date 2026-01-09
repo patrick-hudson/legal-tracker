@@ -151,6 +151,78 @@ class AdminAPI {
         });
     }
 
+    // Attachments
+    async getAttachments(matterId) {
+        return this.request(`/matters/${matterId}/attachments`);
+    }
+
+    async uploadAttachment(matterId, file) {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const url = `${this.baseURL}/matters/${matterId}/attachments`;
+        const response = await fetch(url, {
+            method: 'POST',
+            credentials: 'same-origin',
+            body: formData
+            // Note: Do NOT set Content-Type header - browser sets it with boundary
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.message || data.error || `HTTP ${response.status}`);
+        }
+        return data;
+    }
+
+    async downloadAttachment(attachmentId, filename) {
+        const url = `${this.baseURL}/attachments/${attachmentId}/download`;
+        const response = await fetch(url, {
+            credentials: 'same-origin'
+        });
+
+        if (!response.ok) {
+            throw new Error(`Download failed: HTTP ${response.status}`);
+        }
+
+        const blob = await response.blob();
+
+        // Trigger download
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(downloadUrl);
+    }
+
+    async deleteAttachment(attachmentId) {
+        return this.request(`/attachments/${attachmentId}`, {
+            method: 'DELETE'
+        });
+    }
+
+    // Storage Settings
+    async getStorageSettings() {
+        return this.request('/settings/storage');
+    }
+
+    async updateStorageSettings(settings) {
+        return this.request('/settings/storage', {
+            method: 'PUT',
+            body: JSON.stringify(settings)
+        });
+    }
+
+    async testStorageConnection(type, config) {
+        return this.request('/settings/storage/test', {
+            method: 'POST',
+            body: JSON.stringify({ type, config })
+        });
+    }
+
     async exportMatters(options = {}) {
         const { ids, includePrivateNotes, format = 'csv' } = options;
         const params = new URLSearchParams();
@@ -285,7 +357,10 @@ class AdminAPI {
             generatePrivateNotes,
             notesPercentage,
             minNotesPerMatter,
-            maxNotesPerMatter
+            maxNotesPerMatter,
+            // Attachment generation options
+            generateAttachments,
+            attachmentsPercentage
         } = options;
 
         return this.request('/data/populate-sample', {
@@ -303,7 +378,9 @@ class AdminAPI {
                 generatePrivateNotes,
                 notesPercentage,
                 minNotesPerMatter,
-                maxNotesPerMatter
+                maxNotesPerMatter,
+                generateAttachments,
+                attachmentsPercentage
             })
         });
     }

@@ -1139,6 +1139,44 @@ function setupEventListeners() {
                                     : 'Will use static fallback notes (configure Claude API for AI-generated notes).'}
                             </p>
                         </div>
+
+                        <!-- Attachments Generation Section -->
+                        <div class="border-t border-gray-200 dark:border-gray-600 pt-4 mt-4">
+                            <p class="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                                Document Attachments
+                                <span class="text-xs font-normal text-amber-600 dark:text-amber-400 ml-1">(Admin Only)</span>
+                            </p>
+
+                            <div class="mb-3">
+                                <label class="flex items-center cursor-pointer">
+                                    <input type="checkbox" id="modal-generate-attachments"
+                                        class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 dark:bg-gray-700 dark:border-gray-600">
+                                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Generate AI legal documents</span>
+                                </label>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 ml-6">Auto-generate PDF legal documents (demand letters, motions, etc.)</p>
+                            </div>
+
+                            <div id="attachments-options" class="hidden ml-6 space-y-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Percentage of matters with documents</label>
+                                    <div class="flex items-center gap-2">
+                                        <input type="range" id="modal-attachments-percentage" min="0" max="100" value="25"
+                                            class="w-full h-2 bg-gray-200 rounded-lg cursor-pointer dark:bg-gray-700">
+                                        <span id="attachments-percentage-display" class="text-sm text-gray-600 dark:text-gray-400 w-12 text-right">25%</span>
+                                    </div>
+                                </div>
+
+                                <p class="text-xs text-gray-500 dark:text-gray-400">
+                                    ${isClaudeKeyValidated && aiSettings.selectedModel
+                                        ? 'Uses AI to generate realistic legal documents matching the spice level.'
+                                        : 'Will generate placeholder PDFs (configure Claude API for AI-generated documents).'}
+                                </p>
+
+                                <p class="text-xs text-amber-600 dark:text-amber-400">
+                                    Note: Generating documents can take longer. Each matter with an attachment will make an API call.
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -1183,6 +1221,26 @@ function setupEventListeners() {
                 percentageSlider?.addEventListener('input', (e) => {
                     if (percentageDisplay) {
                         percentageDisplay.textContent = `${e.target.value}%`;
+                    }
+                });
+
+                // Wire up attachments checkbox toggle
+                const attachmentsCheckbox = modal.querySelector('#modal-generate-attachments');
+                const attachmentsOptions = modal.querySelector('#attachments-options');
+                attachmentsCheckbox?.addEventListener('change', (e) => {
+                    if (e.target.checked) {
+                        attachmentsOptions?.classList.remove('hidden');
+                    } else {
+                        attachmentsOptions?.classList.add('hidden');
+                    }
+                });
+
+                // Wire up attachments percentage slider display
+                const attachmentsPercentageSlider = modal.querySelector('#modal-attachments-percentage');
+                const attachmentsPercentageDisplay = modal.querySelector('#attachments-percentage-display');
+                attachmentsPercentageSlider?.addEventListener('input', (e) => {
+                    if (attachmentsPercentageDisplay) {
+                        attachmentsPercentageDisplay.textContent = `${e.target.value}%`;
                     }
                 });
 
@@ -1233,7 +1291,10 @@ function setupEventListeners() {
                             generateNotes: modal.querySelector('#modal-generate-notes')?.checked ?? false,
                             notesPercentage: parseInt(modal.querySelector('#modal-notes-percentage')?.value || 30),
                             minNotes: parseInt(modal.querySelector('#modal-min-notes')?.value || 1),
-                            maxNotes: parseInt(modal.querySelector('#modal-max-notes')?.value || 3)
+                            maxNotes: parseInt(modal.querySelector('#modal-max-notes')?.value || 3),
+                            // Attachment generation options
+                            generateAttachments: modal.querySelector('#modal-generate-attachments')?.checked ?? false,
+                            attachmentsPercentage: parseInt(modal.querySelector('#modal-attachments-percentage')?.value || 25)
                         };
                     }, { capture: true }); // Use capture to run before the modal's click handler
                 });
@@ -1242,7 +1303,7 @@ function setupEventListeners() {
 
         // Handle Generate button click
         if (result === 'generate' && capturedFormValues) {
-            const { count: modalCount, startDate, endDate, minCost, maxCost, wholeDollars, useAi, generateNotes, notesPercentage, minNotes, maxNotes } = capturedFormValues;
+            const { count: modalCount, startDate, endDate, minCost, maxCost, wholeDollars, useAi, generateNotes, notesPercentage, minNotes, maxNotes, generateAttachments, attachmentsPercentage } = capturedFormValues;
 
             // Validation
             if (modalCount < 1 || modalCount > 1000) {
@@ -1262,6 +1323,7 @@ function setupEventListeners() {
             let loadingMsg = `Generating ${modalCount} matters`;
             if (useAi) loadingMsg += ` with AI (${getSpiceLevelName(aiSettings.spiceLevel)})`;
             if (generateNotes) loadingMsg += ` + notes`;
+            if (generateAttachments) loadingMsg += ` + documents`;
             loadingMsg += '... please wait';
             showPersistentToast(loadingMsg, 'loading');
 
@@ -1287,14 +1349,18 @@ function setupEventListeners() {
                     generatePrivateNotes: generateNotes,
                     notesPercentage: generateNotes ? notesPercentage : undefined,
                     minNotesPerMatter: generateNotes ? minNotes : undefined,
-                    maxNotesPerMatter: generateNotes ? maxNotes : undefined
+                    maxNotesPerMatter: generateNotes ? maxNotes : undefined,
+                    // Attachment generation options
+                    generateAttachments: generateAttachments,
+                    attachmentsPercentage: generateAttachments ? attachmentsPercentage : undefined
                 });
 
                 // Dismiss loading toast and show success
                 dismissPersistentToast();
                 const aiNote = response.used_ai_descriptions ? ` (AI @ ${getSpiceLevelName(aiSettings.spiceLevel)})` : '';
                 const notesNote = response.private_notes_generated ? ` + ${response.private_notes_generated} notes` : '';
-                showToast(`Successfully added ${response.matters_added} sample matters ($${response.total_cost_added.toFixed(2)})${aiNote}${notesNote}`, 'success');
+                const attachmentsNote = response.attachments_generated ? ` + ${response.attachments_generated} documents` : '';
+                showToast(`Successfully added ${response.matters_added} sample matters ($${response.total_cost_added.toFixed(2)})${aiNote}${notesNote}${attachmentsNote}`, 'success');
             } catch (error) {
                 dismissPersistentToast();
                 showToast(`Error: ${error.message}`, 'error');

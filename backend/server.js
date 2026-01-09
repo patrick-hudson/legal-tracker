@@ -4,9 +4,12 @@ import fastifyStatic from '@fastify/static';
 import fastifyJWT from '@fastify/jwt';
 import fastifyCookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
+import fastifyMultipart from '@fastify/multipart';
 import Anthropic from '@anthropic-ai/sdk';
 import { createDatabase } from './db.js';
 import { hashPassword, verifyPassword, generateTokenId, generateApiKey, createAdminAuthMiddleware, getTokenExpiration, generateBootstrapToken, hashBootstrapToken, getBootstrapTokenExpiration, validatePasswordStrength } from './auth.js';
+import { createStorage, createStorageFromConfig, validateFileType, sanitizeFilename, MAX_FILE_SIZE } from './storage.js';
+import { generateLegalDocument, generatePlaceholderDocument } from './legal-docs.js';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve } from 'path';
 import { readFileSync, existsSync } from 'fs';
@@ -75,7 +78,7 @@ export async function createServer(options = {}) {
   } = options;
 
   // Create database instance
-  const { settingsDb, mattersDb, adminUsersDb, adminSessionsDb, adminBootstrapTokensDb, privateNotesDb } = await createDatabase(dbPath);
+  const { settingsDb, mattersDb, adminUsersDb, adminSessionsDb, adminBootstrapTokensDb, privateNotesDb, attachmentsDb } = await createDatabase(dbPath);
 
   const fastify = Fastify({
     logger,
@@ -107,6 +110,14 @@ export async function createServer(options = {}) {
     global: false, // Don't apply globally, only to specific routes
     max: 100, // Max requests per time window
     timeWindow: '1 minute'
+  });
+
+  // Multipart form support for file uploads
+  await fastify.register(fastifyMultipart, {
+    limits: {
+      fileSize: MAX_FILE_SIZE,
+      files: 1 // Only allow one file per request
+    }
   });
 
   // CORS setup
@@ -1270,7 +1281,7 @@ export async function createServer(options = {}) {
     return csv;
   });
 
-  // Get single matter with private notes (admin only)
+  // Get single matter with private notes and attachments (admin only)
   fastify.get('/admin/api/matters/:id', { preHandler: adminAuthMiddleware }, async (request, reply) => {
     const { id } = request.params;
 
@@ -1282,10 +1293,14 @@ export async function createServer(options = {}) {
     // Get private notes for this matter
     const privateNotes = privateNotesDb.getByMatterId(parseInt(id));
 
+    // Get attachments for this matter
+    const attachments = attachmentsDb.getByMatterId(parseInt(id));
+
     return {
       ...matter,
       cost: matter.cost / 100, // Convert cents to dollars
-      private_notes: privateNotes
+      private_notes: privateNotes,
+      attachments
     };
   });
 
@@ -1330,7 +1345,21 @@ export async function createServer(options = {}) {
     }
 
     try {
-      // Private notes are deleted automatically via ON DELETE CASCADE
+      // Delete attachments from storage before deleting matter
+      const attachments = attachmentsDb.getByMatterId(parseInt(id));
+      if (attachments.length > 0) {
+        const storage = createStorage(settingsDb);
+        for (const attachment of attachments) {
+          try {
+            await storage.deleteObject(attachment.storage_key);
+          } catch (err) {
+            fastify.log.warn({ attachmentId: attachment.id, error: err.message }, 'Failed to delete attachment from storage');
+          }
+        }
+        // DB records are deleted via ON DELETE CASCADE
+      }
+
+      // Private notes and attachments are deleted automatically via ON DELETE CASCADE
       mattersDb.delete(parseInt(id));
       return { success: true };
     } catch (error) {
@@ -1436,6 +1465,242 @@ export async function createServer(options = {}) {
       return { success: true };
     } catch (error) {
       return reply.code(500).send({ error: 'SERVER_ERROR', message: error.message });
+    }
+  });
+
+  // ============ MATTER ATTACHMENTS ============
+
+  // Get attachments for a matter
+  fastify.get('/admin/api/matters/:matterId/attachments', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { matterId } = request.params;
+
+    // Verify matter exists
+    const matter = mattersDb.getById(parseInt(matterId));
+    if (!matter) {
+      return reply.code(404).send({ error: 'NOT_FOUND', message: 'Matter not found' });
+    }
+
+    const attachments = attachmentsDb.getByMatterId(parseInt(matterId));
+    return { attachments };
+  });
+
+  // Upload attachment for a matter
+  fastify.post('/admin/api/matters/:matterId/attachments', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { matterId } = request.params;
+
+    // Verify matter exists
+    const matter = mattersDb.getById(parseInt(matterId));
+    if (!matter) {
+      return reply.code(404).send({ error: 'NOT_FOUND', message: 'Matter not found' });
+    }
+
+    let file;
+    try {
+      file = await request.file();
+    } catch (error) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: 'No file uploaded' });
+    }
+
+    if (!file) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: 'No file uploaded' });
+    }
+
+    // Validate file type
+    const validation = validateFileType(file.filename, file.mimetype);
+    if (!validation.valid) {
+      return reply.code(400).send({ error: 'INVALID_FILE_TYPE', message: validation.error });
+    }
+
+    try {
+      // Get storage instance
+      const storage = createStorage(settingsDb);
+
+      // Upload to storage
+      const result = await storage.putObject(
+        file.file,
+        sanitizeFilename(file.filename),
+        { contentType: file.mimetype }
+      );
+
+      // Create database record
+      const attachment = attachmentsDb.create(
+        parseInt(matterId),
+        sanitizeFilename(file.filename),
+        file.mimetype,
+        result.size_bytes,
+        storage.type,
+        result.storage_key,
+        request.adminUser?.id || null
+      );
+
+      return {
+        success: true,
+        attachment: {
+          id: attachment.id,
+          original_filename: sanitizeFilename(file.filename),
+          content_type: file.mimetype,
+          size_bytes: result.size_bytes
+        }
+      };
+    } catch (error) {
+      fastify.log.error({ error: error.message }, 'File upload failed');
+      return reply.code(500).send({ error: 'UPLOAD_FAILED', message: error.message });
+    }
+  });
+
+  // Download attachment
+  fastify.get('/admin/api/attachments/:attachmentId/download', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { attachmentId } = request.params;
+
+    const attachment = attachmentsDb.getById(parseInt(attachmentId));
+    if (!attachment) {
+      return reply.code(404).send({ error: 'NOT_FOUND', message: 'Attachment not found' });
+    }
+
+    try {
+      // Get storage instance
+      const storage = createStorage(settingsDb);
+
+      // Get file stream
+      const { stream, size } = await storage.getObjectStream(attachment.storage_key);
+
+      // Set response headers for file download
+      reply.header('Content-Type', attachment.content_type);
+      reply.header('Content-Length', attachment.size_bytes);
+      reply.header('Content-Disposition', `attachment; filename="${encodeURIComponent(attachment.original_filename)}"`);
+
+      return reply.send(stream);
+    } catch (error) {
+      fastify.log.error({ error: error.message, attachmentId }, 'File download failed');
+      return reply.code(500).send({ error: 'DOWNLOAD_FAILED', message: error.message });
+    }
+  });
+
+  // Delete attachment
+  fastify.delete('/admin/api/attachments/:attachmentId', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { attachmentId } = request.params;
+
+    const attachment = attachmentsDb.getById(parseInt(attachmentId));
+    if (!attachment) {
+      return reply.code(404).send({ error: 'NOT_FOUND', message: 'Attachment not found' });
+    }
+
+    try {
+      // Get storage instance
+      const storage = createStorage(settingsDb);
+
+      // Delete from storage
+      await storage.deleteObject(attachment.storage_key);
+
+      // Delete database record
+      attachmentsDb.delete(parseInt(attachmentId));
+
+      return { success: true };
+    } catch (error) {
+      fastify.log.error({ error: error.message, attachmentId }, 'Attachment deletion failed');
+      return reply.code(500).send({ error: 'DELETE_FAILED', message: error.message });
+    }
+  });
+
+  // ============ STORAGE SETTINGS ============
+
+  // Get storage configuration (without sensitive values)
+  fastify.get('/admin/api/settings/storage', { preHandler: adminAuthMiddleware }, async () => {
+    const storageBackend = settingsDb.get('storage_backend') || 'filesystem';
+    const hasS3Config = !!(
+      settingsDb.get('s3_access_key_id') &&
+      settingsDb.get('s3_secret_access_key') &&
+      settingsDb.get('s3_bucket')
+    );
+
+    return {
+      storage_backend: storageBackend,
+      has_s3_config: hasS3Config,
+      s3_bucket: settingsDb.get('s3_bucket') || '',
+      s3_region: settingsDb.get('s3_region') || 'us-east-1',
+      s3_endpoint: settingsDb.get('s3_endpoint') || '',
+      s3_path_style: settingsDb.get('s3_path_style') === 'true',
+      filesystem_path: settingsDb.get('storage_filesystem_path') || ''
+    };
+  });
+
+  // Save storage configuration
+  fastify.put('/admin/api/settings/storage', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const {
+      storage_backend,
+      s3_access_key_id,
+      s3_secret_access_key,
+      s3_bucket,
+      s3_region,
+      s3_endpoint,
+      s3_path_style,
+      filesystem_path
+    } = request.body || {};
+
+    // Validate storage backend
+    if (storage_backend && !['filesystem', 's3'].includes(storage_backend)) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: 'Invalid storage backend' });
+    }
+
+    // Save settings
+    if (storage_backend !== undefined) {
+      settingsDb.set('storage_backend', storage_backend);
+    }
+    if (s3_access_key_id !== undefined) {
+      settingsDb.set('s3_access_key_id', s3_access_key_id);
+    }
+    if (s3_secret_access_key !== undefined) {
+      settingsDb.set('s3_secret_access_key', s3_secret_access_key);
+    }
+    if (s3_bucket !== undefined) {
+      settingsDb.set('s3_bucket', s3_bucket);
+    }
+    if (s3_region !== undefined) {
+      settingsDb.set('s3_region', s3_region);
+    }
+    if (s3_endpoint !== undefined) {
+      settingsDb.set('s3_endpoint', s3_endpoint);
+    }
+    if (s3_path_style !== undefined) {
+      settingsDb.set('s3_path_style', s3_path_style ? 'true' : 'false');
+    }
+    if (filesystem_path !== undefined) {
+      settingsDb.set('storage_filesystem_path', filesystem_path);
+    }
+
+    return { success: true };
+  });
+
+  // Test storage connection
+  fastify.post('/admin/api/settings/storage/test', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { type, config } = request.body || {};
+
+    try {
+      let storage;
+
+      if (type === 's3') {
+        // Test with provided config
+        storage = createStorageFromConfig({
+          type: 's3',
+          accessKeyId: config.access_key_id,
+          secretAccessKey: config.secret_access_key,
+          bucket: config.bucket,
+          region: config.region || 'us-east-1',
+          endpoint: config.endpoint || null,
+          forcePathStyle: config.path_style || false
+        });
+      } else {
+        // Test filesystem storage
+        storage = createStorageFromConfig({
+          type: 'filesystem',
+          path: config?.path || null
+        });
+      }
+
+      const result = await storage.testConnection();
+      return result;
+    } catch (error) {
+      return { success: false, message: error.message };
     }
   });
 
@@ -2087,12 +2352,16 @@ Return ONLY a JSON array of strings, no other text. Example format:
         generatePrivateNotes = false,
         notesPercentage = 30,  // Percentage of matters that get notes (0-100)
         minNotesPerMatter = 1,
-        maxNotesPerMatter = 3
+        maxNotesPerMatter = 3,
+        // Attachment generation options
+        generateAttachments = false,
+        attachmentsPercentage = 25  // Percentage of matters that get AI-generated document (0-100)
       } = request.body || {};
 
       let sampleMatters = [];
       let usedAi = false;
       let notesGenerated = 0;
+      let attachmentsGenerated = 0;
 
       if (source && source !== 'generate') {
         // Validate source name - only allow alphanumeric, dash, underscore
@@ -2266,6 +2535,62 @@ Return ONLY a JSON array of strings, no other text. Example format:
         }
       }
 
+      // Generate attachments if requested
+      if (generateAttachments && createdMatterIds.length > 0) {
+        const claudeApiKey = settingsDb.get('claude_api_key');
+        const model = settingsDb.get('claude_model');
+        const spiceLevel = parseInt(spiceLevelOverride || settingsDb.get('ai_spice_level') || '1', 10);
+
+        // Clamp percentage to 0-100
+        const pct = Math.max(0, Math.min(100, attachmentsPercentage));
+
+        // Determine which matters get attachments (max 1 per matter)
+        const mattersWithAttachments = createdMatterIds.filter(() => Math.random() * 100 < pct);
+
+        if (mattersWithAttachments.length > 0) {
+          const storage = createStorage(settingsDb);
+
+          for (const matterId of mattersWithAttachments) {
+            try {
+              // Get the matter data for context
+              const matterData = mattersDb.getById(matterId);
+
+              let docResult;
+              if (claudeApiKey && model) {
+                // Use Claude API to generate document
+                const client = new Anthropic({ apiKey: claudeApiKey });
+                docResult = await generateLegalDocument(client, model, matterData, spiceLevel);
+              } else {
+                // Generate placeholder document
+                docResult = await generatePlaceholderDocument(matterData);
+              }
+
+              // Store the document
+              const storageResult = await storage.putObject(
+                docResult.buffer,
+                docResult.filename,
+                { contentType: docResult.contentType }
+              );
+
+              // Create attachment record
+              attachmentsDb.create(
+                matterId,
+                docResult.filename,
+                docResult.contentType,
+                storageResult.size_bytes,
+                storage.type,
+                storageResult.storage_key,
+                null // No user for automated generation
+              );
+
+              attachmentsGenerated++;
+            } catch (err) {
+              fastify.log.warn({ matterId, error: err.message }, 'Failed to generate attachment for matter');
+            }
+          }
+        }
+      }
+
       // Update settings
       const currentSpent = parseFloat(settingsDb.get('lifetime_spent') || '0');
       settingsDb.set('lifetime_spent', currentSpent + totalCost);
@@ -2282,7 +2607,8 @@ Return ONLY a JSON array of strings, no other text. Example format:
         total_cost_added: totalCost / 100,
         source: (source === 'generate' || !source) ? 'generated' : source,
         used_ai_descriptions: usedAi,
-        private_notes_generated: notesGenerated
+        private_notes_generated: notesGenerated,
+        attachments_generated: attachmentsGenerated
       };
     } catch (error) {
       return reply.code(500).send({

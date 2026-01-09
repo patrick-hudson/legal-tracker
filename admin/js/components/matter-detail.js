@@ -46,6 +46,7 @@ export async function renderMatterDetail(container, params) {
 
 function renderMatterView(container, matter) {
     const privateNotes = matter.private_notes || [];
+    const attachments = matter.attachments || [];
 
     container.innerHTML = `
         <div class="mb-6">
@@ -89,6 +90,41 @@ function renderMatterView(container, matter) {
                     <dd class="text-gray-900 dark:text-white">${safeEscapeHtml(matter.note, 'No note')}</dd>
                 </div>
             </dl>
+        </div>
+
+        <!-- Attachments Section -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Attachments <span id="attachments-count" class="text-sm font-normal text-gray-500">(${attachments.length})</span></h2>
+                    <p class="text-sm text-amber-600 dark:text-amber-400">
+                        <svg class="w-4 h-4 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
+                        </svg>
+                        Admin Only - PDF, DOC, DOCX, RTF, TXT (max 25MB)
+                    </p>
+                </div>
+                <div class="flex gap-2">
+                    <label class="px-4 py-2 text-white bg-green-600 hover:bg-green-700 rounded-lg text-sm font-medium cursor-pointer">
+                        Upload File
+                        <input type="file" id="attachment-upload" class="hidden" accept=".pdf,.doc,.docx,.rtf,.txt">
+                    </label>
+                </div>
+            </div>
+
+            <!-- Upload Progress -->
+            <div id="upload-progress" class="hidden mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="flex-1 bg-gray-200 rounded-full h-2 dark:bg-gray-700">
+                        <div id="upload-progress-bar" class="bg-blue-600 h-2 rounded-full transition-all" style="width: 0%"></div>
+                    </div>
+                    <span id="upload-progress-text" class="text-sm text-gray-600 dark:text-gray-400">Uploading...</span>
+                </div>
+            </div>
+
+            <div id="attachments-container">
+                ${renderAttachmentsList(attachments)}
+            </div>
         </div>
 
         <!-- Private Notes Section -->
@@ -141,11 +177,17 @@ function renderMatterView(container, matter) {
     document.getElementById('delete-matter-btn').addEventListener('click', () => handleDeleteMatter(matter.id));
     document.getElementById('add-note-btn').addEventListener('click', () => showAddNoteModal(matter.id, container));
 
+    // Attachment upload listener
+    document.getElementById('attachment-upload')?.addEventListener('change', (e) => handleAttachmentUpload(e, matter.id, container));
+
     // Notes search and sort listeners
     attachNotesSearchAndSort(privateNotes);
 
     // Add note action listeners
     attachNoteEventListeners(matter.id, container);
+
+    // Add attachment action listeners
+    attachAttachmentEventListeners(matter.id, container);
 }
 
 // Filter and sort notes based on current state
@@ -517,4 +559,164 @@ function showToast(message, type = 'info') {
         toast.style.opacity = '0';
         setTimeout(() => toast.remove(), 300);
     }, 3000);
+}
+
+// ==================== ATTACHMENTS ====================
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function getFileIcon(contentType) {
+    if (contentType === 'application/pdf') {
+        return `<svg class="w-8 h-8 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/>
+        </svg>`;
+    } else if (contentType?.includes('word') || contentType?.includes('msword')) {
+        return `<svg class="w-8 h-8 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/>
+        </svg>`;
+    } else {
+        return `<svg class="w-8 h-8 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/>
+        </svg>`;
+    }
+}
+
+function renderAttachmentsList(attachments) {
+    if (attachments.length === 0) {
+        return `
+            <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                <svg class="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+                </svg>
+                <p>No attachments yet</p>
+                <p class="text-sm">Click "Upload File" to add documents to this matter.</p>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="space-y-3">
+            ${attachments.map(attachment => `
+                <div class="flex items-center gap-4 p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700" data-attachment-id="${attachment.id}">
+                    <div class="flex-shrink-0">
+                        ${getFileIcon(attachment.content_type)}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-gray-900 dark:text-white truncate">${escapeHtml(attachment.original_filename)}</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">
+                            ${formatFileSize(attachment.size_bytes)} &bull;
+                            ${formatDate(attachment.created_at, { format: 'short', placeholder: 'Unknown' })}
+                            ${attachment.created_by_username ? ` &bull; ${escapeHtml(attachment.created_by_username)}` : ''}
+                        </p>
+                    </div>
+                    <div class="flex gap-2 flex-shrink-0">
+                        <button class="download-attachment-btn p-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900 rounded" data-id="${attachment.id}" data-filename="${escapeHtml(attachment.original_filename)}" title="Download">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                        </button>
+                        <button class="delete-attachment-btn p-2 text-red-600 hover:text-red-800 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900 rounded" data-id="${attachment.id}" title="Delete">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+function attachAttachmentEventListeners(matterId, container) {
+    const attachmentsContainer = document.getElementById('attachments-container');
+    if (!attachmentsContainer) return;
+
+    attachmentsContainer.addEventListener('click', async (e) => {
+        const downloadBtn = e.target.closest('.download-attachment-btn');
+        const deleteBtn = e.target.closest('.delete-attachment-btn');
+
+        if (downloadBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            const attachmentId = downloadBtn.dataset.id;
+            const filename = downloadBtn.dataset.filename;
+            await handleAttachmentDownload(attachmentId, filename);
+        } else if (deleteBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            const attachmentId = deleteBtn.dataset.id;
+            await handleAttachmentDelete(attachmentId, matterId, container);
+        }
+    });
+}
+
+async function handleAttachmentUpload(e, matterId, container) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Clear the input so the same file can be selected again
+    e.target.value = '';
+
+    const progressDiv = document.getElementById('upload-progress');
+    const progressBar = document.getElementById('upload-progress-bar');
+    const progressText = document.getElementById('upload-progress-text');
+
+    try {
+        // Show progress
+        progressDiv?.classList.remove('hidden');
+        progressBar.style.width = '10%';
+        progressText.textContent = 'Uploading...';
+
+        // Upload the file
+        await api.uploadAttachment(matterId, file);
+
+        progressBar.style.width = '100%';
+        progressText.textContent = 'Complete!';
+
+        showToast('File uploaded successfully', 'success');
+
+        // Reload the matter to get updated attachments
+        const updatedMatter = await api.getMatter(matterId);
+        renderMatterView(container, updatedMatter);
+
+    } catch (error) {
+        progressDiv?.classList.add('hidden');
+        showToast(`Upload failed: ${error.message}`, 'error');
+    }
+}
+
+async function handleAttachmentDownload(attachmentId, filename) {
+    try {
+        await api.downloadAttachment(attachmentId, filename);
+    } catch (error) {
+        showToast(`Download failed: ${error.message}`, 'error');
+    }
+}
+
+async function handleAttachmentDelete(attachmentId, matterId, container) {
+    const confirmed = await showConfirm('Are you sure you want to delete this attachment?', {
+        title: 'Delete Attachment',
+        confirmText: 'Delete',
+        cancelText: 'Cancel',
+        type: 'danger'
+    });
+
+    if (!confirmed) return;
+
+    try {
+        await api.deleteAttachment(attachmentId);
+        showToast('Attachment deleted successfully', 'success');
+
+        // Reload the matter to get updated attachments
+        const updatedMatter = await api.getMatter(matterId);
+        renderMatterView(container, updatedMatter);
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    }
 }

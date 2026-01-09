@@ -106,6 +106,20 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
       FOREIGN KEY (created_by_user_id) REFERENCES admin_users(id)
     );
 
+    CREATE TABLE IF NOT EXISTS matter_attachments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      matter_id INTEGER NOT NULL,
+      original_filename TEXT NOT NULL,
+      content_type TEXT NOT NULL,
+      size_bytes INTEGER NOT NULL,
+      storage_backend TEXT NOT NULL,
+      storage_key TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      created_by_user_id INTEGER,
+      FOREIGN KEY (matter_id) REFERENCES matters(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by_user_id) REFERENCES admin_users(id)
+    );
+
     -- Initialize default settings if they don't exist
     INSERT OR IGNORE INTO settings (key, value) VALUES ('lifetime_spent', '0');
     INSERT OR IGNORE INTO settings (key, value) VALUES ('last_matter_date', datetime('now'));
@@ -604,7 +618,108 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
     }
   };
 
-  return { db, settingsDb, mattersDb, adminUsersDb, adminSessionsDb, adminBootstrapTokensDb, privateNotesDb, saveDatabase };
+  const attachmentsDb = {
+    getByMatterId(matterId) {
+      const result = db.exec(`
+        SELECT a.*, u.username as created_by_username
+        FROM matter_attachments a
+        LEFT JOIN admin_users u ON a.created_by_user_id = u.id
+        WHERE a.matter_id = ?
+        ORDER BY a.created_at DESC
+      `, [matterId]);
+      if (result.length > 0) {
+        const columns = result[0].columns;
+        return result[0].values.map(row => {
+          const obj = {};
+          columns.forEach((col, i) => {
+            obj[col] = row[i];
+          });
+          return obj;
+        });
+      }
+      return [];
+    },
+
+    getById(id) {
+      const result = db.exec(`
+        SELECT a.*, u.username as created_by_username
+        FROM matter_attachments a
+        LEFT JOIN admin_users u ON a.created_by_user_id = u.id
+        WHERE a.id = ?
+      `, [id]);
+      if (result.length > 0 && result[0].values.length > 0) {
+        const columns = result[0].columns;
+        const row = result[0].values[0];
+        const obj = {};
+        columns.forEach((col, i) => {
+          obj[col] = row[i];
+        });
+        return obj;
+      }
+      return null;
+    },
+
+    create(matterId, filename, contentType, sizeBytes, storageBackend, storageKey, createdByUserId = null) {
+      const now = new Date().toISOString();
+      db.run(`
+        INSERT INTO matter_attachments (matter_id, original_filename, content_type, size_bytes, storage_backend, storage_key, created_at, created_by_user_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `, [matterId, filename, contentType, sizeBytes, storageBackend, storageKey, now, createdByUserId]);
+
+      const result = db.exec('SELECT last_insert_rowid() as id');
+      const id = result[0].values[0][0];
+
+      saveDatabase();
+      return { id };
+    },
+
+    delete(id) {
+      // Returns the attachment record before deletion (for storage cleanup)
+      const attachment = this.getById(id);
+      db.run('DELETE FROM matter_attachments WHERE id = ?', [id]);
+      saveDatabase();
+      return attachment;
+    },
+
+    deleteByMatterId(matterId) {
+      // Returns all attachment records before deletion (for storage cleanup)
+      const attachments = this.getByMatterId(matterId);
+      db.run('DELETE FROM matter_attachments WHERE matter_id = ?', [matterId]);
+      saveDatabase();
+      return attachments;
+    },
+
+    deleteAll() {
+      // Returns all attachment records before deletion (for storage cleanup)
+      const result = db.exec('SELECT * FROM matter_attachments');
+      let attachments = [];
+      if (result.length > 0) {
+        const columns = result[0].columns;
+        attachments = result[0].values.map(row => {
+          const obj = {};
+          columns.forEach((col, i) => {
+            obj[col] = row[i];
+          });
+          return obj;
+        });
+      }
+      db.run('DELETE FROM matter_attachments');
+      saveDatabase();
+      return attachments;
+    },
+
+    getCountByMatterId(matterId) {
+      const result = db.exec('SELECT COUNT(*) as count FROM matter_attachments WHERE matter_id = ?', [matterId]);
+      return result[0]?.values[0]?.[0] || 0;
+    },
+
+    getTotalSize() {
+      const result = db.exec('SELECT SUM(size_bytes) as total FROM matter_attachments');
+      return result[0]?.values[0]?.[0] || 0;
+    }
+  };
+
+  return { db, settingsDb, mattersDb, adminUsersDb, adminSessionsDb, adminBootstrapTokensDb, privateNotesDb, attachmentsDb, saveDatabase };
 }
 
 // Create default database instance for backwards compatibility
