@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Context-aware private notes generation**: AI-generated private notes now reference the matter's description
+  - New `generateContextualPrivateNotes()` function processes matters in batches (default 10 per API call)
+  - Each note specifically relates to its matter's description rather than being generic
+  - Scales efficiently for hundreds of matters with isolated batch failure handling
+  - Falls back to static notes per-matter if AI fails for specific batches
+
 ---
 
 ## [0.11.5] - 2026-01-09

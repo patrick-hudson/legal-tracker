@@ -2949,7 +2949,110 @@ Return ONLY a JSON array of strings, no other text. Example format:
     }
   }
 
-  // Helper function to generate private notes using Claude API
+  // Spice level instructions shared by note generation functions
+  const spiceInstructions = {
+    '1': 'Professional, formal internal notes. Standard legal documentation style.',
+    '2': 'Dry humor with subtle wit. Keep it professional but with understated observations.',
+    '3': 'Witty internal notes with clever observations about cases, clients, and opposing counsel.',
+    '4': 'Dramatic internal notes with theatrical observations and slightly absurd commentary.',
+    '5': 'Unhinged internal notes. Wildly creative, absurd observations that would never be shared externally.',
+    '6': 'CHAOTIC EVIL: Maximum snark. Every note drips with sarcasm about clients, opposing counsel, judges, and the legal system itself.',
+    '7': 'ELDRITCH HORROR: Internal notes written by a cosmic entity consuming law firms. Reality-questioning observations about the nature of law itself.',
+    '8': 'THE FINAL FORM: Transcendent chaos. Notes that combine existential dread, cosmic horror, time paradoxes, and bureaucratic nightmares. Sentient case files. Emotional support motions.'
+  };
+
+  /**
+   * Generate context-aware private notes for multiple matters in batches.
+   * Each matter gets notes that reference its specific description.
+   *
+   * @param {Array<{matterId: number, description: string, noteCount: number}>} matters - Matters needing notes
+   * @param {string|null} overrideSpiceLevel - Spice level override
+   * @param {Object} context - User context for logging
+   * @param {number} batchSize - Matters per API call (default 10)
+   * @returns {Promise<Map<number, Array<{content: string, type: string}>>>} Map of matterId -> notes array
+   */
+  async function generateContextualPrivateNotes(matters, overrideSpiceLevel = null, context = {}, batchSize = 10) {
+    const claudeApiKey = settingsDb.get('claude_api_key');
+    const model = settingsDb.get('claude_model');
+
+    if (!claudeApiKey || !model) {
+      return null;
+    }
+
+    const client = new Anthropic({ apiKey: claudeApiKey });
+    const spiceLevel = overrideSpiceLevel || settingsDb.get('ai_spice_level') || '1';
+    const instruction = spiceInstructions[spiceLevel] || spiceInstructions['1'];
+
+    // Results map: matterId -> array of notes
+    const results = new Map();
+
+    // Process in batches
+    for (let i = 0; i < matters.length; i += batchSize) {
+      const batch = matters.slice(i, i + batchSize);
+
+      // Build the prompt for this batch
+      const matterDescriptions = batch.map((m, idx) =>
+        `Matter ${idx + 1} (ID: ${m.matterId}, notes needed: ${m.noteCount}): "${m.description}"`
+      ).join('\n');
+
+      const prompt = `Generate internal private notes for these legal matters. Each note should directly reference and relate to its matter's description. These are internal-only notes not shared with clients.
+
+MATTERS:
+${matterDescriptions}
+
+For each matter, generate the requested number of notes. Types to vary across:
+- Call logs and communication records (type: "call")
+- Case status updates (type: "status")
+- Strategy notes and observations (type: "strategy")
+- Client behavior notes (type: "client")
+- Warnings about deadlines or issues (type: "warning")
+- Observations about opposing counsel or judges (type: "observation")
+- General commentary and follow-ups (type: "note")
+
+IMPORTANT: Each note MUST reference specific details from its matter's description. Don't generate generic notes.
+
+Tone: ${instruction}
+
+Return ONLY a JSON object with matter IDs as keys, each containing an array of note objects. Example:
+{
+  "123": [{"content": "Called client about the Smith contract dispute...", "type": "call"}, {"content": "Strategy note: Given the contract breach allegations...", "type": "strategy"}],
+  "456": [{"content": "Status update on the property damage claim...", "type": "status"}]
+}`;
+
+      try {
+        const response = await callClaudeWithLogging(client, {
+          model,
+          max_tokens: 4096,
+          messages: [{ role: 'user', content: prompt }]
+        }, context);
+
+        const content = response.content?.[0]?.text;
+        if (!content) continue;
+
+        // Extract JSON object from response
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) continue;
+
+        const batchResults = JSON.parse(jsonMatch[0]);
+
+        // Add results to main map
+        for (const [matterIdStr, notes] of Object.entries(batchResults)) {
+          const matterId = parseInt(matterIdStr, 10);
+          if (Array.isArray(notes)) {
+            results.set(matterId, notes);
+          }
+        }
+      } catch (err) {
+        // Error already logged by callClaudeWithLogging
+        // Continue with next batch - partial results are better than none
+        console.error(`[generateContextualPrivateNotes] Batch ${i / batchSize + 1} failed:`, err.message);
+      }
+    }
+
+    return results.size > 0 ? results : null;
+  }
+
+  // Helper function to generate private notes using Claude API (legacy, non-contextual)
   async function generateClaudePrivateNotes(count, overrideSpiceLevel = null, context = {}) {
     const claudeApiKey = settingsDb.get('claude_api_key');
     const model = settingsDb.get('claude_model');
@@ -2961,19 +3064,6 @@ Return ONLY a JSON array of strings, no other text. Example format:
     try {
       const client = new Anthropic({ apiKey: claudeApiKey });
       const spiceLevel = overrideSpiceLevel || settingsDb.get('ai_spice_level') || '1';
-
-      // Build prompt based on spice level
-      const spiceInstructions = {
-        '1': 'Professional, formal internal notes. Standard legal documentation style.',
-        '2': 'Dry humor with subtle wit. Keep it professional but with understated observations.',
-        '3': 'Witty internal notes with clever observations about cases, clients, and opposing counsel.',
-        '4': 'Dramatic internal notes with theatrical observations and slightly absurd commentary.',
-        '5': 'Unhinged internal notes. Wildly creative, absurd observations that would never be shared externally.',
-        '6': 'CHAOTIC EVIL: Maximum snark. Every note drips with sarcasm about clients, opposing counsel, judges, and the legal system itself.',
-        '7': 'ELDRITCH HORROR: Internal notes written by a cosmic entity consuming law firms. Reality-questioning observations about the nature of law itself.',
-        '8': 'THE FINAL FORM: Transcendent chaos. Notes that combine existential dread, cosmic horror, time paradoxes, and bureaucratic nightmares. Sentient case files. Emotional support motions.'
-      };
-
       const instruction = spiceInstructions[spiceLevel] || spiceInstructions['1'];
 
       const prompt = `Generate ${count} unique internal private notes that lawyers would write about their legal matters. These are internal-only notes not shared with clients.
@@ -3268,14 +3358,22 @@ Return ONLY a JSON array of strings, no other text. Example format:
         });
 
         if (mattersWithNotes.length > 0) {
-          // Calculate total notes needed
-          const noteCounts = mattersWithNotes.map(() =>
-            Math.floor(Math.random() * (maxNotes - minNotes + 1)) + minNotes
-          );
-          const totalNotesNeeded = noteCounts.reduce((a, b) => a + b, 0);
+          // Build matter info for note generation (need description and note count for each)
+          const matterInfoList = mattersWithNotes.map(matterId => {
+            const matterData = mattersDb.getById(matterId);
+            const noteCount = Math.floor(Math.random() * (maxNotes - minNotes + 1)) + minNotes;
+            return {
+              matterId,
+              description: matterData?.note || 'Legal matter',
+              noteCount,
+              matterDate: matterData?.matter_date ? new Date(matterData.matter_date) : new Date()
+            };
+          });
 
-          // Get notes (AI or static) - only use AI if useAiDescriptions is enabled
-          let notePool = [];
+          const totalNotesNeeded = matterInfoList.reduce((sum, m) => sum + m.noteCount, 0);
+
+          // Get notes (AI contextual or static) - only use AI if useAiDescriptions is enabled
+          let contextualNotesMap = null;
           let usedAiNotes = false;
 
           if (useAiDescriptions) {
@@ -3283,49 +3381,52 @@ Return ONLY a JSON array of strings, no other text. Example format:
             logDebugFromRequest(request, {
               actionType: ACTION_TYPES.SAMPLE_DATA_GENERATE,
               entityType: ENTITY_TYPES.PRIVATE_NOTE,
-              summary: `Requesting ${totalNotesNeeded} AI-generated notes`,
-              details: { count: totalNotesNeeded, spiceLevel: spiceLevelOverride }
+              summary: `Requesting ${totalNotesNeeded} context-aware AI notes for ${matterInfoList.length} matters`,
+              details: { totalNotes: totalNotesNeeded, matterCount: matterInfoList.length, spiceLevel: spiceLevelOverride }
             });
-            const aiNotes = await generateClaudePrivateNotes(totalNotesNeeded, spiceLevelOverride, userContext);
-            if (aiNotes && aiNotes.length > 0) {
-              notePool = aiNotes;
+
+            // Use the new contextual batched function
+            contextualNotesMap = await generateContextualPrivateNotes(matterInfoList, spiceLevelOverride, userContext);
+
+            if (contextualNotesMap && contextualNotesMap.size > 0) {
               usedAiNotes = true;
               logInfoFromRequest(request, {
                 actionType: ACTION_TYPES.SAMPLE_DATA_GENERATE,
                 entityType: ENTITY_TYPES.PRIVATE_NOTE,
-                summary: `Generated ${aiNotes.length} AI notes for sample data`,
-                details: { count: aiNotes.length, spiceLevel: spiceLevelOverride }
+                summary: `Generated context-aware AI notes for ${contextualNotesMap.size} matters`,
+                details: { mattersWithNotes: contextualNotesMap.size, spiceLevel: spiceLevelOverride }
               });
             }
           }
 
-          // Fall back to static notes if AI wasn't enabled or didn't work
-          if (notePool.length === 0) {
-            notePool = staticPrivateNotes;
-            logDebugFromRequest(request, {
-              actionType: ACTION_TYPES.SAMPLE_DATA_GENERATE,
-              entityType: ENTITY_TYPES.PRIVATE_NOTE,
-              summary: `Using ${staticPrivateNotes.length} static notes (AI ${useAiDescriptions ? 'failed' : 'not enabled'})`,
-              details: { staticNoteCount: staticPrivateNotes.length, aiEnabled: useAiDescriptions }
-            });
-          }
-
           // Create notes for each selected matter
-          let noteIndex = 0;
-          for (let i = 0; i < mattersWithNotes.length; i++) {
-            const matterId = mattersWithNotes[i];
-            const noteCount = noteCounts[i];
+          for (const matterInfo of matterInfoList) {
+            const { matterId, noteCount, matterDate, description } = matterInfo;
 
-            // Get the matter date for generating interaction dates
-            const matterData = mattersDb.getById(matterId);
-            const matterDate = matterData ? new Date(matterData.matter_date) : new Date();
+            // Get notes for this matter - either from contextual AI or fall back to static
+            let notesForMatter = contextualNotesMap?.get(matterId);
 
-            for (let j = 0; j < noteCount; j++) {
-              const noteItem = notePool[noteIndex % notePool.length];
+            // Fall back to static notes if AI didn't generate notes for this matter
+            if (!notesForMatter || notesForMatter.length === 0) {
+              notesForMatter = [];
+              for (let j = 0; j < noteCount; j++) {
+                const staticNote = staticPrivateNotes[Math.floor(Math.random() * staticPrivateNotes.length)];
+                notesForMatter.push(typeof staticNote === 'object' ? staticNote : { content: staticNote, type: 'note' });
+              }
+              if (useAiDescriptions) {
+                logDebugFromRequest(request, {
+                  actionType: ACTION_TYPES.SAMPLE_DATA_GENERATE,
+                  entityType: ENTITY_TYPES.PRIVATE_NOTE,
+                  summary: `Falling back to static notes for matter #${matterId}`,
+                  details: { matterId, noteCount }
+                });
+              }
+            }
 
-              // Handle both old string format and new object format
+            // Create each note in the database
+            for (const noteItem of notesForMatter) {
               const noteContent = typeof noteItem === 'object' ? noteItem.content : noteItem;
-              const interactionType = typeof noteItem === 'object' ? noteItem.type : 'note';
+              const interactionType = typeof noteItem === 'object' ? (noteItem.type || 'note') : 'note';
 
               // Generate interaction date (0-60 days after matter date)
               const daysAfter = Math.floor(Math.random() * 60);
@@ -3337,7 +3438,6 @@ Return ONLY a JSON array of strings, no other text. Example format:
                 interaction_date: interactionDateStr,
                 interaction_type: interactionType
               });
-              noteIndex++;
               notesGenerated++;
             }
 
@@ -3346,8 +3446,8 @@ Return ONLY a JSON array of strings, no other text. Example format:
               actionType: ACTION_TYPES.CREATE,
               entityType: ENTITY_TYPES.PRIVATE_NOTE,
               entityId: matterId,
-              summary: `Created ${noteCount} notes for matter #${matterId}: "${matterData?.note?.substring(0, 50) || 'N/A'}..."`,
-              details: { matterId, matterNote: matterData?.note, noteCount, usedAi: usedAiNotes }
+              summary: `Created ${notesForMatter.length} notes for matter #${matterId}: "${description?.substring(0, 50) || 'N/A'}..."`,
+              details: { matterId, matterNote: description, noteCount: notesForMatter.length, usedAi: usedAiNotes && contextualNotesMap?.has(matterId) }
             });
           }
         }
