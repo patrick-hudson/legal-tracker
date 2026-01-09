@@ -6,7 +6,7 @@ A self-hosted "days since" counter for tracking how long you've gone without hir
 
 ```
 ╔════════════════════════════════════════════════════════════════╗
-║  LEGAL MATTER v0.8.0                                           ║
+║  LEGAL MATTER v0.8.1                                           ║
 ║  Legal Expense Governance Allocation Ledger Management         ║
 ║  Application for Tracking Time, Expenses, Retainers            ║
 ╚════════════════════════════════════════════════════════════════╝
