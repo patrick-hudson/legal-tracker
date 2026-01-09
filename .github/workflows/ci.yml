@@ -63,12 +63,20 @@ jobs:
         NEW_VERSION=$(cat ../VERSION)
         echo "Updated to version $NEW_VERSION"
 
+    - name: Update CHANGELOG
+      if: matrix.node-version == '20.x' && github.event_name == 'push'
+      run: |
+        NEW_VERSION=$(cat VERSION)
+        TODAY=$(date +%Y-%m-%d)
+        # Replace [Unreleased] with version number and date, add new Unreleased section
+        sed -i "s/## \[Unreleased\]/## [Unreleased]\n\n---\n\n## [$NEW_VERSION] - $TODAY/" CHANGELOG.md
+
     - name: Commit version bump
       if: matrix.node-version == '20.x' && github.event_name == 'push'
       run: |
         git config --local user.email "github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions[bot]"
-        git add VERSION README.md backend/package.json frontend/app.js
+        git add VERSION README.md backend/package.json frontend/app.js CHANGELOG.md
         NEW_VERSION=$(cat VERSION)
         git diff --staged --quiet || git commit -m "Release version $NEW_VERSION [skip ci]"
 
@@ -85,6 +93,34 @@ jobs:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         branch: ${{ github.ref }}
         tags: true
+
+    - name: Extract changelog for release
+      if: matrix.node-version == '20.x' && github.event_name == 'push'
+      id: changelog
+      run: |
+        NEW_VERSION=$(cat VERSION)
+        # Extract content from the version section (between version header and next ---)
+        # The CHANGELOG has been updated so [Unreleased] is now [$NEW_VERSION]
+        NOTES=$(awk -v ver="$NEW_VERSION" '/^## \['"$NEW_VERSION"'\]/{flag=1; next} /^---$/{if(flag) exit} flag' CHANGELOG.md)
+        # If no version content, fall back to commit message
+        if [ -z "$(echo "$NOTES" | tr -d '[:space:]')" ]; then
+          NOTES=$(git log -1 --pretty=%B)
+        fi
+        echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+        # Use delimiter for multiline output
+        echo "notes<<EOF" >> $GITHUB_OUTPUT
+        echo "$NOTES" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Create GitHub Release
+      if: matrix.node-version == '20.x' && github.event_name == 'push'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v${{ steps.changelog.outputs.version }}
+        name: v${{ steps.changelog.outputs.version }}
+        body: ${{ steps.changelog.outputs.notes }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Build check
       working-directory: ./backend
