@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+---
+
+## [0.10.0] - 2026-01-09
+
 ### Added
 
 #### Audit Logging System
@@ -730,7 +734,8 @@ Initial development phase establishing core functionality.
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| Unreleased | - | Audit logging system |
+| Unreleased | - | |
+| 0.10.0 | 2026-01-09 | Audit logging system |
 | 0.9.4 | 2026-01-09 | GitHub Release creation with changelog notes |
 | 0.9.3 | 2026-01-09 | Test performance improvements with disableRateLimit |
 | 0.9.2 | 2026-01-09 | Collapsible sections, improved timeline display |
