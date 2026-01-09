@@ -8,6 +8,7 @@
 // Log levels with numeric severity (lower = more severe)
 export const LOG_LEVELS = {
   ERROR: 'ERROR',
+  SECURITY: 'SECURITY',
   WARNING: 'WARNING',
   INFO: 'INFO',
   DEBUG: 'DEBUG'
@@ -16,9 +17,10 @@ export const LOG_LEVELS = {
 // Numeric severity for comparison (lower = more severe, always logged)
 const LOG_LEVEL_SEVERITY = {
   ERROR: 0,
-  WARNING: 1,
-  INFO: 2,
-  DEBUG: 3
+  SECURITY: 1,
+  WARNING: 2,
+  INFO: 3,
+  DEBUG: 4
 };
 
 // Action types
@@ -34,7 +36,8 @@ export const ACTION_TYPES = {
   SAMPLE_DATA_GENERATE: 'sample_data_generate',
   API_CALL: 'api_call',
   ERROR: 'error',
-  WARNING: 'warning'
+  WARNING: 'warning',
+  SECURITY_EVENT: 'security_event'
 };
 
 // Entity types
@@ -199,6 +202,31 @@ export function logWarning({ userId, username, entityType, entityId, summary, de
 }
 
 /**
+ * Log a security event (suspicious activity, invalid tokens, etc.)
+ * @param {Object} options - Security event details
+ * @param {number} [options.userId] - User involved (if known)
+ * @param {string} [options.username] - Username for display (if known)
+ * @param {string} [options.entityType] - Type of entity involved
+ * @param {number} [options.entityId] - ID of entity involved
+ * @param {string} options.summary - Human-readable summary
+ * @param {Object} [options.details] - Additional context (token info, etc.)
+ * @param {string} [options.ipAddress] - Client IP address
+ */
+export function logSecurity({ userId, username, entityType, entityId, summary, details, ipAddress }) {
+  return log({
+    level: LOG_LEVELS.SECURITY,
+    user_id: userId,
+    username,
+    action_type: ACTION_TYPES.SECURITY_EVENT,
+    entity_type: entityType,
+    entity_id: entityId,
+    summary,
+    details,
+    ip_address: ipAddress
+  });
+}
+
+/**
  * Log an info event (most common for tracking actions)
  * @param {Object} options - Event details
  * @param {number} [options.userId] - User who performed the action
@@ -294,6 +322,36 @@ export function logErrorFromRequest(request, options) {
 export function logWarningFromRequest(request, options) {
   const context = getUserContext(request);
   return logWarning({
+    userId: context.userId,
+    username: context.username,
+    ipAddress: context.ipAddress,
+    ...options
+  });
+}
+
+/**
+ * Convenience function to log security events from a request context
+ * @param {Object} request - Fastify request object
+ * @param {Object} options - Log options (same as logSecurity, minus userId/username/ipAddress)
+ */
+export function logSecurityFromRequest(request, options) {
+  const context = getUserContext(request);
+  return logSecurity({
+    userId: context.userId,
+    username: context.username,
+    ipAddress: context.ipAddress,
+    ...options
+  });
+}
+
+/**
+ * Convenience function to log debug events from a request context
+ * @param {Object} request - Fastify request object
+ * @param {Object} options - Log options (same as logDebug, minus userId/username/ipAddress)
+ */
+export function logDebugFromRequest(request, options) {
+  const context = getUserContext(request);
+  return logDebug({
     userId: context.userId,
     username: context.username,
     ipAddress: context.ipAddress,

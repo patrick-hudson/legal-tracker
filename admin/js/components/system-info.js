@@ -75,6 +75,7 @@ export async function renderSystemInfo(container) {
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Minimum Log Level</label>
                             <select id="audit-log-level-select" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                                 <option value="ERROR">Error only</option>
+                                <option value="SECURITY">Security and above</option>
                                 <option value="WARNING">Warning and above</option>
                                 <option value="INFO">Info and above (default)</option>
                                 <option value="DEBUG">Debug (all events)</option>
@@ -83,13 +84,23 @@ export async function renderSystemInfo(container) {
                                 Controls which events are recorded to the audit log. Lower levels include all higher level events.
                             </p>
                         </div>
+                        <div>
+                            <label class="flex items-center space-x-3 cursor-pointer">
+                                <input type="checkbox" id="log-api-requests" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600">
+                                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Log API Requests</span>
+                            </label>
+                            <p class="mt-1 ml-7 text-xs text-gray-500 dark:text-gray-400">
+                                When enabled and log level is DEBUG, logs all authenticated API requests. May generate many entries.
+                            </p>
+                        </div>
                         <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
                             <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Log Levels</h4>
                             <ul class="text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                                <li><span class="inline-block w-16 font-medium text-red-600 dark:text-red-400">ERROR</span> Exceptions and failures</li>
-                                <li><span class="inline-block w-16 font-medium text-yellow-600 dark:text-yellow-400">WARNING</span> Suspicious activity, near-failures</li>
-                                <li><span class="inline-block w-16 font-medium text-blue-600 dark:text-blue-400">INFO</span> CRUD operations, settings changes, auth events</li>
-                                <li><span class="inline-block w-16 font-medium text-gray-600 dark:text-gray-400">DEBUG</span> Detailed diagnostics (may impact performance)</li>
+                                <li><span class="inline-block w-20 font-medium text-red-600 dark:text-red-400">ERROR</span> Exceptions and failures</li>
+                                <li><span class="inline-block w-20 font-medium text-orange-600 dark:text-orange-400">SECURITY</span> Suspicious tokens, auth anomalies</li>
+                                <li><span class="inline-block w-20 font-medium text-yellow-600 dark:text-yellow-400">WARNING</span> Near-failures, degraded states</li>
+                                <li><span class="inline-block w-20 font-medium text-blue-600 dark:text-blue-400">INFO</span> CRUD operations, settings, auth events</li>
+                                <li><span class="inline-block w-20 font-medium text-purple-600 dark:text-purple-400">DEBUG</span> Diagnostics, API requests (if enabled)</li>
                             </ul>
                         </div>
                     </div>
@@ -149,6 +160,12 @@ function setupEventListeners(currentSettings) {
     if (auditLogLevelSelect) {
         const currentLevel = currentSettings.audit_log_level || 'INFO';
         auditLogLevelSelect.value = currentLevel;
+    }
+
+    // Set API request logging checkbox
+    const logApiRequestsCheckbox = document.getElementById('log-api-requests');
+    if (logApiRequestsCheckbox) {
+        logApiRequestsCheckbox.checked = currentSettings.log_api_requests === 'true';
     }
 
     // Load version info and environment
@@ -241,6 +258,26 @@ function setupEventListeners(currentSettings) {
         } catch (error) {
             console.error('Failed to save audit log level:', error);
             showToast('Failed to save audit log level', 'error');
+        }
+    });
+
+    // API request logging checkbox handler
+    document.getElementById('log-api-requests')?.addEventListener('change', async (e) => {
+        const value = e.target.checked ? 'true' : 'false';
+
+        try {
+            const response = await fetch('/admin/api/settings/log_api_requests', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ value })
+            });
+
+            if (!response.ok) throw new Error('Failed to save');
+
+            showToast('API request logging ' + (e.target.checked ? 'enabled' : 'disabled'), 'success');
+        } catch (error) {
+            console.error('Failed to save API request logging setting:', error);
+            showToast('Failed to save setting', 'error');
         }
     });
 

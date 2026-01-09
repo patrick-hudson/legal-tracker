@@ -494,7 +494,11 @@ class AdminAPI {
 
     // Audit Log
     async getAuditLog(params = {}) {
-        const queryString = new URLSearchParams(params).toString();
+        // Filter out undefined/null values to avoid sending "undefined" as string
+        const cleanParams = Object.fromEntries(
+            Object.entries(params).filter(([_, v]) => v != null)
+        );
+        const queryString = new URLSearchParams(cleanParams).toString();
         return this.request(`/audit-log${queryString ? `?${queryString}` : ''}`);
     }
 

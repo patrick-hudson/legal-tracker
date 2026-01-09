@@ -7,7 +7,7 @@ import rateLimit from '@fastify/rate-limit';
 import fastifyMultipart from '@fastify/multipart';
 import Anthropic from '@anthropic-ai/sdk';
 import { createDatabase } from './db.js';
-import { initAudit, logInfo, logError, logWarning, logInfoFromRequest, logErrorFromRequest, getUserContext, ACTION_TYPES, ENTITY_TYPES } from './audit.js';
+import { initAudit, logInfo, logError, logWarning, logSecurity, logInfoFromRequest, logErrorFromRequest, logSecurityFromRequest, logDebugFromRequest, getUserContext, ACTION_TYPES, ENTITY_TYPES } from './audit.js';
 import { hashPassword, verifyPassword, generateTokenId, generateApiKey, createAdminAuthMiddleware, getTokenExpiration, generateBootstrapToken, hashBootstrapToken, getBootstrapTokenExpiration, validatePasswordStrength } from './auth.js';
 import { createStorage, createStorageFromConfig, validateFileType, sanitizeFilename, MAX_FILE_SIZE } from './storage.js';
 import { generateLegalDocument, generatePlaceholderDocument } from './legal-docs.js';
@@ -635,6 +635,67 @@ export async function createServer(options = {}) {
   // Create admin auth middleware
   const adminAuthMiddleware = createAdminAuthMiddleware(adminSessionsDb, adminUsersDb);
 
+  // API request logging hooks (only logs when setting is enabled and level is DEBUG)
+  // Capture request body before processing
+  fastify.addHook('preHandler', async (request) => {
+    // Only for admin API requests
+    if (!request.url.startsWith('/admin/api/')) return;
+
+    // Store the request body for later logging (if it exists and isn't a file upload)
+    if (request.body && typeof request.body === 'object' && !request.isMultipart) {
+      // Sanitize sensitive fields from body
+      const sanitizedBody = { ...request.body };
+      const sensitiveFields = ['password', 'hashedPassword', 'apiKey', 'api_key', 'secret', 'token'];
+      for (const field of sensitiveFields) {
+        if (sanitizedBody[field]) {
+          sanitizedBody[field] = '[REDACTED]';
+        }
+      }
+      request.logBody = sanitizedBody;
+    }
+  });
+
+  // Log after response is sent
+  fastify.addHook('onResponse', async (request, reply) => {
+    // Only log admin API requests (not public routes, not static files)
+    if (!request.url.startsWith('/admin/api/')) return;
+
+    // Skip certain noisy endpoints
+    const skipEndpoints = ['/admin/api/auth/validate', '/admin/api/watchdog/status'];
+    if (skipEndpoints.some(ep => request.url.startsWith(ep))) return;
+
+    // Only log if user is authenticated (request.adminUser is set by middleware)
+    if (!request.adminUser) return;
+
+    // Check if API request logging is enabled
+    const logApiRequests = settingsDb.get('log_api_requests');
+    if (logApiRequests !== 'true') return;
+
+    // Build request details
+    const requestDetails = {
+      method: request.method,
+      url: request.url
+    };
+    if (Object.keys(request.query || {}).length > 0) {
+      requestDetails.query = request.query;
+    }
+    if (request.logBody && Object.keys(request.logBody).length > 0) {
+      requestDetails.body = request.logBody;
+    }
+
+    // Log at DEBUG level
+    logDebugFromRequest(request, {
+      actionType: ACTION_TYPES.API_CALL,
+      entityType: ENTITY_TYPES.SYSTEM,
+      summary: `${request.method} ${request.url} -> ${reply.statusCode}`,
+      durationMs: reply.elapsedTime ? Math.round(reply.elapsedTime) : null,
+      request: requestDetails,
+      response: {
+        statusCode: reply.statusCode
+      }
+    });
+  });
+
   // ============ WATCHDOG PROXY ENDPOINTS ============
   // These proxy requests to the watchdog process manager (if running)
   // WATCHDOG_URL can be set to a full URL (e.g., http://watchdog:3001) or just port for localhost
@@ -976,6 +1037,92 @@ export async function createServer(options = {}) {
 
   // ============ ADMIN AUTH ENDPOINTS ============
 
+  // Validate token - checks if admin_token cookie is valid, clears if stale
+  // Used by login page to detect and clean up invalid tokens
+  fastify.get('/admin/api/auth/validate', async (request, reply) => {
+    const token = request.cookies.admin_token;
+
+    // No token present - nothing to validate
+    if (!token) {
+      return { valid: false, reason: 'no_token' };
+    }
+
+    try {
+      // Try to decode and verify the JWT
+      const decoded = fastify.jwt.verify(token);
+
+      // Check if session exists and is valid
+      const session = adminSessionsDb.getByJti(decoded.jti);
+      if (!session) {
+        // Token is valid JWT but session doesn't exist (logged out elsewhere, server restarted, etc.)
+        logSecurityFromRequest(request, {
+          entityType: ENTITY_TYPES.USER,
+          summary: 'Stale admin token detected and cleared - session not found',
+          details: {
+            tokenJti: decoded.jti,
+            tokenUsername: decoded.username,
+            reason: 'session_not_found'
+          }
+        });
+
+        reply.clearCookie('admin_token', {
+          path: '/',
+          httpOnly: true,
+          secure: COOKIE_SECURE,
+          sameSite: 'strict'
+        });
+
+        return { valid: false, reason: 'session_not_found', cleared: true };
+      }
+
+      // Check if session is expired
+      if (new Date(session.expires_at) < new Date()) {
+        logSecurityFromRequest(request, {
+          entityType: ENTITY_TYPES.USER,
+          summary: 'Expired admin token detected and cleared',
+          details: {
+            tokenJti: decoded.jti,
+            tokenUsername: decoded.username,
+            reason: 'session_expired',
+            expiredAt: session.expires_at
+          }
+        });
+
+        reply.clearCookie('admin_token', {
+          path: '/',
+          httpOnly: true,
+          secure: COOKIE_SECURE,
+          sameSite: 'strict'
+        });
+
+        return { valid: false, reason: 'session_expired', cleared: true };
+      }
+
+      // Token and session are valid
+      return { valid: true, username: decoded.username };
+
+    } catch (err) {
+      // JWT verification failed (invalid signature, malformed, etc.)
+      logSecurityFromRequest(request, {
+        entityType: ENTITY_TYPES.USER,
+        summary: 'Invalid admin token detected and cleared',
+        details: {
+          error: err.message,
+          reason: 'invalid_token'
+        }
+      });
+
+      reply.clearCookie('admin_token', {
+        path: '/',
+        httpOnly: true,
+        secure: COOKIE_SECURE,
+        sameSite: 'strict'
+      });
+
+      return { valid: false, reason: 'invalid_token', cleared: true };
+    }
+  });
+
   // Admin login - strict rate limiting to prevent brute force attacks
   fastify.post('/admin/api/auth/login', {
     config: {
@@ -1082,12 +1229,19 @@ export async function createServer(options = {}) {
   });
 
   // Admin logout
-  fastify.post('/admin/api/auth/logout', { preHandler: adminAuthMiddleware }, async (request) => {
+  fastify.post('/admin/api/auth/logout', { preHandler: adminAuthMiddleware }, async (request, reply) => {
     const jti = request.user.jti;
 
-    // Invalidate session in database - this is what actually logs the user out
-    // The cookie will still exist in browser but will be rejected by auth middleware
+    // Invalidate session in database
     adminSessionsDb.invalidate(jti);
+
+    // Clear the cookie
+    reply.clearCookie('admin_token', {
+      path: '/',
+      httpOnly: true,
+      secure: COOKIE_SECURE,
+      sameSite: 'strict'
+    });
 
     // Log logout
     logInfoFromRequest(request, {

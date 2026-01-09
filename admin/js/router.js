@@ -54,7 +54,7 @@ class Router {
         if (!auth.isAuthenticated) {
             const isAuth = await auth.checkAuth();
             if (!isAuth) {
-                this.showLogin();
+                await this.showLogin();
                 return;
             }
         }
@@ -108,7 +108,19 @@ class Router {
         }
     }
 
-    showLogin() {
+    async showLogin() {
+        // Validate and clear any stale tokens before showing login
+        try {
+            const response = await fetch('/admin/api/auth/validate', {
+                credentials: 'include'
+            });
+            const result = await response.json();
+            // If token was cleared, the server will set the cookie removal header
+            // No action needed here - just ensuring stale tokens are cleaned up
+        } catch (e) {
+            // Validation endpoint unavailable - continue showing login
+        }
+
         document.getElementById('login-page').classList.remove('hidden');
         document.getElementById('admin-layout').classList.add('hidden');
     }

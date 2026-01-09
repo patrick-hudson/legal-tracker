@@ -177,6 +177,22 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
     db.run(`INSERT INTO settings (key, value) VALUES ('auto_drain_enabled', 'false')`); // Default: disabled
   }
 
+  // Initialize audit logging settings
+  const auditLogLevelExists = db.exec('SELECT value FROM settings WHERE key = ?', ['audit_log_level']);
+  if (!auditLogLevelExists.length || !auditLogLevelExists[0].values.length) {
+    db.run(`INSERT INTO settings (key, value) VALUES ('audit_log_level', 'INFO')`); // Default: INFO level
+  }
+
+  const logApiRequestsExists = db.exec('SELECT value FROM settings WHERE key = ?', ['log_api_requests']);
+  if (!logApiRequestsExists.length || !logApiRequestsExists[0].values.length) {
+    db.run(`INSERT INTO settings (key, value) VALUES ('log_api_requests', 'false')`); // Default: disabled
+  }
+
+  const auditLogPageSizeExists = db.exec('SELECT value FROM settings WHERE key = ?', ['audit_log_page_size']);
+  if (!auditLogPageSizeExists.length || !auditLogPageSizeExists[0].values.length) {
+    db.run(`INSERT INTO settings (key, value) VALUES ('audit_log_page_size', '25')`); // Default: 25 entries per page
+  }
+
   // Migrations for existing databases
   // Add new matter fields if they don't exist
   const matterColumns = db.exec("PRAGMA table_info(matters)");

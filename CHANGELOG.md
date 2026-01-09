@@ -6,21 +6,59 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Audit log pagination controls**: Enhanced navigation for audit log entries
+  - Configurable page size (25, 50, 100, 200) with preference saved to database
+  - "Goto Page" input box for direct page navigation
+  - Top and bottom navigation buttons for easier access
+  - Default page size changed to 25 entries
+
+- **API request payload logging**: Request bodies now included in DEBUG-level API logs
+  - Captures request body/payload in preHandler hook
+  - Sanitizes sensitive fields (password, apiKey, secret, token) with `[REDACTED]`
+  - Response status code included in log details
+
+- **Default settings initialization**: New database defaults for audit settings
+  - `audit_log_level`: defaults to 'INFO'
+  - `log_api_requests`: defaults to 'false'
+  - `audit_log_page_size`: defaults to '25'
+
+### Fixed
+
+- **Audit log row expansion bug**: Clicking rows caused exponential expansion
+  - Event listeners were being duplicated on each table reload
+  - Now properly removes old handler before attaching new one
+  - Clicks on expanded detail rows no longer toggle parent
+
 ---
 
 ## [0.11.3] - 2026-01-09
 
 ### Added
 
-- **Watchdog Process Manager**: Lightweight process manager for server lifecycle control
-  - HTTP API on port 3001 with status, restart, and file changes endpoints
-  - Automatic crash recovery with 2-second delay before restart
-  - File change detection tracks modifications since last restart
-  - Audit log integration logs all restart events with reasons
-  - Admin UI shows server status, uptime, restart count, and pending changes
-  - One-click restart button in System Info page
-  - Yellow warning banner shows modified files needing restart
-  - Graceful shutdown on SIGINT/SIGTERM
+- **SECURITY audit log level**: New log level for security-related events
+  - Sits between ERROR and WARNING in severity (always logged)
+  - Orange badge and left border styling in audit log UI
+  - Filter option in audit log dropdown
+  - `logSecurity()` and `logSecurityFromRequest()` functions
+
+- **Token validation endpoint**: Detects and clears stale admin tokens
+  - `GET /admin/api/auth/validate` checks token and session validity
+  - Automatically clears invalid/expired tokens from browser
+  - Logs security events when stale tokens are detected
+  - Called automatically when login page is shown
+
+- **API request logging**: Optional DEBUG-level logging for all admin API requests
+  - New "Log API Requests" toggle in System Info settings
+  - Requires both DEBUG log level and explicit opt-in
+  - Logs method, URL, query params, status code, and duration
+  - Skips noisy endpoints (validate, watchdog status)
+
+### Fixed
+
+- **Logout now clears admin_token cookie**: Previously only invalidated session in database
+- **Audit log filter fix**: Level filter was sending `level=undefined` as string literal
 
 ---
 
