@@ -7,7 +7,7 @@ import rateLimit from '@fastify/rate-limit';
 import fastifyMultipart from '@fastify/multipart';
 import Anthropic from '@anthropic-ai/sdk';
 import { createDatabase } from './db.js';
-import { initAudit, logInfo, logError, logWarning, logSecurity, logInfoFromRequest, logErrorFromRequest, logSecurityFromRequest, logDebugFromRequest, getUserContext, ACTION_TYPES, ENTITY_TYPES } from './audit.js';
+import { initAudit, logInfo, logError, logWarning, logSecurity, logInfoFromRequest, logErrorFromRequest, logSecurityFromRequest, logDebugFromRequest, getUserContext, callClaudeWithLogging, ACTION_TYPES, ENTITY_TYPES } from './audit.js';
 import { hashPassword, verifyPassword, generateTokenId, generateApiKey, createAdminAuthMiddleware, getTokenExpiration, generateBootstrapToken, hashBootstrapToken, getBootstrapTokenExpiration, validatePasswordStrength } from './auth.js';
 import { createStorage, createStorageFromConfig, validateFileType, sanitizeFilename, MAX_FILE_SIZE } from './storage.js';
 import { generateLegalDocument, generatePlaceholderDocument } from './legal-docs.js';
@@ -1779,9 +1779,10 @@ export async function createServer(options = {}) {
       const attachments = attachmentsDb.getByMatterId(parseInt(id));
       if (attachments.length > 0) {
         const storage = createStorage(settingsDb);
+        const userContext = getUserContext(request);
         for (const attachment of attachments) {
           try {
-            await storage.deleteObject(attachment.storage_key);
+            await storage.deleteObject(attachment.storage_key, userContext);
           } catch (err) {
             fastify.log.warn({ attachmentId: attachment.id, error: err.message }, 'Failed to delete attachment from storage');
           }
@@ -2027,12 +2028,14 @@ export async function createServer(options = {}) {
     try {
       // Get storage instance
       const storage = createStorage(settingsDb);
+      const userContext = getUserContext(request);
 
       // Upload to storage
       const result = await storage.putObject(
         file.file,
         sanitizeFilename(file.filename),
-        { contentType: file.mimetype }
+        { contentType: file.mimetype },
+        userContext
       );
 
       // Create database record
@@ -2090,9 +2093,10 @@ export async function createServer(options = {}) {
     try {
       // Get storage instance
       const storage = createStorage(settingsDb);
+      const userContext = getUserContext(request);
 
       // Get file stream
-      const { stream, size } = await storage.getObjectStream(attachment.storage_key);
+      const { stream, size } = await storage.getObjectStream(attachment.storage_key, userContext);
 
       // Set response headers for file download
       reply.header('Content-Type', attachment.content_type);
@@ -2118,9 +2122,10 @@ export async function createServer(options = {}) {
     try {
       // Get storage instance
       const storage = createStorage(settingsDb);
+      const userContext = getUserContext(request);
 
       // Delete from storage
-      await storage.deleteObject(attachment.storage_key);
+      await storage.deleteObject(attachment.storage_key, userContext);
 
       // Delete database record
       attachmentsDb.delete(parseInt(attachmentId));
@@ -2492,12 +2497,13 @@ export async function createServer(options = {}) {
     try {
       const client = new Anthropic({ apiKey: claudeApiKey });
       const prompt = buildDescriptionPrompt(count, spiceLevel, customPrompt);
+      const userContext = getUserContext(request);
 
-      const response = await client.messages.create({
+      const response = await callClaudeWithLogging(client, {
         model,
         max_tokens: 2048,
         messages: [{ role: 'user', content: prompt }]
-      });
+      }, userContext);
 
       const content = response.content?.[0]?.text;
       if (!content) {
@@ -2908,7 +2914,7 @@ Return ONLY a JSON array of strings, no other text. Example format:
   }
 
   // Helper function to generate descriptions using Claude API (with SDK)
-  async function generateClaudeDescriptions(count, overrideSpiceLevel = null) {
+  async function generateClaudeDescriptions(count, overrideSpiceLevel = null, context = {}) {
     const claudeApiKey = settingsDb.get('claude_api_key');
     const model = settingsDb.get('claude_model');
 
@@ -2922,11 +2928,11 @@ Return ONLY a JSON array of strings, no other text. Example format:
       const customPrompt = settingsDb.get('ai_custom_prompt') || '';
       const prompt = buildDescriptionPrompt(count, spiceLevel, customPrompt);
 
-      const response = await client.messages.create({
+      const response = await callClaudeWithLogging(client, {
         model,
         max_tokens: 4096,
         messages: [{ role: 'user', content: prompt }]
-      });
+      }, context);
 
       const content = response.content?.[0]?.text;
       if (!content) return null;
@@ -2938,17 +2944,13 @@ Return ONLY a JSON array of strings, no other text. Example format:
       const descriptions = JSON.parse(jsonMatch[0]);
       return Array.isArray(descriptions) ? descriptions : null;
     } catch (err) {
-      logError({
-        error: err,
-        entityType: ENTITY_TYPES.CLAUDE_API,
-        summary: 'Claude API error generating descriptions'
-      });
+      // Error already logged by callClaudeWithLogging
       return null;
     }
   }
 
   // Helper function to generate private notes using Claude API
-  async function generateClaudePrivateNotes(count, overrideSpiceLevel = null) {
+  async function generateClaudePrivateNotes(count, overrideSpiceLevel = null, context = {}) {
     const claudeApiKey = settingsDb.get('claude_api_key');
     const model = settingsDb.get('claude_model');
 
@@ -2990,11 +2992,11 @@ Tone: ${instruction}
 Return ONLY a JSON array of strings, no other text. Example format:
 ["Note 1 text here", "Note 2 text here", ...]`;
 
-      const response = await client.messages.create({
+      const response = await callClaudeWithLogging(client, {
         model,
         max_tokens: 4096,
         messages: [{ role: 'user', content: prompt }]
-      });
+      }, context);
 
       const content = response.content?.[0]?.text;
       if (!content) return null;
@@ -3005,11 +3007,7 @@ Return ONLY a JSON array of strings, no other text. Example format:
       const notes = JSON.parse(jsonMatch[0]);
       return Array.isArray(notes) ? notes : null;
     } catch (err) {
-      logError({
-        error: err,
-        entityType: ENTITY_TYPES.CLAUDE_API,
-        summary: 'Claude API error generating private notes'
-      });
+      // Error already logged by callClaudeWithLogging
       return null;
     }
   }
@@ -3109,7 +3107,8 @@ Return ONLY a JSON array of strings, no other text. Example format:
         let descriptions = staticDescriptions;
 
         if (useAiDescriptions) {
-          const aiDescriptions = await generateClaudeDescriptions(matterCount, spiceLevelOverride);
+          const userContext = getUserContext(request);
+          const aiDescriptions = await generateClaudeDescriptions(matterCount, spiceLevelOverride, userContext);
           if (aiDescriptions && aiDescriptions.length > 0) {
             descriptions = aiDescriptions;
             usedAi = true;
@@ -3224,7 +3223,8 @@ Return ONLY a JSON array of strings, no other text. Example format:
           // Get notes (AI or static)
           let notePool = [];
           if (useAiDescriptions) {
-            const aiNotes = await generateClaudePrivateNotes(totalNotesNeeded, spiceLevelOverride);
+            const userContext = getUserContext(request);
+            const aiNotes = await generateClaudePrivateNotes(totalNotesNeeded, spiceLevelOverride, userContext);
             if (aiNotes && aiNotes.length > 0) {
               notePool = aiNotes;
             }
@@ -3293,17 +3293,20 @@ Return ONLY a JSON array of strings, no other text. Example format:
               if (claudeApiKey && model) {
                 // Use Claude API to generate document
                 const client = new Anthropic({ apiKey: claudeApiKey });
-                docResult = await generateLegalDocument(client, model, matterData, spiceLevel);
+                const userContext = getUserContext(request);
+                docResult = await generateLegalDocument(client, model, matterData, spiceLevel, userContext);
               } else {
                 // Generate placeholder document
                 docResult = await generatePlaceholderDocument(matterData);
               }
 
-              // Store the document
+              // Store the document (reuse userContext from above or create if using placeholder)
+              const storageContext = (claudeApiKey && model) ? userContext : getUserContext(request);
               const storageResult = await storage.putObject(
                 docResult.buffer,
                 docResult.filename,
-                { contentType: docResult.contentType }
+                { contentType: docResult.contentType },
+                storageContext
               );
 
               // Generate document date (0-30 days after matter date)

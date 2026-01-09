@@ -15,6 +15,7 @@ import assert from 'node:assert';
 import { createServer } from '../server.js';
 import crypto from 'crypto';
 import { hashPassword } from '../auth.js';
+import { logDebug, initAudit, ENTITY_TYPES, ACTION_TYPES } from '../audit.js';
 
 describe('Audit Log Tests', () => {
   let server;
@@ -389,6 +390,207 @@ describe('Audit Log Tests', () => {
       const logs = auditLogDb.getAll({ limit: 5 });
       const settingsEntry = logs.entries.find(e => e.action_type === 'settings_change');
       assert.ok(settingsEntry, 'Should have settings_change entry');
+    });
+  });
+
+  describe('Debug Mode Logging', () => {
+    it('should not create DEBUG entries when debug mode is off (default)', async () => {
+      const { auditLogDb, settingsDb } = server.db;
+
+      // Ensure debug mode is off (INFO level)
+      settingsDb.set('audit_log_level', 'INFO');
+
+      // Re-init audit with current settings
+      initAudit(server.db);
+
+      const initialCount = auditLogDb.getCount();
+
+      // Try to create a DEBUG level entry using logDebug (should be filtered)
+      logDebug({
+        actionType: ACTION_TYPES.API_CALL,
+        entityType: ENTITY_TYPES.CLAUDE_API,
+        summary: 'Debug test entry that should be filtered'
+      });
+
+      const newCount = auditLogDb.getCount();
+      // DEBUG entry should NOT be created when level is INFO
+      assert.strictEqual(newCount, initialCount, 'DEBUG entry should not be created when debug mode is off');
+    });
+
+    it('should create DEBUG entries when debug mode is on', async () => {
+      const { auditLogDb, settingsDb } = server.db;
+
+      // Enable debug mode
+      settingsDb.set('audit_log_level', 'DEBUG');
+
+      // Re-init audit with current settings
+      initAudit(server.db);
+
+      const initialCount = auditLogDb.getCount();
+
+      // Create a DEBUG level entry using logDebug
+      logDebug({
+        actionType: ACTION_TYPES.API_CALL,
+        entityType: ENTITY_TYPES.CLAUDE_API,
+        summary: 'Debug test entry when enabled',
+        request: { model: 'claude-3', messages: [] },
+        response: { id: 'test-123', usage: { input_tokens: 100 } },
+        durationMs: 500
+      });
+
+      const newCount = auditLogDb.getCount();
+      assert.ok(newCount > initialCount, 'DEBUG entry should be created when debug mode is on');
+
+      // Find the entry we just created
+      const logs = auditLogDb.getAll({ level: 'DEBUG', limit: 1 });
+      const entry = logs.entries.find(e => e.summary === 'Debug test entry when enabled');
+      assert.ok(entry, 'Should find the debug entry');
+      assert.strictEqual(entry.level, 'DEBUG');
+      assert.strictEqual(entry.entity_type, 'claude_api');
+      assert.deepStrictEqual(entry.request, { model: 'claude-3', messages: [] });
+      assert.deepStrictEqual(entry.response, { id: 'test-123', usage: { input_tokens: 100 } });
+      assert.strictEqual(entry.duration_ms, 500);
+
+      // Reset to INFO level
+      settingsDb.set('audit_log_level', 'INFO');
+      initAudit(server.db);
+    });
+
+    it('should store request and response JSON correctly', async () => {
+      const { auditLogDb, settingsDb } = server.db;
+
+      // Enable debug mode
+      settingsDb.set('audit_log_level', 'DEBUG');
+      initAudit(server.db);
+
+      const testRequest = {
+        model: 'claude-3-sonnet',
+        max_tokens: 4096,
+        messages: [{ role: 'user', content: 'Test prompt' }]
+      };
+
+      const testResponse = {
+        id: 'msg_12345',
+        model: 'claude-3-sonnet',
+        stopReason: 'end_turn',
+        usage: { input_tokens: 50, output_tokens: 200 },
+        contentLength: 1500
+      };
+
+      logDebug({
+        actionType: ACTION_TYPES.API_CALL,
+        entityType: ENTITY_TYPES.CLAUDE_API,
+        summary: 'Claude API response: claude-3-sonnet (1234ms)',
+        request: testRequest,
+        response: testResponse,
+        durationMs: 1234
+      });
+
+      // Find the entry
+      const logs = auditLogDb.getAll({ level: 'DEBUG', limit: 5 });
+      const entry = logs.entries.find(e => e.summary.includes('Claude API response: claude-3-sonnet'));
+
+      assert.ok(entry, 'Should find the entry');
+      // Verify JSON was stored and retrieved correctly
+      assert.deepStrictEqual(entry.request, testRequest);
+      assert.deepStrictEqual(entry.response, testResponse);
+      assert.strictEqual(entry.duration_ms, 1234);
+
+      // Reset
+      settingsDb.set('audit_log_level', 'INFO');
+      initAudit(server.db);
+    });
+
+    it('should create DEBUG entries with correct storage operation format', async () => {
+      const { auditLogDb, settingsDb } = server.db;
+
+      // Enable debug mode
+      settingsDb.set('audit_log_level', 'DEBUG');
+      initAudit(server.db);
+
+      logDebug({
+        actionType: ACTION_TYPES.API_CALL,
+        entityType: ENTITY_TYPES.ATTACHMENT,
+        summary: 'Storage putObject: uuid/file.pdf (12345 bytes, 50ms)',
+        request: { operation: 'putObject', key: 'uuid/file.pdf', contentType: 'application/pdf' },
+        response: { sizeBytes: 12345 },
+        durationMs: 50
+      });
+
+      const logs = auditLogDb.getAll({ level: 'DEBUG', limit: 5 });
+      const entry = logs.entries.find(e => e.summary.includes('Storage putObject'));
+
+      assert.ok(entry, 'Should find the storage entry');
+      assert.strictEqual(entry.entity_type, 'attachment');
+      assert.strictEqual(entry.request.operation, 'putObject');
+
+      // Reset
+      settingsDb.set('audit_log_level', 'INFO');
+      initAudit(server.db);
+    });
+
+    it('should filter DEBUG entries in API response when level filter is applied', async () => {
+      const { settingsDb, auditLogDb } = server.db;
+
+      // Enable debug mode and create some entries
+      settingsDb.set('audit_log_level', 'DEBUG');
+      initAudit(server.db);
+
+      logDebug({
+        actionType: ACTION_TYPES.API_CALL,
+        summary: 'Debug entry for filter test'
+      });
+
+      // Also create an INFO entry directly (these always log)
+      auditLogDb.create({
+        level: 'INFO',
+        action_type: 'create',
+        summary: 'Info entry for filter test'
+      });
+
+      // Test API filter for DEBUG only
+      const debugResponse = await fetch(`${baseURL}/admin/api/audit-log?level=DEBUG`, {
+        headers: { 'Cookie': adminCookie }
+      });
+
+      const debugData = await debugResponse.json();
+      assert.ok(debugData.entries.every(e => e.level === 'DEBUG'), 'All entries should be DEBUG level');
+
+      // Test API filter for INFO only
+      const infoResponse = await fetch(`${baseURL}/admin/api/audit-log?level=INFO`, {
+        headers: { 'Cookie': adminCookie }
+      });
+
+      const infoData = await infoResponse.json();
+      assert.ok(infoData.entries.every(e => e.level === 'INFO'), 'All entries should be INFO level');
+
+      // Reset
+      settingsDb.set('audit_log_level', 'INFO');
+      initAudit(server.db);
+    });
+
+    it('should still log ERROR entries regardless of debug mode setting', async () => {
+      const { auditLogDb, settingsDb } = server.db;
+
+      // Set to INFO (debug mode off)
+      settingsDb.set('audit_log_level', 'INFO');
+      initAudit(server.db);
+
+      const initialCount = auditLogDb.getCount();
+
+      // ERROR entries should always be logged (use direct create since logError would also work)
+      const result = auditLogDb.create({
+        level: 'ERROR',
+        action_type: 'error',
+        summary: 'Test error with debug off',
+        stack_trace: 'Error: test'
+      });
+
+      const newCount = auditLogDb.getCount();
+      assert.ok(newCount > initialCount, 'ERROR entry should always be created');
+
+      const entry = auditLogDb.getById(result.id);
+      assert.strictEqual(entry.level, 'ERROR');
     });
   });
 });

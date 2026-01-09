@@ -12,6 +12,7 @@ let currentLimit = 25;
 let expandedRows = new Set();
 let tbodyClickHandler = null;
 let settingsLoaded = false;
+let isDebugModeActive = false;
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 const DEFAULT_PAGE_SIZE = 25;
@@ -30,7 +31,7 @@ export async function renderAuditLog(container) {
     container.innerHTML = '<div class="flex justify-center items-center h-64"><div class="spinner"></div></div>';
 
     try {
-        // Load saved page size preference on first render
+        // Load saved page size preference and debug mode status on first render
         if (!settingsLoaded) {
             try {
                 const settings = await api.getSettings();
@@ -40,6 +41,8 @@ export async function renderAuditLog(container) {
                         currentLimit = savedLimit;
                     }
                 }
+                // Check if debug mode is active
+                isDebugModeActive = settings.audit_log_level === 'DEBUG';
             } catch (e) {
                 // Settings not available, use default
             }
@@ -65,10 +68,31 @@ async function loadAuditLog(container) {
     const { entries, total, page, totalPages } = data;
 
     container.innerHTML = `
-        <div class="mb-4">
-            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Audit Log</h1>
-            <p class="text-gray-600 dark:text-gray-400">System activity and security events</p>
+        <div class="mb-4 flex items-start justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Audit Log</h1>
+                <p class="text-gray-600 dark:text-gray-400">System activity and security events</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${isDebugModeActive ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}">
+                    <span class="w-2 h-2 ${isDebugModeActive ? 'bg-purple-500' : 'bg-gray-400'} rounded-full mr-1.5"></span>
+                    Debug ${isDebugModeActive ? 'ON' : 'OFF'}
+                </span>
+                <a href="#system-info" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">Settings</a>
+            </div>
         </div>
+
+        ${isDebugModeActive ? `
+            <div class="mb-4 p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg">
+                <div class="flex items-center text-purple-800 dark:text-purple-300">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <span class="font-medium">Debug mode active</span>
+                    <span class="ml-2 text-sm font-normal">- verbose logging enabled (Claude API calls, storage operations)</span>
+                </div>
+            </div>
+        ` : ''}
 
         <!-- Filters and Top Navigation -->
         <div class="mb-4 flex flex-wrap gap-4 items-end justify-between">
@@ -159,14 +183,20 @@ function renderRow(entry) {
     const hasDetails = entry.details || entry.request || entry.response || entry.stack_trace;
     const isError = entry.level === 'ERROR';
     const isSecurity = entry.level === 'SECURITY';
+    const isDebug = entry.level === 'DEBUG';
 
-    // Determine row border styling based on level
+    // Determine row styling based on level
     let borderClass = '';
+    let bgClass = '';
     if (isError) borderClass = 'border-l-4 border-l-red-500';
     else if (isSecurity) borderClass = 'border-l-4 border-l-orange-500';
+    else if (isDebug) {
+        borderClass = 'border-l-4 border-l-purple-400';
+        bgClass = 'bg-purple-50/50 dark:bg-purple-900/10';
+    }
 
     return `
-        <tr class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 ${hasDetails ? 'cursor-pointer' : ''} ${borderClass}" data-entry-id="${entry.id}">
+        <tr class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 ${hasDetails ? 'cursor-pointer' : ''} ${borderClass} ${bgClass}" data-entry-id="${entry.id}">
             <td class="px-4 py-3">
                 ${hasDetails ? `
                     <svg class="w-4 h-4 transition-transform ${isExpanded ? 'rotate-90' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -200,8 +230,12 @@ function renderRow(entry) {
 }
 
 function renderDetailsRow(entry) {
+    const isDebug = entry.level === 'DEBUG';
+    const isApiCall = entry.entity_type === 'claude_api' || (entry.request && entry.response);
+    const detailsBgClass = isDebug ? 'bg-purple-50/30 dark:bg-purple-900/5' : 'bg-gray-50 dark:bg-gray-900';
+
     return `
-        <tr class="bg-gray-50 dark:bg-gray-900" data-details-for="${entry.id}">
+        <tr class="${detailsBgClass}" data-details-for="${entry.id}">
             <td colspan="7" class="px-4 py-4">
                 <div class="space-y-3 text-sm">
                     ${entry.ip_address ? `
@@ -210,7 +244,7 @@ function renderDetailsRow(entry) {
                             <span class="ml-2 text-gray-600 dark:text-gray-400">${escapeHtml(entry.ip_address)}</span>
                         </div>
                     ` : ''}
-                    ${entry.duration_ms ? `
+                    ${entry.duration_ms !== undefined && entry.duration_ms !== null ? `
                         <div>
                             <span class="font-medium text-gray-700 dark:text-gray-300">Duration:</span>
                             <span class="ml-2 text-gray-600 dark:text-gray-400">${entry.duration_ms}ms</span>
@@ -219,30 +253,40 @@ function renderDetailsRow(entry) {
                     ${entry.details ? `
                         <div>
                             <span class="font-medium text-gray-700 dark:text-gray-300">Details:</span>
-                            <pre class="mt-1 p-3 bg-gray-100 dark:bg-gray-800 rounded text-xs overflow-x-auto">${escapeHtml(JSON.stringify(entry.details, null, 2))}</pre>
+                            <pre class="mt-1 p-3 bg-gray-100 dark:bg-gray-800 rounded text-xs overflow-x-auto max-h-64">${escapeHtml(JSON.stringify(entry.details, null, 2))}</pre>
                         </div>
                     ` : ''}
                     ${entry.request ? `
                         <div>
-                            <span class="font-medium text-gray-700 dark:text-gray-300">Request:</span>
-                            <pre class="mt-1 p-3 bg-gray-100 dark:bg-gray-800 rounded text-xs overflow-x-auto">${escapeHtml(JSON.stringify(entry.request, null, 2))}</pre>
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="font-medium ${isApiCall ? 'text-purple-700 dark:text-purple-400' : 'text-gray-700 dark:text-gray-300'}">Request:</span>
+                                <button class="copy-json-btn px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600" data-json="${escapeHtml(JSON.stringify(entry.request, null, 2)).replace(/"/g, '&quot;')}">
+                                    Copy
+                                </button>
+                            </div>
+                            <pre class="p-3 ${isApiCall ? 'bg-purple-50 dark:bg-purple-900/20' : 'bg-gray-100 dark:bg-gray-800'} rounded text-xs overflow-x-auto max-h-64">${escapeHtml(JSON.stringify(entry.request, null, 2))}</pre>
                         </div>
                     ` : ''}
                     ${entry.response ? `
                         <div>
-                            <span class="font-medium text-gray-700 dark:text-gray-300">Response:</span>
-                            <pre class="mt-1 p-3 bg-gray-100 dark:bg-gray-800 rounded text-xs overflow-x-auto">${escapeHtml(JSON.stringify(entry.response, null, 2))}</pre>
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="font-medium ${isApiCall ? 'text-purple-700 dark:text-purple-400' : 'text-gray-700 dark:text-gray-300'}">Response:</span>
+                                <button class="copy-json-btn px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600" data-json="${escapeHtml(JSON.stringify(entry.response, null, 2)).replace(/"/g, '&quot;')}">
+                                    Copy
+                                </button>
+                            </div>
+                            <pre class="p-3 ${isApiCall ? 'bg-purple-50 dark:bg-purple-900/20' : 'bg-gray-100 dark:bg-gray-800'} rounded text-xs overflow-x-auto max-h-64">${escapeHtml(JSON.stringify(entry.response, null, 2))}</pre>
                         </div>
                     ` : ''}
                     ${entry.stack_trace ? `
                         <div>
                             <div class="flex items-center justify-between">
                                 <span class="font-medium text-red-700 dark:text-red-400">Stack Trace:</span>
-                                <button class="copy-stack-trace-btn px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600" data-stack-trace="${escapeHtml(entry.stack_trace).replace(/"/g, '&quot;')}">
+                                <button class="copy-json-btn px-2 py-1 text-xs bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600" data-json="${escapeHtml(entry.stack_trace).replace(/"/g, '&quot;')}">
                                     Copy
                                 </button>
                             </div>
-                            <pre class="mt-1 p-3 bg-red-50 dark:bg-red-900/20 rounded text-xs overflow-x-auto text-red-800 dark:text-red-300 whitespace-pre-wrap font-mono">${escapeHtml(entry.stack_trace)}</pre>
+                            <pre class="mt-1 p-3 bg-red-50 dark:bg-red-900/20 rounded text-xs overflow-x-auto text-red-800 dark:text-red-300 whitespace-pre-wrap font-mono max-h-64">${escapeHtml(entry.stack_trace)}</pre>
                         </div>
                     ` : ''}
                 </div>
@@ -337,13 +381,13 @@ function setupEventListeners(container) {
             tbody.removeEventListener('click', tbodyClickHandler);
         }
         tbodyClickHandler = async (e) => {
-            // Handle copy stack trace button
-            const copyBtn = e.target.closest('.copy-stack-trace-btn');
+            // Handle copy JSON/text button (for request, response, stack trace)
+            const copyBtn = e.target.closest('.copy-json-btn');
             if (copyBtn) {
                 e.stopPropagation();
-                const stackTrace = copyBtn.dataset.stackTrace;
+                const textToCopy = copyBtn.dataset.json;
                 try {
-                    await navigator.clipboard.writeText(stackTrace);
+                    await navigator.clipboard.writeText(textToCopy);
                     const originalText = copyBtn.textContent;
                     copyBtn.textContent = 'Copied!';
                     setTimeout(() => { copyBtn.textContent = originalText; }, 2000);

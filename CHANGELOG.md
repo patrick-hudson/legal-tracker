@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Claude API call logging**: Wrapper function for logging all Claude API interactions
+  - `callClaudeWithLogging()` logs request before call and response after
+  - Captures model, duration, token usage, content length
+  - Sanitizes sensitive fields (apiKey, secretAccessKey, password, token)
+
+- **Storage operation logging**: Debug-level logging for file storage operations
+  - `logStoragePut()`, `logStorageGet()`, `logStorageDelete()` functions
+  - `logStorageError()` for error-level storage failures
+  - Tracks storage key, size, content type, and duration
+  - Works with both filesystem and S3 storage backends
+
+- **Audit log debug mode UI enhancements**:
+  - Debug mode ON/OFF indicator badge in header (links to System Info)
+  - Purple banner when debug mode is active
+  - Purple left border and muted background for DEBUG entries
+  - Copy buttons for request/response JSON in expanded view
+  - Max height with overflow scroll on expanded sections
+
+### Changed
+
+- Legal document generation now uses `callClaudeWithLogging()` for audit trail
+- All storage operations now receive user context for proper attribution
+- Server API calls pass user context through to logging functions
+
 ---
 
 ## [0.11.4] - 2026-01-09
@@ -851,7 +877,9 @@ Initial development phase establishing core functionality.
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| Unreleased | - | |
+| Unreleased | - | Claude API logging, storage logging, debug UI enhancements |
+| 0.11.4 | 2026-01-09 | Audit log pagination, API request payload logging |
+| 0.11.3 | 2026-01-09 | SECURITY log level, token validation, logout cookie clearing |
 | 0.11.2 | 2026-01-09 | Watchdog process manager |
 | 0.11.1 | 2026-01-09 | Global error handling, console statements replaced |
 | 0.11.0 | 2026-01-09 | Audit log level configuration |

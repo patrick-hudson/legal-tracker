@@ -5,6 +5,7 @@
 
 import PDFDocument from 'pdfkit';
 import { Readable } from 'stream';
+import { callClaudeWithLogging } from './audit.js';
 
 // Document types that can be generated
 const DOCUMENT_TYPES = [
@@ -93,16 +94,17 @@ Generate the complete ${docName}:`;
  * @param {string} docType - Document type
  * @param {Object} matter - Matter data
  * @param {number} spiceLevel - Spice level 1-8
+ * @param {Object} [context] - User context for logging
  * @returns {Promise<string>} Generated document content
  */
-export async function generateDocumentContent(client, model, docType, matter, spiceLevel = 1) {
+export async function generateDocumentContent(client, model, docType, matter, spiceLevel = 1, context = {}) {
     const prompt = buildDocumentPrompt(docType, matter, spiceLevel);
 
-    const response = await client.messages.create({
+    const response = await callClaudeWithLogging(client, {
         model,
         max_tokens: 4096,
         messages: [{ role: 'user', content: prompt }]
-    });
+    }, context);
 
     const content = response.content?.[0]?.text;
     if (!content) {
@@ -194,14 +196,15 @@ export async function textToPdf(content, docType, matter) {
  * @param {string} model - Model ID
  * @param {Object} matter - Matter data
  * @param {number} spiceLevel - Spice level 1-8
+ * @param {Object} [context] - User context for logging
  * @returns {Promise<{ buffer: Buffer, filename: string, contentType: string, docType: string }>}
  */
-export async function generateLegalDocument(client, model, matter, spiceLevel = 1) {
+export async function generateLegalDocument(client, model, matter, spiceLevel = 1, context = {}) {
     const docType = getRandomDocumentType();
     const docName = DOCUMENT_TYPE_NAMES[docType];
 
     // Generate content using Claude
-    const content = await generateDocumentContent(client, model, docType, matter, spiceLevel);
+    const content = await generateDocumentContent(client, model, docType, matter, spiceLevel, context);
 
     // Convert to PDF
     const buffer = await textToPdf(content, docType, matter);

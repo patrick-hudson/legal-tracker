@@ -10,7 +10,7 @@ import { mkdir, stat, unlink, readdir } from 'fs/promises';
 import { randomUUID } from 'crypto';
 import { pipeline } from 'stream/promises';
 import { Readable } from 'stream';
-import { logWarning, ENTITY_TYPES } from './audit.js';
+import { logWarning, logStoragePut, logStorageGet, logStorageDelete, logStorageError, ENTITY_TYPES } from './audit.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -112,46 +112,58 @@ class FilesystemStorage {
      * @param {{ contentType: string }} metadata - File metadata
      * @returns {Promise<{ storage_key: string, size_bytes: number, content_type: string }>}
      */
-    async putObject(data, filename, metadata = {}) {
+    async putObject(data, filename, metadata = {}, context = {}) {
+        const startTime = Date.now();
         const storageKey = generateStorageKey(filename);
         const fullPath = join(this.basePath, storageKey);
 
-        // Ensure directory exists
-        const dir = dirname(fullPath);
-        await mkdir(dir, { recursive: true });
+        try {
+            // Ensure directory exists
+            const dir = dirname(fullPath);
+            await mkdir(dir, { recursive: true });
 
-        let sizeBytes = 0;
+            let sizeBytes = 0;
 
-        if (Buffer.isBuffer(data)) {
-            // Direct buffer write
-            const writeStream = createWriteStream(fullPath);
-            await pipeline(Readable.from(data), writeStream);
-            sizeBytes = data.length;
-        } else {
-            // Stream write with size tracking
-            const writeStream = createWriteStream(fullPath);
+            if (Buffer.isBuffer(data)) {
+                // Direct buffer write
+                const writeStream = createWriteStream(fullPath);
+                await pipeline(Readable.from(data), writeStream);
+                sizeBytes = data.length;
+            } else {
+                // Stream write with size tracking
+                const writeStream = createWriteStream(fullPath);
 
-            await new Promise((resolve, reject) => {
-                data.on('data', (chunk) => {
-                    sizeBytes += chunk.length;
-                    if (sizeBytes > MAX_FILE_SIZE) {
-                        data.destroy();
-                        writeStream.destroy();
-                        reject(new Error(`File exceeds maximum size of ${MAX_FILE_SIZE / 1024 / 1024}MB`));
-                    }
+                await new Promise((resolve, reject) => {
+                    data.on('data', (chunk) => {
+                        sizeBytes += chunk.length;
+                        if (sizeBytes > MAX_FILE_SIZE) {
+                            data.destroy();
+                            writeStream.destroy();
+                            reject(new Error(`File exceeds maximum size of ${MAX_FILE_SIZE / 1024 / 1024}MB`));
+                        }
+                    });
+                    data.pipe(writeStream);
+                    writeStream.on('finish', resolve);
+                    writeStream.on('error', reject);
+                    data.on('error', reject);
                 });
-                data.pipe(writeStream);
-                writeStream.on('finish', resolve);
-                writeStream.on('error', reject);
-                data.on('error', reject);
-            });
-        }
+            }
 
-        return {
-            storage_key: storageKey,
-            size_bytes: sizeBytes,
-            content_type: metadata.contentType || 'application/octet-stream'
-        };
+            const durationMs = Date.now() - startTime;
+            const contentType = metadata.contentType || 'application/octet-stream';
+
+            logStoragePut({ storageKey, sizeBytes, contentType, durationMs, context });
+
+            return {
+                storage_key: storageKey,
+                size_bytes: sizeBytes,
+                content_type: contentType
+            };
+        } catch (error) {
+            const durationMs = Date.now() - startTime;
+            logStorageError({ operation: 'putObject', storageKey, error, durationMs, context });
+            throw error;
+        }
     }
 
     /**
@@ -159,43 +171,64 @@ class FilesystemStorage {
      * @param {string} storageKey - Storage key
      * @returns {Promise<{ stream: Readable, size: number, contentType: string }>}
      */
-    async getObjectStream(storageKey) {
+    async getObjectStream(storageKey, context = {}) {
+        const startTime = Date.now();
         const fullPath = join(this.basePath, storageKey);
 
-        if (!existsSync(fullPath)) {
-            throw new Error('File not found');
+        try {
+            if (!existsSync(fullPath)) {
+                throw new Error('File not found');
+            }
+
+            const stats = statSync(fullPath);
+            const stream = createReadStream(fullPath);
+            const durationMs = Date.now() - startTime;
+
+            logStorageGet({ storageKey, sizeBytes: stats.size, durationMs, context });
+
+            return {
+                stream,
+                size: stats.size,
+                contentType: 'application/octet-stream' // Content type stored in DB
+            };
+        } catch (error) {
+            const durationMs = Date.now() - startTime;
+            logStorageError({ operation: 'getObjectStream', storageKey, error, durationMs, context });
+            throw error;
         }
-
-        const stats = statSync(fullPath);
-        const stream = createReadStream(fullPath);
-
-        return {
-            stream,
-            size: stats.size,
-            contentType: 'application/octet-stream' // Content type stored in DB
-        };
     }
 
     /**
      * Delete an object
      * @param {string} storageKey - Storage key
+     * @param {Object} [context] - User context for logging
      */
-    async deleteObject(storageKey) {
+    async deleteObject(storageKey, context = {}) {
+        const startTime = Date.now();
         const fullPath = join(this.basePath, storageKey);
 
-        if (existsSync(fullPath)) {
-            unlinkSync(fullPath);
+        try {
+            if (existsSync(fullPath)) {
+                unlinkSync(fullPath);
 
-            // Try to clean up empty directory
-            const dir = dirname(fullPath);
-            try {
-                const files = await readdir(dir);
-                if (files.length === 0) {
-                    await unlink(dir).catch(() => {});
+                // Try to clean up empty directory
+                const dir = dirname(fullPath);
+                try {
+                    const files = await readdir(dir);
+                    if (files.length === 0) {
+                        await unlink(dir).catch(() => {});
+                    }
+                } catch {
+                    // Ignore directory cleanup errors
                 }
-            } catch {
-                // Ignore directory cleanup errors
             }
+
+            const durationMs = Date.now() - startTime;
+            logStorageDelete({ storageKey, durationMs, context });
+        } catch (error) {
+            const durationMs = Date.now() - startTime;
+            logStorageError({ operation: 'deleteObject', storageKey, error, durationMs, context });
+            throw error;
         }
     }
 
@@ -280,9 +313,11 @@ class S3Storage {
      * @param {Readable|Buffer} data - File data stream or buffer
      * @param {string} filename - Original filename
      * @param {{ contentType: string }} metadata - File metadata
+     * @param {Object} [context] - User context for logging
      * @returns {Promise<{ storage_key: string, size_bytes: number, content_type: string }>}
      */
-    async putObject(data, filename, metadata = {}) {
+    async putObject(data, filename, metadata = {}, context = {}) {
+        const startTime = Date.now();
         const { PutObjectCommand } = await import('@aws-sdk/client-s3');
         const { Upload } = await import('@aws-sdk/lib-storage');
 
@@ -290,87 +325,118 @@ class S3Storage {
         const storageKey = generateStorageKey(filename);
         const contentType = metadata.contentType || 'application/octet-stream';
 
-        let body;
-        let sizeBytes = 0;
+        try {
+            let body;
+            let sizeBytes = 0;
 
-        if (Buffer.isBuffer(data)) {
-            body = data;
-            sizeBytes = data.length;
-        } else {
-            // For streams, collect into buffer for size calculation
-            // (S3 multipart upload handles large files better with streams, but we need size)
-            const chunks = [];
-            for await (const chunk of data) {
-                sizeBytes += chunk.length;
-                if (sizeBytes > MAX_FILE_SIZE) {
-                    throw new Error(`File exceeds maximum size of ${MAX_FILE_SIZE / 1024 / 1024}MB`);
+            if (Buffer.isBuffer(data)) {
+                body = data;
+                sizeBytes = data.length;
+            } else {
+                // For streams, collect into buffer for size calculation
+                // (S3 multipart upload handles large files better with streams, but we need size)
+                const chunks = [];
+                for await (const chunk of data) {
+                    sizeBytes += chunk.length;
+                    if (sizeBytes > MAX_FILE_SIZE) {
+                        throw new Error(`File exceeds maximum size of ${MAX_FILE_SIZE / 1024 / 1024}MB`);
+                    }
+                    chunks.push(chunk);
                 }
-                chunks.push(chunk);
+                body = Buffer.concat(chunks);
             }
-            body = Buffer.concat(chunks);
-        }
 
-        // Use multipart upload for larger files
-        if (sizeBytes > 5 * 1024 * 1024) {
-            const upload = new Upload({
-                client,
-                params: {
+            // Use multipart upload for larger files
+            if (sizeBytes > 5 * 1024 * 1024) {
+                const upload = new Upload({
+                    client,
+                    params: {
+                        Bucket: this.config.bucket,
+                        Key: storageKey,
+                        Body: body,
+                        ContentType: contentType
+                    }
+                });
+                await upload.done();
+            } else {
+                await client.send(new PutObjectCommand({
                     Bucket: this.config.bucket,
                     Key: storageKey,
                     Body: body,
                     ContentType: contentType
-                }
-            });
-            await upload.done();
-        } else {
-            await client.send(new PutObjectCommand({
-                Bucket: this.config.bucket,
-                Key: storageKey,
-                Body: body,
-                ContentType: contentType
-            }));
-        }
+                }));
+            }
 
-        return {
-            storage_key: storageKey,
-            size_bytes: sizeBytes,
-            content_type: contentType
-        };
+            const durationMs = Date.now() - startTime;
+            logStoragePut({ storageKey, sizeBytes, contentType, durationMs, context });
+
+            return {
+                storage_key: storageKey,
+                size_bytes: sizeBytes,
+                content_type: contentType
+            };
+        } catch (error) {
+            const durationMs = Date.now() - startTime;
+            logStorageError({ operation: 'putObject', storageKey, error, durationMs, context });
+            throw error;
+        }
     }
 
     /**
      * Get an object as a readable stream
      * @param {string} storageKey - Storage key
+     * @param {Object} [context] - User context for logging
      * @returns {Promise<{ stream: Readable, size: number, contentType: string }>}
      */
-    async getObjectStream(storageKey) {
+    async getObjectStream(storageKey, context = {}) {
+        const startTime = Date.now();
         const { GetObjectCommand } = await import('@aws-sdk/client-s3');
 
-        const client = await this.getClient();
-        const response = await client.send(new GetObjectCommand({
-            Bucket: this.config.bucket,
-            Key: storageKey
-        }));
+        try {
+            const client = await this.getClient();
+            const response = await client.send(new GetObjectCommand({
+                Bucket: this.config.bucket,
+                Key: storageKey
+            }));
 
-        return {
-            stream: response.Body,
-            size: response.ContentLength,
-            contentType: response.ContentType || 'application/octet-stream'
-        };
+            const durationMs = Date.now() - startTime;
+            logStorageGet({ storageKey, sizeBytes: response.ContentLength, durationMs, context });
+
+            return {
+                stream: response.Body,
+                size: response.ContentLength,
+                contentType: response.ContentType || 'application/octet-stream'
+            };
+        } catch (error) {
+            const durationMs = Date.now() - startTime;
+            logStorageError({ operation: 'getObjectStream', storageKey, error, durationMs, context });
+            throw error;
+        }
     }
 
     /**
      * Delete an object
      * @param {string} storageKey - Storage key
+     * @param {Object} [context] - User context for logging
      */
-    async deleteObject(storageKey) {
+    async deleteObject(storageKey, context = {}) {
+        const startTime = Date.now();
         const { DeleteObjectCommand } = await import('@aws-sdk/client-s3');
 
-        const client = await this.getClient();
-        await client.send(new DeleteObjectCommand({
-            Bucket: this.config.bucket,
-            Key: storageKey
-        }));
+        try {
+            const client = await this.getClient();
+            await client.send(new DeleteObjectCommand({
+                Bucket: this.config.bucket,
+                Key: storageKey
+            }));
+
+            const durationMs = Date.now() - startTime;
+            logStorageDelete({ storageKey, durationMs, context });
+        } catch (error) {
+            const durationMs = Date.now() - startTime;
+            logStorageError({ operation: 'deleteObject', storageKey, error, durationMs, context });
+            throw error;
+        }
     }
 
     /**

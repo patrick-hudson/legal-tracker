@@ -358,3 +358,181 @@ export function logDebugFromRequest(request, options) {
     ...options
   });
 }
+
+/**
+ * Sanitize sensitive fields from request data for logging
+ * @param {Object} data - Data to sanitize
+ * @returns {Object} Sanitized data
+ */
+function sanitizeForLogging(data) {
+  if (!data || typeof data !== 'object') return data;
+
+  const sensitiveFields = ['apiKey', 'api_key', 'secretAccessKey', 'secret_access_key', 'password', 'token'];
+  const sanitized = Array.isArray(data) ? [...data] : { ...data };
+
+  for (const key of Object.keys(sanitized)) {
+    if (sensitiveFields.some(f => key.toLowerCase().includes(f.toLowerCase()))) {
+      sanitized[key] = '[REDACTED]';
+    } else if (typeof sanitized[key] === 'object' && sanitized[key] !== null) {
+      sanitized[key] = sanitizeForLogging(sanitized[key]);
+    }
+  }
+
+  return sanitized;
+}
+
+/**
+ * Wrap a Claude API call with debug logging
+ * Logs request before call, response after, duration, and errors
+ * @param {Object} client - Anthropic client
+ * @param {Object} params - API call parameters (model, max_tokens, messages, etc.)
+ * @param {Object} [context] - Optional context (userId, username, ipAddress)
+ * @returns {Promise<Object>} API response
+ */
+export async function callClaudeWithLogging(client, params, context = {}) {
+  const startTime = Date.now();
+  const { userId, username, ipAddress } = context;
+
+  // Log request before call
+  logDebug({
+    userId,
+    username,
+    actionType: ACTION_TYPES.API_CALL,
+    entityType: ENTITY_TYPES.CLAUDE_API,
+    summary: `Claude API request: ${params.model}`,
+    request: sanitizeForLogging(params),
+    ipAddress
+  });
+
+  try {
+    const response = await client.messages.create(params);
+    const durationMs = Date.now() - startTime;
+
+    // Log successful response
+    logDebug({
+      userId,
+      username,
+      actionType: ACTION_TYPES.API_CALL,
+      entityType: ENTITY_TYPES.CLAUDE_API,
+      summary: `Claude API response: ${params.model} (${durationMs}ms)`,
+      request: sanitizeForLogging(params),
+      response: {
+        id: response.id,
+        model: response.model,
+        stopReason: response.stop_reason,
+        usage: response.usage,
+        contentLength: response.content?.[0]?.text?.length ?? 0
+      },
+      durationMs,
+      ipAddress
+    });
+
+    return response;
+  } catch (error) {
+    const durationMs = Date.now() - startTime;
+
+    // Log error
+    logError({
+      error,
+      userId,
+      username,
+      entityType: ENTITY_TYPES.CLAUDE_API,
+      summary: `Claude API error: ${error.message}`,
+      request: sanitizeForLogging(params),
+      details: { durationMs },
+      ipAddress
+    });
+
+    throw error;
+  }
+}
+
+/**
+ * Log S3/storage putObject operation
+ * @param {Object} options - Operation details
+ * @param {string} options.storageKey - Storage key
+ * @param {number} options.sizeBytes - File size in bytes
+ * @param {string} options.contentType - Content type
+ * @param {number} options.durationMs - Operation duration
+ * @param {Object} [options.context] - User context (userId, username, ipAddress)
+ */
+export function logStoragePut({ storageKey, sizeBytes, contentType, durationMs, context = {} }) {
+  const { userId, username, ipAddress } = context;
+  logDebug({
+    userId,
+    username,
+    actionType: ACTION_TYPES.API_CALL,
+    entityType: ENTITY_TYPES.ATTACHMENT,
+    summary: `Storage putObject: ${storageKey} (${sizeBytes} bytes, ${durationMs}ms)`,
+    request: { operation: 'putObject', key: storageKey, contentType },
+    response: { sizeBytes },
+    durationMs,
+    ipAddress
+  });
+}
+
+/**
+ * Log S3/storage getObjectStream operation
+ * @param {Object} options - Operation details
+ * @param {string} options.storageKey - Storage key
+ * @param {number} options.sizeBytes - File size in bytes
+ * @param {number} options.durationMs - Operation duration
+ * @param {Object} [options.context] - User context (userId, username, ipAddress)
+ */
+export function logStorageGet({ storageKey, sizeBytes, durationMs, context = {} }) {
+  const { userId, username, ipAddress } = context;
+  logDebug({
+    userId,
+    username,
+    actionType: ACTION_TYPES.API_CALL,
+    entityType: ENTITY_TYPES.ATTACHMENT,
+    summary: `Storage getObjectStream: ${storageKey} (${sizeBytes} bytes, ${durationMs}ms)`,
+    request: { operation: 'getObjectStream', key: storageKey },
+    response: { sizeBytes },
+    durationMs,
+    ipAddress
+  });
+}
+
+/**
+ * Log S3/storage deleteObject operation
+ * @param {Object} options - Operation details
+ * @param {string} options.storageKey - Storage key
+ * @param {number} options.durationMs - Operation duration
+ * @param {Object} [options.context] - User context (userId, username, ipAddress)
+ */
+export function logStorageDelete({ storageKey, durationMs, context = {} }) {
+  const { userId, username, ipAddress } = context;
+  logDebug({
+    userId,
+    username,
+    actionType: ACTION_TYPES.API_CALL,
+    entityType: ENTITY_TYPES.ATTACHMENT,
+    summary: `Storage deleteObject: ${storageKey} (${durationMs}ms)`,
+    request: { operation: 'deleteObject', key: storageKey },
+    durationMs,
+    ipAddress
+  });
+}
+
+/**
+ * Log S3/storage error
+ * @param {Object} options - Error details
+ * @param {string} options.operation - Operation name (putObject, getObjectStream, deleteObject)
+ * @param {string} options.storageKey - Storage key
+ * @param {Error} options.error - Error object
+ * @param {number} options.durationMs - Operation duration
+ * @param {Object} [options.context] - User context (userId, username, ipAddress)
+ */
+export function logStorageError({ operation, storageKey, error, durationMs, context = {} }) {
+  const { userId, username, ipAddress } = context;
+  logError({
+    error,
+    userId,
+    username,
+    entityType: ENTITY_TYPES.ATTACHMENT,
+    summary: `Storage ${operation} error: ${storageKey}`,
+    details: { operation, key: storageKey, durationMs },
+    ipAddress
+  });
+}
