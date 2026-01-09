@@ -322,6 +322,26 @@ export async function renderMatters(container) {
         </div>
     `;
 
+    // Set up row click delegation on tbody (handles dynamically loaded rows)
+    const tbody = document.getElementById('matters-tbody');
+    tbody.addEventListener('click', (e) => {
+        // Find the row that was clicked
+        const row = e.target.closest('tr[data-matter-id]');
+        if (!row) return;
+
+        // Don't navigate if clicking on interactive elements
+        const target = e.target;
+        if (target.tagName === 'INPUT' ||
+            target.tagName === 'BUTTON' ||
+            target.tagName === 'A' ||
+            target.closest('button') ||
+            target.closest('a')) {
+            return;
+        }
+
+        window.location.hash = `/matters/${row.dataset.matterId}`;
+    });
+
     // Load matters
     await loadMatters();
 
@@ -584,21 +604,7 @@ async function loadMatters() {
 
         tbody.innerHTML = matters.map(matter => generateTableRow(matter)).join('');
 
-        // Add row click navigation (but not for interactive elements)
-        document.querySelectorAll('[data-matter-id]').forEach(row => {
-            row.addEventListener('click', (e) => {
-                // Don't navigate if clicking on interactive elements
-                const target = e.target;
-                if (target.tagName === 'INPUT' ||
-                    target.tagName === 'BUTTON' ||
-                    target.tagName === 'A' ||
-                    target.closest('button') ||
-                    target.closest('a')) {
-                    return;
-                }
-                window.location.hash = `/matters/${row.dataset.matterId}`;
-            });
-        });
+        // Row click navigation is handled via event delegation on tbody (set up once in renderMatters)
 
         // Add checkbox event listeners and restore selection state
         document.querySelectorAll('.matter-checkbox').forEach(checkbox => {

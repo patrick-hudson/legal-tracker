@@ -142,6 +142,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Attachments now support `document_date` and `direction` fields
 - Edit attachment modal added to modify document metadata
 
+### Fixed
+
+- **Matters Table Row Click Navigation**: Fixed bug where clicking on a row would navigate to the wrong matter
+  - Switched from individual event listeners per row to event delegation on tbody
+  - Prevents issues with duplicate event listeners when table is refreshed
+
 ---
 
 ## [0.7.2] - 2026-01-09
