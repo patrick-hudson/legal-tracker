@@ -14,6 +14,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Scales efficiently for hundreds of matters with isolated batch failure handling
   - Falls back to static notes per-matter if AI fails for specific batches
 
+### Fixed
+
+- **Audit log action types for auth events**: Fixed `logSecurity()` function to preserve the original action type (login, login_failed, logout) instead of overriding all security events with `security_event`
+
 ---
 
 ## [0.11.5] - 2026-01-09

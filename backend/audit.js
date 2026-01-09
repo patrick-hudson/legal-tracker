@@ -206,18 +206,19 @@ export function logWarning({ userId, username, entityType, entityId, summary, de
  * @param {Object} options - Security event details
  * @param {number} [options.userId] - User involved (if known)
  * @param {string} [options.username] - Username for display (if known)
+ * @param {string} [options.actionType] - Type of action (login, login_failed, logout, etc.) - defaults to security_event
  * @param {string} [options.entityType] - Type of entity involved
  * @param {number} [options.entityId] - ID of entity involved
  * @param {string} options.summary - Human-readable summary
  * @param {Object} [options.details] - Additional context (token info, etc.)
  * @param {string} [options.ipAddress] - Client IP address
  */
-export function logSecurity({ userId, username, entityType, entityId, summary, details, ipAddress }) {
+export function logSecurity({ userId, username, actionType, entityType, entityId, summary, details, ipAddress }) {
   return log({
     level: LOG_LEVELS.SECURITY,
     user_id: userId,
     username,
-    action_type: ACTION_TYPES.SECURITY_EVENT,
+    action_type: actionType || ACTION_TYPES.SECURITY_EVENT,
     entity_type: entityType,
     entity_id: entityId,
     summary,
