@@ -1313,10 +1313,38 @@ function showAddMultipleModal() {
     document.body.appendChild(modal);
 
     let rowCount = 1;
-    modal.querySelector('#add-row-btn').addEventListener('click', () => {
-        const container = modal.querySelector('#matter-rows');
-        container.insertAdjacentHTML('beforeend', createMatterRow(rowCount++));
+    const container = modal.querySelector('#matter-rows');
+
+    // Update delete button states based on row count
+    function updateDeleteButtons() {
+        const rows = container.querySelectorAll('.matter-row');
+        const deleteButtons = container.querySelectorAll('.delete-row-btn');
+        deleteButtons.forEach(btn => {
+            btn.disabled = rows.length <= 1;
+            btn.classList.toggle('opacity-30', rows.length <= 1);
+            btn.classList.toggle('cursor-not-allowed', rows.length <= 1);
+        });
+    }
+
+    // Handle delete row clicks via event delegation
+    container.addEventListener('click', (e) => {
+        const deleteBtn = e.target.closest('.delete-row-btn');
+        if (!deleteBtn) return;
+
+        const rows = container.querySelectorAll('.matter-row');
+        if (rows.length <= 1) return; // Keep at least one row
+
+        deleteBtn.closest('.matter-row').remove();
+        updateDeleteButtons();
     });
+
+    modal.querySelector('#add-row-btn').addEventListener('click', () => {
+        container.insertAdjacentHTML('beforeend', createMatterRow(rowCount++));
+        updateDeleteButtons();
+    });
+
+    // Initialize delete button state
+    updateDeleteButtons();
 
     modal.querySelector('#add-multiple-form').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -1355,15 +1383,22 @@ function showAddMultipleModal() {
 
 function createMatterRow(index) {
     return `
-        <div class="matter-row grid grid-cols-12 gap-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+        <div class="matter-row grid grid-cols-12 gap-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg items-center">
             <div class="col-span-4">
                 <input type="datetime-local" name="matter_${index}_date" class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2 dark:bg-gray-600 dark:border-gray-500 dark:text-white" required>
             </div>
-            <div class="col-span-5">
+            <div class="col-span-4">
                 <input type="text" name="matter_${index}_note" placeholder="Note" class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2 dark:bg-gray-600 dark:border-gray-500 dark:text-white" required>
             </div>
             <div class="col-span-3">
                 <input type="number" step="0.01" name="matter_${index}_cost" placeholder="Cost ($)" class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2 dark:bg-gray-600 dark:border-gray-500 dark:text-white" required>
+            </div>
+            <div class="col-span-1 flex justify-center">
+                <button type="button" class="delete-row-btn p-1 text-red-600 hover:text-red-800 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900 rounded" title="Remove row">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
             </div>
         </div>
     `;
