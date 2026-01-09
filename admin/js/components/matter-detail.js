@@ -119,95 +119,129 @@ function renderMatterView(container, matter) {
             ` : ''}
         </div>
 
-        <!-- Attachments Section -->
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
-            <div class="flex justify-between items-center mb-4">
-                <div>
-                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Attachments <span id="attachments-count" class="text-sm font-normal text-gray-500">(${attachments.length})</span></h2>
-                    <p class="text-sm text-amber-600 dark:text-amber-400">
-                        <svg class="w-4 h-4 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
-                        </svg>
-                        Admin Only - PDF, DOC, DOCX, RTF, TXT (max 25MB)
-                    </p>
-                </div>
-                <div class="flex gap-2">
-                    <label class="px-4 py-2 text-white bg-green-600 hover:bg-green-700 rounded-lg text-sm font-medium cursor-pointer">
-                        Upload File
-                        <input type="file" id="attachment-upload" class="hidden" accept=".pdf,.doc,.docx,.rtf,.txt">
-                    </label>
-                </div>
-            </div>
-
-            <!-- Upload Progress -->
-            <div id="upload-progress" class="hidden mb-4">
-                <div class="flex items-center gap-3">
-                    <div class="flex-1 bg-gray-200 rounded-full h-2 dark:bg-gray-700">
-                        <div id="upload-progress-bar" class="bg-blue-600 h-2 rounded-full transition-all" style="width: 0%"></div>
+        <!-- Timeline Section - Collapsible -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow mb-6">
+            <button type="button" id="timeline-section-toggle" class="flex items-center justify-between w-full p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors rounded-lg" aria-expanded="false" aria-controls="timeline-section-content">
+                <div class="flex items-center">
+                    <svg class="w-6 h-6 mr-3 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Activity Timeline <span class="text-sm font-normal text-gray-500">(${privateNotes.length + attachments.length})</span></h2>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Chronological view of notes and attachments</p>
                     </div>
-                    <span id="upload-progress-text" class="text-sm text-gray-600 dark:text-gray-400">Uploading...</span>
                 </div>
-            </div>
-
-            <div id="attachments-container">
-                ${renderAttachmentsList(attachments)}
+                <svg id="timeline-section-chevron" class="w-5 h-5 text-gray-500 dark:text-gray-400 transform rotate-180 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </button>
+            <div id="timeline-section-content" class="hidden border-t border-gray-200 dark:border-gray-700">
+                <div class="p-4">
+                    <div class="flex justify-end mb-4">
+                        <button id="toggle-timeline-order" class="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300" data-order="desc">
+                            <span class="order-label">Newest First</span>
+                        </button>
+                    </div>
+                    <div id="timeline-container">
+                        ${renderTimeline(privateNotes, attachments, 'desc')}
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- Timeline Section -->
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
-            <div class="flex justify-between items-center mb-4">
-                <div>
-                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Timeline <span id="timeline-count" class="text-sm font-normal text-gray-500">(${privateNotes.length + attachments.length})</span></h2>
-                    <p class="text-sm text-gray-500 dark:text-gray-400">Chronological view of all activity</p>
-                </div>
-                <button id="toggle-timeline-order" class="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300" data-order="desc">
-                    <span class="order-label">Newest First</span>
+        <!-- Attachments Section - Collapsible -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow mb-6">
+            <div class="flex items-center justify-between p-4">
+                <button type="button" id="attachments-section-toggle" class="flex items-center flex-1 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 -m-2 p-2 rounded-lg transition-colors" aria-expanded="true" aria-controls="attachments-section-content">
+                    <svg class="w-6 h-6 mr-3 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+                    </svg>
+                    <div class="flex-1">
+                        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Attachments <span class="text-sm font-normal text-gray-500">(${attachments.length})</span></h2>
+                        <p class="text-sm text-amber-600 dark:text-amber-400">
+                            <svg class="w-4 h-4 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
+                            </svg>
+                            Admin Only - PDF, DOC, DOCX, RTF, TXT (max 25MB)
+                        </p>
+                    </div>
+                    <svg id="attachments-section-chevron" class="w-5 h-5 text-gray-500 dark:text-gray-400 transform transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
                 </button>
+                <label class="ml-4 px-4 py-2 text-white bg-green-600 hover:bg-green-700 rounded-lg text-sm font-medium cursor-pointer flex-shrink-0">
+                    Upload File
+                    <input type="file" id="attachment-upload" class="hidden" accept=".pdf,.doc,.docx,.rtf,.txt">
+                </label>
             </div>
-            <div id="timeline-container">
-                ${renderTimeline(privateNotes, attachments, 'desc')}
+            <div id="attachments-section-content" class="border-t border-gray-200 dark:border-gray-700">
+                <div class="p-4">
+                    <!-- Upload Progress -->
+                    <div id="upload-progress" class="hidden mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="flex-1 bg-gray-200 rounded-full h-2 dark:bg-gray-700">
+                                <div id="upload-progress-bar" class="bg-blue-600 h-2 rounded-full transition-all" style="width: 0%"></div>
+                            </div>
+                            <span id="upload-progress-text" class="text-sm text-gray-600 dark:text-gray-400">Uploading...</span>
+                        </div>
+                    </div>
+
+                    <div id="attachments-container">
+                        ${renderAttachmentsList(attachments)}
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- Private Notes Section -->
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <div class="flex justify-between items-center mb-4">
-                <div>
-                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Private Notes <span id="notes-count" class="text-sm font-normal text-gray-500">(${privateNotes.length})</span></h2>
-                    <p class="text-sm text-amber-600 dark:text-amber-400">
-                        <svg class="w-4 h-4 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
-                        </svg>
-                        Admin Only - These notes are not visible to public users
-                    </p>
-                </div>
-                <button id="add-note-btn" class="px-4 py-2 text-white bg-green-600 hover:bg-green-700 rounded-lg text-sm font-medium">
+        <!-- Private Notes Section - Collapsible -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow mb-6">
+            <div class="flex items-center justify-between p-4">
+                <button type="button" id="notes-section-toggle" class="flex items-center flex-1 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 -m-2 p-2 rounded-lg transition-colors" aria-expanded="true" aria-controls="notes-section-content">
+                    <svg class="w-6 h-6 mr-3 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                    </svg>
+                    <div class="flex-1">
+                        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Private Notes <span class="text-sm font-normal text-gray-500">(${privateNotes.length})</span></h2>
+                        <p class="text-sm text-amber-600 dark:text-amber-400">
+                            <svg class="w-4 h-4 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
+                            </svg>
+                            Admin Only - These notes are not visible to public users
+                        </p>
+                    </div>
+                    <svg id="notes-section-chevron" class="w-5 h-5 text-gray-500 dark:text-gray-400 transform transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                </button>
+                <button id="add-note-btn" class="ml-4 px-4 py-2 text-white bg-green-600 hover:bg-green-700 rounded-lg text-sm font-medium flex-shrink-0">
                     Add Note
                 </button>
             </div>
+            <div id="notes-section-content" class="border-t border-gray-200 dark:border-gray-700">
+                <div class="p-4">
+                    <!-- Search and Sort Controls -->
+                    ${privateNotes.length > 0 ? `
+                    <div class="flex gap-3 mb-4">
+                        <div class="flex-1">
+                            <input type="text" id="notes-search" placeholder="Search notes..." value="${escapeHtml(currentNotesSearch)}"
+                                class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white">
+                        </div>
+                        <div class="relative">
+                            <select id="notes-sort" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 pr-8 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                <option value="newest" ${currentNotesSort === 'newest' ? 'selected' : ''}>Newest First</option>
+                                <option value="oldest" ${currentNotesSort === 'oldest' ? 'selected' : ''}>Oldest First</option>
+                                <option value="author-asc" ${currentNotesSort === 'author-asc' ? 'selected' : ''}>Author (A-Z)</option>
+                                <option value="author-desc" ${currentNotesSort === 'author-desc' ? 'selected' : ''}>Author (Z-A)</option>
+                                <option value="updated" ${currentNotesSort === 'updated' ? 'selected' : ''}>Recently Updated</option>
+                            </select>
+                        </div>
+                    </div>
+                    ` : ''}
 
-            <!-- Search and Sort Controls -->
-            ${privateNotes.length > 0 ? `
-            <div class="flex gap-3 mb-4">
-                <div class="flex-1">
-                    <input type="text" id="notes-search" placeholder="Search notes..." value="${escapeHtml(currentNotesSearch)}"
-                        class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white">
+                    <div id="notes-container">
+                        ${renderNotesList(filterAndSortNotes(privateNotes))}
+                    </div>
                 </div>
-                <div class="relative">
-                    <select id="notes-sort" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2 pr-8 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                        <option value="newest" ${currentNotesSort === 'newest' ? 'selected' : ''}>Newest First</option>
-                        <option value="oldest" ${currentNotesSort === 'oldest' ? 'selected' : ''}>Oldest First</option>
-                        <option value="author-asc" ${currentNotesSort === 'author-asc' ? 'selected' : ''}>Author (A-Z)</option>
-                        <option value="author-desc" ${currentNotesSort === 'author-desc' ? 'selected' : ''}>Author (Z-A)</option>
-                        <option value="updated" ${currentNotesSort === 'updated' ? 'selected' : ''}>Recently Updated</option>
-                    </select>
-                </div>
-            </div>
-            ` : ''}
-
-            <div id="notes-container">
-                ${renderNotesList(filterAndSortNotes(privateNotes))}
             </div>
         </div>
     `;
@@ -223,6 +257,38 @@ function renderMatterView(container, matter) {
     // Attachment upload listener
     document.getElementById('attachment-upload')?.addEventListener('change', (e) => handleAttachmentUpload(e, matter.id, container));
 
+    // Timeline section collapsible - apply saved state from localStorage
+    const timelineExpanded = localStorage.getItem('timelineSectionExpanded') === 'true';
+    if (timelineExpanded) {
+        const content = document.getElementById('timeline-section-content');
+        const chevron = document.getElementById('timeline-section-chevron');
+        const toggle = document.getElementById('timeline-section-toggle');
+        if (content && chevron && toggle) {
+            content.classList.remove('hidden');
+            chevron.classList.remove('rotate-180');
+            toggle.setAttribute('aria-expanded', 'true');
+        }
+    }
+
+    // Timeline section toggle listener
+    document.getElementById('timeline-section-toggle')?.addEventListener('click', () => {
+        const content = document.getElementById('timeline-section-content');
+        const chevron = document.getElementById('timeline-section-chevron');
+        const toggle = document.getElementById('timeline-section-toggle');
+
+        if (content.classList.contains('hidden')) {
+            content.classList.remove('hidden');
+            chevron.classList.remove('rotate-180');
+            toggle.setAttribute('aria-expanded', 'true');
+            localStorage.setItem('timelineSectionExpanded', 'true');
+        } else {
+            content.classList.add('hidden');
+            chevron.classList.add('rotate-180');
+            toggle.setAttribute('aria-expanded', 'false');
+            localStorage.setItem('timelineSectionExpanded', 'false');
+        }
+    });
+
     // Timeline order toggle listener
     document.getElementById('toggle-timeline-order')?.addEventListener('click', (e) => {
         const btn = e.currentTarget;
@@ -231,6 +297,70 @@ function renderMatterView(container, matter) {
         btn.dataset.order = newOrder;
         btn.querySelector('.order-label').textContent = newOrder === 'desc' ? 'Newest First' : 'Oldest First';
         document.getElementById('timeline-container').innerHTML = renderTimeline(privateNotes, attachments, newOrder);
+    });
+
+    // Attachments section collapsible - apply saved state (default expanded)
+    const attachmentsCollapsed = localStorage.getItem('attachmentsSectionCollapsed') === 'true';
+    if (attachmentsCollapsed) {
+        const content = document.getElementById('attachments-section-content');
+        const chevron = document.getElementById('attachments-section-chevron');
+        const toggle = document.getElementById('attachments-section-toggle');
+        if (content && chevron && toggle) {
+            content.classList.add('hidden');
+            chevron.classList.add('rotate-180');
+            toggle.setAttribute('aria-expanded', 'false');
+        }
+    }
+
+    // Attachments section toggle listener
+    document.getElementById('attachments-section-toggle')?.addEventListener('click', () => {
+        const content = document.getElementById('attachments-section-content');
+        const chevron = document.getElementById('attachments-section-chevron');
+        const toggle = document.getElementById('attachments-section-toggle');
+
+        if (content.classList.contains('hidden')) {
+            content.classList.remove('hidden');
+            chevron.classList.remove('rotate-180');
+            toggle.setAttribute('aria-expanded', 'true');
+            localStorage.setItem('attachmentsSectionCollapsed', 'false');
+        } else {
+            content.classList.add('hidden');
+            chevron.classList.add('rotate-180');
+            toggle.setAttribute('aria-expanded', 'false');
+            localStorage.setItem('attachmentsSectionCollapsed', 'true');
+        }
+    });
+
+    // Private Notes section collapsible - apply saved state (default expanded)
+    const notesCollapsed = localStorage.getItem('notesSectionCollapsed') === 'true';
+    if (notesCollapsed) {
+        const content = document.getElementById('notes-section-content');
+        const chevron = document.getElementById('notes-section-chevron');
+        const toggle = document.getElementById('notes-section-toggle');
+        if (content && chevron && toggle) {
+            content.classList.add('hidden');
+            chevron.classList.add('rotate-180');
+            toggle.setAttribute('aria-expanded', 'false');
+        }
+    }
+
+    // Private Notes section toggle listener
+    document.getElementById('notes-section-toggle')?.addEventListener('click', () => {
+        const content = document.getElementById('notes-section-content');
+        const chevron = document.getElementById('notes-section-chevron');
+        const toggle = document.getElementById('notes-section-toggle');
+
+        if (content.classList.contains('hidden')) {
+            content.classList.remove('hidden');
+            chevron.classList.remove('rotate-180');
+            toggle.setAttribute('aria-expanded', 'true');
+            localStorage.setItem('notesSectionCollapsed', 'false');
+        } else {
+            content.classList.add('hidden');
+            chevron.classList.add('rotate-180');
+            toggle.setAttribute('aria-expanded', 'false');
+            localStorage.setItem('notesSectionCollapsed', 'true');
+        }
     });
 
     // Notes search and sort listeners
@@ -845,57 +975,94 @@ function renderTimeline(notes, attachments, order = 'desc') {
         `;
     }
 
+    // Group entries by month/year for better visual organization
+    const groupedByMonth = {};
+    timeline.forEach(entry => {
+        const date = new Date(entry.date);
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        const monthLabel = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        if (!groupedByMonth[monthKey]) {
+            groupedByMonth[monthKey] = { label: monthLabel, entries: [] };
+        }
+        groupedByMonth[monthKey].entries.push(entry);
+    });
+
+    // Sort month keys
+    const sortedMonths = Object.keys(groupedByMonth).sort((a, b) =>
+        order === 'asc' ? a.localeCompare(b) : b.localeCompare(a)
+    );
+
+    const colorClasses = {
+        gray: { dot: 'bg-gray-400 dark:bg-gray-500', ring: 'ring-gray-100 dark:ring-gray-800', icon: 'text-gray-600 dark:text-gray-300' },
+        green: { dot: 'bg-green-500 dark:bg-green-400', ring: 'ring-green-100 dark:ring-green-900', icon: 'text-green-600 dark:text-green-300' },
+        blue: { dot: 'bg-blue-500 dark:bg-blue-400', ring: 'ring-blue-100 dark:ring-blue-900', icon: 'text-blue-600 dark:text-blue-300' },
+        purple: { dot: 'bg-purple-500 dark:bg-purple-400', ring: 'ring-purple-100 dark:ring-purple-900', icon: 'text-purple-600 dark:text-purple-300' },
+        red: { dot: 'bg-red-500 dark:bg-red-400', ring: 'ring-red-100 dark:ring-red-900', icon: 'text-red-600 dark:text-red-300' },
+        amber: { dot: 'bg-amber-500 dark:bg-amber-400', ring: 'ring-amber-100 dark:ring-amber-900', icon: 'text-amber-600 dark:text-amber-300' },
+        indigo: { dot: 'bg-indigo-500 dark:bg-indigo-400', ring: 'ring-indigo-100 dark:ring-indigo-900', icon: 'text-indigo-600 dark:text-indigo-300' },
+        teal: { dot: 'bg-teal-500 dark:bg-teal-400', ring: 'ring-teal-100 dark:ring-teal-900', icon: 'text-teal-600 dark:text-teal-300' }
+    };
+
     return `
-        <div class="relative">
-            <div class="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200 dark:bg-gray-700"></div>
-            <div class="space-y-4">
-                ${timeline.map(entry => {
-                    if (entry.type === 'note') {
-                        const interactionConfig = INTERACTION_TYPES[entry.interaction_type] || INTERACTION_TYPES.note;
-                        const colorClasses = {
-                            gray: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
-                            green: 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-400',
-                            blue: 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400',
-                            purple: 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-400',
-                            red: 'bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400',
-                            amber: 'bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-400',
-                            indigo: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-400',
-                            teal: 'bg-teal-100 text-teal-600 dark:bg-teal-900 dark:text-teal-400'
-                        };
-                        return `
-                            <div class="relative pl-10">
-                                <div class="absolute left-2 w-5 h-5 rounded-full ${colorClasses[interactionConfig.color]} flex items-center justify-center">
-                                    ${getInteractionIcon(entry.interaction_type)}
-                                </div>
-                                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-                                    <div class="flex items-center gap-2 mb-1">
-                                        <span class="text-xs font-medium text-${interactionConfig.color}-600 dark:text-${interactionConfig.color}-400">${interactionConfig.label}</span>
-                                        <span class="text-xs text-gray-500 dark:text-gray-400">${formatDate(entry.date, { format: 'short', placeholder: 'Unknown' })}</span>
-                                        ${entry.created_by ? `<span class="text-xs text-gray-500 dark:text-gray-400">by ${escapeHtml(entry.created_by)}</span>` : ''}
-                                    </div>
-                                    <p class="text-sm text-gray-700 dark:text-gray-300 line-clamp-2">${escapeHtml(entry.content)}</p>
-                                </div>
+        <div class="flow-root">
+            <ul role="list" class="-mb-8">
+                ${sortedMonths.map((monthKey, monthIdx) => {
+                    const group = groupedByMonth[monthKey];
+                    return `
+                        <li class="mb-6">
+                            <div class="flex items-center mb-3">
+                                <div class="flex-shrink-0 w-2 h-2 rounded-full bg-indigo-500 dark:bg-indigo-400"></div>
+                                <span class="ml-3 text-sm font-semibold text-indigo-600 dark:text-indigo-400">${group.label}</span>
+                                <div class="ml-3 flex-1 border-t border-gray-200 dark:border-gray-700"></div>
                             </div>
-                        `;
-                    } else {
-                        return `
-                            <div class="relative pl-10">
-                                <div class="absolute left-2 w-5 h-5 rounded-full bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 flex items-center justify-center">
-                                    ${getFileIcon(entry.content_type).replace('w-8 h-8', 'w-4 h-4')}
-                                </div>
-                                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-                                    <div class="flex items-center gap-2 mb-1">
-                                        ${getDirectionBadge(entry.direction)}
-                                        <span class="text-xs text-gray-500 dark:text-gray-400">${formatDate(entry.date, { format: 'short', placeholder: 'Unknown' })}</span>
-                                    </div>
-                                    <p class="text-sm font-medium text-gray-900 dark:text-white">${escapeHtml(entry.filename)}</p>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">${formatFileSize(entry.size_bytes)}</p>
-                                </div>
-                            </div>
-                        `;
-                    }
+                            <ul role="list" class="ml-4 space-y-4">
+                                ${group.entries.map((entry, entryIdx) => {
+                                    const isLast = monthIdx === sortedMonths.length - 1 && entryIdx === group.entries.length - 1;
+
+                                    if (entry.type === 'note') {
+                                        const interactionConfig = INTERACTION_TYPES[entry.interaction_type] || INTERACTION_TYPES.note;
+                                        const colors = colorClasses[interactionConfig.color] || colorClasses.gray;
+                                        return `
+                                            <li class="relative pb-4 ${isLast ? '' : 'border-l-2 border-gray-200 dark:border-gray-700'} pl-6">
+                                                <div class="absolute -left-[9px] top-0 flex h-[18px] w-[18px] items-center justify-center rounded-full ${colors.dot} ring-4 ${colors.ring}">
+                                                    <svg class="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="${interactionConfig.icon}"/></svg>
+                                                </div>
+                                                <div class="flex flex-col min-w-0">
+                                                    <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                                        <span class="font-medium ${colors.icon}">${interactionConfig.label}</span>
+                                                        <span>${formatDate(entry.date, { format: 'short', placeholder: 'Unknown' })}</span>
+                                                        ${entry.created_by ? `<span>by ${escapeHtml(entry.created_by)}</span>` : ''}
+                                                    </div>
+                                                    <p class="text-sm text-gray-700 dark:text-gray-300 line-clamp-2">${escapeHtml(entry.content)}</p>
+                                                </div>
+                                            </li>
+                                        `;
+                                    } else {
+                                        const directionConfig = DIRECTION_LABELS[entry.direction] || DIRECTION_LABELS.internal;
+                                        const colors = colorClasses[directionConfig.color] || colorClasses.gray;
+                                        return `
+                                            <li class="relative pb-4 ${isLast ? '' : 'border-l-2 border-gray-200 dark:border-gray-700'} pl-6">
+                                                <div class="absolute -left-[9px] top-0 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-gray-400 dark:bg-gray-500 ring-4 ring-gray-100 dark:ring-gray-800">
+                                                    <svg class="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+                                                </div>
+                                                <div class="flex flex-col min-w-0">
+                                                    <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                                        ${getDirectionBadge(entry.direction)}
+                                                        <span>${formatDate(entry.date, { format: 'short', placeholder: 'Unknown' })}</span>
+                                                        ${entry.created_by ? `<span>by ${escapeHtml(entry.created_by)}</span>` : ''}
+                                                    </div>
+                                                    <p class="text-sm font-medium text-gray-900 dark:text-white">${escapeHtml(entry.filename)}</p>
+                                                    <p class="text-xs text-gray-500 dark:text-gray-400">${formatFileSize(entry.size_bytes)}</p>
+                                                </div>
+                                            </li>
+                                        `;
+                                    }
+                                }).join('')}
+                            </ul>
+                        </li>
+                    `;
                 }).join('')}
-            </div>
+            </ul>
         </div>
     `;
 }

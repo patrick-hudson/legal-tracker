@@ -39,6 +39,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Type badges for notes (phone call, email, meeting, etc.)
   - Direction badges for attachments (incoming, outgoing, internal)
   - Empty state for matters with no activity
+- **Improved Timeline Display**: Enhanced visual presentation
+  - Grouped by month/year with section headers
+  - Vertical line connecting entries within each month
+  - Color-coded dots matching interaction type
+  - Collapsed by default, expandable with state persistence
+
+#### Collapsible Sections
+- **Matter Detail Collapsible Panels**: All main sections are now collapsible
+  - Timeline section: collapsed by default
+  - Attachments section: expanded by default
+  - Private Notes section: expanded by default
+  - State persisted via localStorage
+  - Chevron animation on toggle
+  - Action buttons remain visible when collapsed
 
 #### Matter Attachments System
 - **File Upload Support**: Upload PDF, DOC, DOCX, RTF, and TXT files to matters
