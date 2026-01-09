@@ -1510,3 +1510,18 @@ async function init() {
 }
 
 init();
+
+// Expose functions to global scope for onclick handlers
+window.toggleThemePicker = toggleThemePicker;
+window.setTheme = setTheme;
+window.toggleDatePicker = toggleDatePicker;
+window.toggleLog = toggleLog;
+window.toggleMoneySettings = toggleMoneySettings;
+window.toggleDrainSettings = toggleDrainSettings;
+window.saveDrainSettings = saveDrainSettings;
+window.quickLogMatter = quickLogMatter;
+window.submitManualMatter = submitManualMatter;
+window.deleteMatterById = deleteMatterById;
+window.setMoney = setMoney;
+window.addMoney = addMoney;
+window.resetMoney = resetMoney;

@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **Frontend Button Handlers**: Fixed all buttons broken in frontend (theme picker, log matter, view history, etc.)
+  - Exposed UI functions to window object for inline onclick handlers
+  - Functions were inaccessible after ES module conversion since module scope doesn't expose to global scope
+
 ---
 
 ## [0.10.0] - 2026-01-09
@@ -734,7 +740,7 @@ Initial development phase establishing core functionality.
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| Unreleased | - | |
+| Unreleased | - | Fix frontend buttons |
 | 0.10.0 | 2026-01-09 | Audit logging system |
 | 0.9.4 | 2026-01-09 | GitHub Release creation with changelog notes |
 | 0.9.3 | 2026-01-09 | Test performance improvements with disableRateLimit |
