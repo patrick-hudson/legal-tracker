@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+---
+
+## [0.11.5] - 2026-01-09
+
 ### Added
 
 - **Claude API call logging**: Wrapper function for logging all Claude API interactions
@@ -877,7 +881,8 @@ Initial development phase establishing core functionality.
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| Unreleased | - | Claude API logging, storage logging, debug UI enhancements |
+| Unreleased | - | |
+| 0.11.5 | 2026-01-09 | Claude API logging, storage logging, debug UI enhancements |
 | 0.11.4 | 2026-01-09 | Audit log pagination, API request payload logging |
 | 0.11.3 | 2026-01-09 | SECURITY log level, token validation, logout cookie clearing |
 | 0.11.2 | 2026-01-09 | Watchdog process manager |
