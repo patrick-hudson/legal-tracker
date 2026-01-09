@@ -243,8 +243,9 @@ node watchdog.js
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `WATCHDOG_PORT` | `3001` | Port for watchdog HTTP API |
+| `WATCHDOG_HOST` | `0.0.0.0` | Host/IP to bind watchdog API |
 | `WATCHDOG_API_KEY` | `API_KEY` | API key for restart endpoint |
-| `WATCHDOG_URL` | — | Full URL to watchdog (for non-localhost setups) |
+| `WATCHDOG_URL` | — | Full URL to watchdog (for server.js proxy in non-localhost setups) |
 
 **Admin UI Integration:**
 

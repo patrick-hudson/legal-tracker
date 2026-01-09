@@ -8,6 +8,7 @@
  *
  * Environment variables:
  *   WATCHDOG_PORT - Port for watchdog API (default: 3001)
+ *   WATCHDOG_HOST - Host/IP to bind watchdog API (default: 0.0.0.0)
  *   WATCHDOG_API_KEY - API key for restart endpoint (default: from .env or generated)
  *   SERVER_PORT - Port for main server (default: 3000)
  */
@@ -26,6 +27,7 @@ const __dirname = dirname(__filename);
 dotenv.config({ path: join(__dirname, '.env') });
 
 const WATCHDOG_PORT = process.env.WATCHDOG_PORT || 3001;
+const WATCHDOG_HOST = process.env.WATCHDOG_HOST || '0.0.0.0';
 const WATCHDOG_API_KEY = process.env.WATCHDOG_API_KEY || process.env.API_KEY || 'watchdog-dev-key';
 const SERVER_PORT = process.env.PORT || 3000;
 
@@ -408,7 +410,7 @@ async function main() {
   console.log(`
 [watchdog] Legal Tracker Process Manager
 [watchdog] ================================
-[watchdog] Watchdog API: http://localhost:${WATCHDOG_PORT}
+[watchdog] Watchdog API: http://${WATCHDOG_HOST}:${WATCHDOG_PORT}
 [watchdog] Server will run on port: ${SERVER_PORT}
 [watchdog] API Key configured: ${WATCHDOG_API_KEY ? 'yes' : 'no'}
 `);
@@ -422,8 +424,8 @@ async function main() {
 
   // Start HTTP server for watchdog API
   const httpServer = createServer(handleRequest);
-  httpServer.listen(WATCHDOG_PORT, () => {
-    console.log(`[watchdog] API listening on port ${WATCHDOG_PORT}`);
+  httpServer.listen(WATCHDOG_PORT, WATCHDOG_HOST, () => {
+    console.log(`[watchdog] API listening on ${WATCHDOG_HOST}:${WATCHDOG_PORT}`);
   });
 
   // Start the main server
