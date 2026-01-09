@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+---
+
+## [0.11.0] - 2026-01-09
+
 ### Added
 
 - **Audit Log Level Configuration**: Added setting to control minimum audit log level
@@ -752,7 +756,8 @@ Initial development phase establishing core functionality.
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| Unreleased | - | Audit log level configuration |
+| Unreleased | - | |
+| 0.11.0 | 2026-01-09 | Audit log level configuration |
 | 0.10.1 | 2026-01-09 | Fix frontend buttons |
 | 0.10.0 | 2026-01-09 | Audit logging system |
 | 0.9.4 | 2026-01-09 | GitHub Release creation with changelog notes |
