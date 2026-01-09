@@ -393,8 +393,8 @@ async function handleRestart() {
         }
 
         // Show countdown and redirect to login
-        // Server takes ~3-5 seconds to restart (including graceful shutdown), redirect after 7 seconds
-        const REDIRECT_DELAY = 7;
+        // Server takes ~3-5 seconds to restart (including graceful shutdown), redirect after 8 seconds
+        const REDIRECT_DELAY = 8;
         let countdown = REDIRECT_DELAY;
 
         btn.textContent = `Redirecting in ${countdown}s...`;
@@ -406,8 +406,8 @@ async function handleRestart() {
                 btn.textContent = `Redirecting in ${countdown}s...`;
             } else {
                 clearInterval(countdownInterval);
-                // Redirect to login page
-                window.location.href = '/admin';
+                // Reload the page to refresh after restart
+                window.location.reload();
             }
         }, 1000);
 

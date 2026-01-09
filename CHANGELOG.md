@@ -29,6 +29,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Wipe action logged with user info and timestamp preserved in audit log
   - "Wipe Matters" also now properly wipes attachments and private notes
 
+- **Server restart redirect behavior**: Fixed countdown redirect after server restart
+  - Increased redirect delay from 7 to 8 seconds to accommodate server restart time
+  - Changed from URL navigation to page reload to prevent countdown hanging when already on target page
+
 ---
 
 ## [0.11.5] - 2026-01-09
