@@ -22,6 +22,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 - **Audit log action types for auth events**: Fixed `logSecurity()` function to preserve the original action type (login, login_failed, logout) instead of overriding all security events with `security_event`
 
+- **Comprehensive wipe settings functionality**: "Wipe Settings" now properly clears all data and resets ID sequences
+  - Wipes all matters, private notes, and attachments (including storage backend files)
+  - Resets all SQLite auto-increment ID sequences to 0 (next created records start at ID 1)
+  - Clears audit log entries except the wipe action itself
+  - Wipe action logged with user info and timestamp preserved in audit log
+  - "Wipe Matters" also now properly wipes attachments and private notes
+
 ---
 
 ## [0.11.5] - 2026-01-09

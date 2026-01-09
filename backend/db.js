@@ -1178,10 +1178,33 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
 
       saveDatabase();
       return { created };
+    },
+
+    deleteAll() {
+      db.run('DELETE FROM audit_log');
+      saveDatabase();
+    },
+
+    deleteExcept(excludeId) {
+      db.run('DELETE FROM audit_log WHERE id != ?', [excludeId]);
+      saveDatabase();
     }
   };
 
-  return { db, settingsDb, mattersDb, adminUsersDb, adminSessionsDb, adminBootstrapTokensDb, privateNotesDb, attachmentsDb, auditLogDb, saveDatabase };
+  /**
+   * Reset all auto-increment sequences to 0
+   * After calling this, the next INSERT will get ID 1
+   * SQLite stores sequences in sqlite_sequence table when AUTOINCREMENT is used
+   */
+  function resetAllSequences() {
+    const tables = ['matters', 'private_notes', 'matter_attachments', 'admin_users', 'admin_sessions', 'admin_bootstrap_tokens', 'audit_log'];
+    for (const table of tables) {
+      db.run('DELETE FROM sqlite_sequence WHERE name = ?', [table]);
+    }
+    saveDatabase();
+  }
+
+  return { db, settingsDb, mattersDb, adminUsersDb, adminSessionsDb, adminBootstrapTokensDb, privateNotesDb, attachmentsDb, auditLogDb, saveDatabase, resetAllSequences };
 }
 
 // Create default database instance for backwards compatibility

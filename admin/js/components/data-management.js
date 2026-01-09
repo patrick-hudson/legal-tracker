@@ -337,13 +337,15 @@ export async function renderDataManagement(container) {
                             <p class="text-sm text-orange-800 dark:text-orange-400 font-semibold mb-2">Deletes:</p>
                             <ul class="list-disc list-inside text-xs text-orange-700 dark:text-orange-300 space-y-1">
                                 <li>All matter records</li>
-                                <li>Matter timestamps</li>
+                                <li>All private notes</li>
+                                <li>All attachments (files deleted from storage)</li>
                                 <li>Last matter date</li>
                             </ul>
                             <p class="text-xs text-orange-700 dark:text-orange-300 mt-2 font-semibold">Preserves:</p>
                             <ul class="list-disc list-inside text-xs text-orange-700 dark:text-orange-300 space-y-1">
                                 <li>All settings (fees, drain rate)</li>
                                 <li>Admin users & sessions</li>
+                                <li>Audit log</li>
                             </ul>
                         </div>
                     </details>
@@ -376,9 +378,16 @@ export async function renderDataManagement(container) {
                     <details class="mb-4">
                         <summary class="text-xs text-amber-600 dark:text-amber-400 cursor-pointer hover:underline font-medium">What will be affected?</summary>
                         <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mt-2">
-                            <p class="text-sm text-amber-800 dark:text-amber-400 font-semibold mb-2">Resets:</p>
+                            <p class="text-sm text-amber-800 dark:text-amber-400 font-semibold mb-2">Deletes:</p>
                             <ul class="list-disc list-inside text-xs text-amber-700 dark:text-amber-300 space-y-1">
                                 <li>All matter records</li>
+                                <li>All private notes</li>
+                                <li>All attachments (files deleted from storage)</li>
+                                <li>All audit log history (only the wipe action entry is kept)</li>
+                            </ul>
+                            <p class="text-sm text-amber-800 dark:text-amber-400 font-semibold mt-2 mb-2">Resets:</p>
+                            <ul class="list-disc list-inside text-xs text-amber-700 dark:text-amber-300 space-y-1">
+                                <li>ID sequences → 0 (new records start at ID 1)</li>
                                 <li>Lifetime fees → $0</li>
                                 <li>Drain rate → 0</li>
                                 <li>Auto-drain → disabled</li>

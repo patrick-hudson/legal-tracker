@@ -81,7 +81,7 @@ export async function createServer(options = {}) {
   } = options;
 
   // Create database instance
-  const { settingsDb, mattersDb, adminUsersDb, adminSessionsDb, adminBootstrapTokensDb, privateNotesDb, attachmentsDb, auditLogDb, saveDatabase } = await createDatabase(dbPath);
+  const { settingsDb, mattersDb, adminUsersDb, adminSessionsDb, adminBootstrapTokensDb, privateNotesDb, attachmentsDb, auditLogDb, saveDatabase, resetAllSequences } = await createDatabase(dbPath);
 
   // Initialize audit logging service
   initAudit({ auditLogDb, settingsDb });
@@ -3976,9 +3976,10 @@ Return ONLY a valid JSON array, no other text. Example:
     }
 
     try {
-      // Log the wipe action
-      const userId = request.adminUser?.id || 'unknown';
+      const userId = request.adminUser?.id ?? null;
+      const username = request.adminUser?.username ?? null;
       const ip = request.ip || 'unknown';
+
       fastify.log.warn({
         action: 'WIPE_MATTERS',
         user_id: userId,
@@ -3989,7 +3990,11 @@ Return ONLY a valid JSON array, no other text. Example:
       // Count matters before deletion
       const matterCount = mattersDb.getAll().length;
 
-      // Delete all private notes first (CASCADE should handle this, but be explicit)
+      // Delete all attachments and get records for storage cleanup
+      const attachments = attachmentsDb.deleteAll();
+      const attachmentCount = attachments.length;
+
+      // Delete all private notes (CASCADE should handle this, but be explicit)
       privateNotesDb.deleteAll();
 
       // Delete all matters
@@ -3998,26 +4003,40 @@ Return ONLY a valid JSON array, no other text. Example:
         mattersDb.delete(matter.id);
       }
 
+      // Delete storage files for attachments
+      if (attachments.length > 0) {
+        const storage = createStorage(settingsDb);
+        for (const attachment of attachments) {
+          try {
+            await storage.deleteObject(attachment.storage_key, { userId, username, ipAddress: ip });
+          } catch (err) {
+            fastify.log.warn({ error: err.message, key: attachment.storage_key }, 'Failed to delete attachment from storage during wipe');
+          }
+        }
+      }
+
       // Reset the last_matter_date setting
       settingsDb.set('last_matter_date', null);
 
       fastify.log.info({
         action: 'WIPE_MATTERS_COMPLETE',
-        matters_deleted: matterCount
+        matters_deleted: matterCount,
+        attachments_deleted: attachmentCount
       }, 'Matters wipe completed successfully');
 
       // Audit log the wipe
       logInfoFromRequest(request, {
         actionType: ACTION_TYPES.DATA_WIPE,
         entityType: ENTITY_TYPES.SYSTEM,
-        summary: `Wiped ${matterCount} matters and all private notes`,
-        details: { matters_deleted: matterCount, scope: 'matters_only' }
+        summary: `Wiped ${matterCount} matters, ${attachmentCount} attachments, and all private notes`,
+        details: { matters_deleted: matterCount, attachments_deleted: attachmentCount, scope: 'matters_only' }
       });
 
       return {
         success: true,
-        message: `Successfully deleted ${matterCount} matter records and all private notes`,
-        matters_deleted: matterCount
+        message: `Successfully deleted ${matterCount} matter records, ${attachmentCount} attachments, and all private notes`,
+        matters_deleted: matterCount,
+        attachments_deleted: attachmentCount
       };
     } catch (error) {
       logErrorFromRequest(request, {
@@ -4065,9 +4084,32 @@ Return ONLY a valid JSON array, no other text. Example:
     }
 
     try {
-      // Log the wipe action
-      const userId = request.adminUser?.id || 'unknown';
+      const userId = request.adminUser?.id ?? null;
+      const username = request.adminUser?.username ?? null;
       const ip = request.ip || 'unknown';
+
+      // Count items before deletion
+      const matterCount = mattersDb.getAll().length;
+      const attachments = attachmentsDb.deleteAll(); // Returns all attachments for storage cleanup
+      const attachmentCount = attachments.length;
+
+      // 1. Log the wipe action FIRST (before clearing audit log)
+      const wipeLogEntry = logInfo({
+        userId,
+        username,
+        actionType: ACTION_TYPES.DATA_WIPE,
+        entityType: ENTITY_TYPES.SYSTEM,
+        summary: `Wiped ${matterCount} matters, ${attachmentCount} attachments, notes, and reset settings`,
+        details: {
+          matters_deleted: matterCount,
+          attachments_deleted: attachmentCount,
+          settings_reset: true,
+          sequences_reset: true,
+          scope: 'matters_and_settings'
+        },
+        ipAddress: ip
+      });
+
       fastify.log.warn({
         action: 'WIPE_MATTERS_AND_SETTINGS',
         user_id: userId,
@@ -4075,19 +4117,36 @@ Return ONLY a valid JSON array, no other text. Example:
         timestamp: new Date().toISOString()
       }, 'Matters and settings wipe initiated');
 
-      // Count matters before deletion
-      const matterCount = mattersDb.getAll().length;
-
-      // 1. Delete all private notes first
+      // 2. Delete all private notes
       privateNotesDb.deleteAll();
 
-      // 2. Delete all matters
+      // 3. Delete all matters
       const matters = mattersDb.getAll();
       for (const matter of matters) {
         mattersDb.delete(matter.id);
       }
 
-      // 3. Reset all configurable settings to defaults
+      // 4. Delete storage files for attachments
+      if (attachments.length > 0) {
+        const storage = createStorage(settingsDb);
+        for (const attachment of attachments) {
+          try {
+            await storage.deleteObject(attachment.storage_key, { userId, username, ipAddress: ip });
+          } catch (err) {
+            fastify.log.warn({ error: err.message, key: attachment.storage_key }, 'Failed to delete attachment from storage during wipe');
+          }
+        }
+      }
+
+      // 5. Clear all audit log entries EXCEPT the wipe action we just logged
+      if (wipeLogEntry?.id) {
+        auditLogDb.deleteExcept(wipeLogEntry.id);
+      }
+
+      // 6. Reset all ID sequences
+      resetAllSequences();
+
+      // 7. Reset all configurable settings to defaults
       for (const [key, value] of Object.entries(DEFAULT_APP_SETTINGS)) {
         settingsDb.set(key, value);
       }
@@ -4098,22 +4157,17 @@ Return ONLY a valid JSON array, no other text. Example:
       fastify.log.info({
         action: 'WIPE_MATTERS_AND_SETTINGS_COMPLETE',
         matters_deleted: matterCount,
+        attachments_deleted: attachmentCount,
         settings_reset: true
       }, 'Matters and settings wipe completed successfully');
 
-      // Audit log the wipe
-      logInfoFromRequest(request, {
-        actionType: ACTION_TYPES.DATA_WIPE,
-        entityType: ENTITY_TYPES.SYSTEM,
-        summary: `Wiped ${matterCount} matters, notes, and reset settings`,
-        details: { matters_deleted: matterCount, settings_reset: true, scope: 'matters_and_settings' }
-      });
-
       return {
         success: true,
-        message: `Successfully deleted ${matterCount} matter records, all private notes, and reset settings to defaults`,
+        message: `Successfully deleted ${matterCount} matter records, ${attachmentCount} attachments, all private notes, reset settings to defaults, and reset ID sequences`,
         matters_deleted: matterCount,
-        settings_reset: true
+        attachments_deleted: attachmentCount,
+        settings_reset: true,
+        sequences_reset: true
       };
     } catch (error) {
       logErrorFromRequest(request, {
@@ -4410,8 +4464,11 @@ Return ONLY a valid JSON array, no other text. Example:
     adminUsersDb,
     adminSessionsDb,
     adminBootstrapTokensDb,
+    privateNotesDb,
+    attachmentsDb,
     auditLogDb,
-    saveDatabase
+    saveDatabase,
+    resetAllSequences
   };
 
   return fastify;

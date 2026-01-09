@@ -1006,4 +1006,197 @@ describe('Bootstrap and Wipe Everything Functionality', () => {
       await freshServer.close();
     });
   });
+
+  describe('Wipe Matters and Settings - Extended Tests', () => {
+    test('should wipe attachments when wiping matters and settings', async () => {
+      const { mattersDb, attachmentsDb } = fastify.db;
+
+      // Create a matter with an attachment
+      const matter = mattersDb.add(new Date().toISOString(), 'Test matter with attachment', 10, 10000);
+      attachmentsDb.create(
+        matter.id,
+        'test.pdf',
+        'application/pdf',
+        1024,
+        'filesystem',
+        'test/key/123.pdf',
+        adminUserId
+      );
+
+      // Verify attachment exists
+      const attachmentsBefore = attachmentsDb.getByMatterId(matter.id);
+      assert.strictEqual(attachmentsBefore.length, 1);
+
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/data/wipe-matters-and-settings',
+        headers: {
+          cookie: authCookie
+        },
+        payload: { confirmation: 'WIPE SETTINGS' }
+      });
+
+      assert.strictEqual(response.statusCode, 200);
+      const body = JSON.parse(response.body);
+      assert.strictEqual(body.attachments_deleted, 1);
+
+      // Verify no attachments remain (check by querying all)
+      const allAttachments = attachmentsDb.getByMatterId(matter.id);
+      assert.strictEqual(allAttachments.length, 0);
+    });
+
+    test('should reset ID sequences after wipe', async () => {
+      const { mattersDb } = fastify.db;
+
+      // Create several matters
+      mattersDb.add(new Date().toISOString(), 'Matter 1', 10, 10000);
+      mattersDb.add(new Date().toISOString(), 'Matter 2', 10, 10000);
+      mattersDb.add(new Date().toISOString(), 'Matter 3', 10, 10000);
+
+      // Verify matters have IDs > 1
+      const mattersBefore = mattersDb.getAll();
+      assert.ok(mattersBefore.length >= 3);
+
+      // Perform wipe
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/data/wipe-matters-and-settings',
+        headers: {
+          cookie: authCookie
+        },
+        payload: { confirmation: 'WIPE SETTINGS' }
+      });
+
+      assert.strictEqual(response.statusCode, 200);
+      const body = JSON.parse(response.body);
+      assert.strictEqual(body.sequences_reset, true);
+
+      // Create a new matter - should get ID 1
+      const newMatter = mattersDb.add(new Date().toISOString(), 'New Matter After Wipe', 5, 5000);
+      assert.strictEqual(newMatter.id, 1);
+    });
+
+    test('should clear audit log except wipe action after wipe', async () => {
+      const { mattersDb, auditLogDb } = fastify.db;
+
+      // Create some matters to generate audit log entries
+      mattersDb.add(new Date().toISOString(), 'Matter 1', 10, 10000);
+      mattersDb.add(new Date().toISOString(), 'Matter 2', 10, 10000);
+
+      // Verify audit log has entries
+      const auditCountBefore = auditLogDb.getCount();
+      assert.ok(auditCountBefore > 0, 'Should have audit log entries before wipe');
+
+      // Perform wipe
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/data/wipe-matters-and-settings',
+        headers: {
+          cookie: authCookie
+        },
+        payload: { confirmation: 'WIPE SETTINGS' }
+      });
+
+      assert.strictEqual(response.statusCode, 200);
+
+      // Audit log should have exactly 1 entry (the wipe action)
+      const auditCountAfter = auditLogDb.getCount();
+      assert.strictEqual(auditCountAfter, 1, 'Audit log should have exactly 1 entry (the wipe action)');
+
+      // The remaining entry should be the wipe action
+      const { entries } = auditLogDb.getAll({ limit: 10 });
+      assert.strictEqual(entries.length, 1);
+      assert.strictEqual(entries[0].action_type, 'data_wipe');
+      assert.ok(entries[0].summary.includes('Wiped'));
+    });
+
+    test('should preserve wipe action user info in audit log', async () => {
+      const { auditLogDb } = fastify.db;
+
+      // Perform wipe
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/data/wipe-matters-and-settings',
+        headers: {
+          cookie: authCookie
+        },
+        payload: { confirmation: 'WIPE SETTINGS' }
+      });
+
+      assert.strictEqual(response.statusCode, 200);
+
+      // Check the wipe audit log entry has correct user info
+      const { entries } = auditLogDb.getAll({ limit: 1 });
+      assert.strictEqual(entries.length, 1);
+      assert.strictEqual(entries[0].username, 'testadmin');
+      assert.ok(entries[0].user_id);
+    });
+  });
+
+  describe('Wipe Matters - Extended Tests', () => {
+    test('should wipe attachments when wiping matters only', async () => {
+      const { mattersDb, attachmentsDb } = fastify.db;
+
+      // Create a matter with an attachment
+      const matter = mattersDb.add(new Date().toISOString(), 'Test matter with attachment', 10, 10000);
+      attachmentsDb.create(
+        matter.id,
+        'test.pdf',
+        'application/pdf',
+        1024,
+        'filesystem',
+        'test/key/456.pdf',
+        adminUserId
+      );
+
+      // Verify attachment exists
+      const attachmentsBefore = attachmentsDb.getByMatterId(matter.id);
+      assert.strictEqual(attachmentsBefore.length, 1);
+
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/data/wipe-matters',
+        headers: {
+          cookie: authCookie
+        },
+        payload: { confirmation: 'WIPE MATTERS' }
+      });
+
+      assert.strictEqual(response.statusCode, 200);
+      const body = JSON.parse(response.body);
+      assert.strictEqual(body.attachments_deleted, 1);
+
+      // Verify no attachments remain
+      const allAttachments = attachmentsDb.getByMatterId(matter.id);
+      assert.strictEqual(allAttachments.length, 0);
+    });
+
+    test('should wipe private notes when wiping matters', async () => {
+      const { mattersDb, privateNotesDb } = fastify.db;
+
+      // Create a matter with private notes
+      const matter = mattersDb.add(new Date().toISOString(), 'Test matter with notes', 10, 10000);
+      privateNotesDb.create(matter.id, 'Private note 1', adminUserId);
+      privateNotesDb.create(matter.id, 'Private note 2', adminUserId);
+
+      // Verify notes exist
+      const notesBefore = privateNotesDb.getByMatterId(matter.id);
+      assert.strictEqual(notesBefore.length, 2);
+
+      const response = await fastify.inject({
+        method: 'POST',
+        url: '/admin/api/data/wipe-matters',
+        headers: {
+          cookie: authCookie
+        },
+        payload: { confirmation: 'WIPE MATTERS' }
+      });
+
+      assert.strictEqual(response.statusCode, 200);
+
+      // Verify no notes remain
+      const notesAfter = privateNotesDb.getByMatterId(matter.id);
+      assert.strictEqual(notesAfter.length, 0);
+    });
+  });
 });
