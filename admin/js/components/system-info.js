@@ -392,13 +392,24 @@ async function handleRestart() {
             throw new Error('Failed to restart');
         }
 
-        showToast('Server restart initiated', 'success');
+        // Show countdown and redirect to login
+        // Server takes ~3-5 seconds to restart (including graceful shutdown), redirect after 7 seconds
+        const REDIRECT_DELAY = 7;
+        let countdown = REDIRECT_DELAY;
 
-        // Wait a moment then reload status
-        btn.textContent = 'Restarting...';
-        setTimeout(() => {
-            loadWatchdogStatus();
-        }, 3000);
+        btn.textContent = `Redirecting in ${countdown}s...`;
+        showToast('Server restart initiated. You will be redirected to login.', 'success');
+
+        const countdownInterval = setInterval(() => {
+            countdown--;
+            if (countdown > 0) {
+                btn.textContent = `Redirecting in ${countdown}s...`;
+            } else {
+                clearInterval(countdownInterval);
+                // Redirect to login page
+                window.location.href = '/admin';
+            }
+        }, 1000);
 
     } catch (error) {
         console.error('Failed to restart server:', error);

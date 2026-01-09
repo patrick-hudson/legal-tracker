@@ -1,22 +1,48 @@
 /**
  * Audit Log Component
- * Displays system audit log entries with pagination and filtering
+ * Displays system audit log entries with pagination, search, filtering, and export
  */
 
 import api from '../api.js';
 import { formatDate, escapeHtml } from '../display-utils.js';
 
 let currentPage = 1;
-let currentLevel = '';
+let currentLevels = []; // Now an array for multi-select
 let currentLimit = 25;
+let currentSearch = '';
+let currentStartDate = '';
+let currentEndDate = '';
+let currentUsername = '';
+let currentActionType = '';
+let currentEntityType = '';
 let expandedRows = new Set();
 let tbodyClickHandler = null;
 let settingsLoaded = false;
 let isDebugModeActive = false;
+let searchDebounceTimer = null;
+let autoRefreshEnabled = false;
+let autoRefreshInterval = null;
+const AUTO_REFRESH_INTERVAL_MS = 10000; // 10 seconds
+
+// Filter options loaded from API
+let filterOptions = {
+    users: [],
+    actionTypes: [],
+    entityTypes: []
+};
+
+// Stats loaded from API
+let stats = {
+    errorsLast24h: 0,
+    warningsLast24h: 0,
+    securityLast24h: 0,
+    infoLast24h: 0
+};
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 const DEFAULT_PAGE_SIZE = 25;
 const PAGE_SIZE_SETTING_KEY = 'audit_log_page_size';
+const SEARCH_DEBOUNCE_MS = 300;
 
 // Level badge colors
 const LEVEL_COLORS = {
@@ -27,6 +53,15 @@ const LEVEL_COLORS = {
     DEBUG: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'
 };
 
+// Level pill button colors (for filter pills)
+const LEVEL_PILL_COLORS = {
+    ERROR: { active: 'bg-red-600 text-white border-red-600', inactive: 'bg-white text-red-700 border-red-300 hover:bg-red-50 dark:bg-gray-800 dark:text-red-400 dark:border-red-700 dark:hover:bg-red-900/30' },
+    SECURITY: { active: 'bg-orange-600 text-white border-orange-600', inactive: 'bg-white text-orange-700 border-orange-300 hover:bg-orange-50 dark:bg-gray-800 dark:text-orange-400 dark:border-orange-700 dark:hover:bg-orange-900/30' },
+    WARNING: { active: 'bg-yellow-500 text-white border-yellow-500', inactive: 'bg-white text-yellow-700 border-yellow-300 hover:bg-yellow-50 dark:bg-gray-800 dark:text-yellow-400 dark:border-yellow-700 dark:hover:bg-yellow-900/30' },
+    INFO: { active: 'bg-blue-600 text-white border-blue-600', inactive: 'bg-white text-blue-700 border-blue-300 hover:bg-blue-50 dark:bg-gray-800 dark:text-blue-400 dark:border-blue-700 dark:hover:bg-blue-900/30' },
+    DEBUG: { active: 'bg-purple-600 text-white border-purple-600', inactive: 'bg-white text-purple-700 border-purple-300 hover:bg-purple-50 dark:bg-gray-800 dark:text-purple-400 dark:border-purple-700 dark:hover:bg-purple-900/30' }
+};
+
 export async function renderAuditLog(container) {
     container.innerHTML = '<div class="flex justify-center items-center h-64"><div class="spinner"></div></div>';
 
@@ -34,7 +69,12 @@ export async function renderAuditLog(container) {
         // Load saved page size preference and debug mode status on first render
         if (!settingsLoaded) {
             try {
-                const settings = await api.getSettings();
+                const [settings, filtersResponse, statsResponse] = await Promise.all([
+                    api.getSettings(),
+                    api.getAuditLogFilters(),
+                    api.getAuditLogStats()
+                ]);
+
                 if (settings[PAGE_SIZE_SETTING_KEY]) {
                     const savedLimit = parseInt(settings[PAGE_SIZE_SETTING_KEY]);
                     if (PAGE_SIZE_OPTIONS.includes(savedLimit)) {
@@ -43,8 +83,24 @@ export async function renderAuditLog(container) {
                 }
                 // Check if debug mode is active
                 isDebugModeActive = settings.audit_log_level === 'DEBUG';
+
+                // Store filter options
+                filterOptions = {
+                    users: filtersResponse.users || [],
+                    actionTypes: filtersResponse.actionTypes || [],
+                    entityTypes: filtersResponse.entityTypes || []
+                };
+
+                // Store stats
+                stats = {
+                    errorsLast24h: statsResponse.errorsLast24h || 0,
+                    warningsLast24h: statsResponse.warningsLast24h || 0,
+                    securityLast24h: statsResponse.securityLast24h || 0,
+                    infoLast24h: statsResponse.infoLast24h || 0
+                };
             } catch (e) {
-                // Settings not available, use default
+                // Settings not available, use defaults
+                console.warn('Failed to load audit log settings:', e);
             }
             settingsLoaded = true;
         }
@@ -62,10 +118,20 @@ async function loadAuditLog(container) {
     const data = await api.getAuditLog({
         page: currentPage,
         limit: currentLimit,
-        level: currentLevel || undefined
+        levels: currentLevels.length > 0 ? currentLevels.join(',') : undefined,
+        search: currentSearch || undefined,
+        startDate: currentStartDate || undefined,
+        endDate: currentEndDate || undefined,
+        username: currentUsername || undefined,
+        actionType: currentActionType || undefined,
+        entityType: currentEntityType || undefined
     });
 
     const { entries, total, page, totalPages } = data;
+
+    // Check if any filters are active
+    const hasActiveFilters = currentLevels.length > 0 || currentSearch || currentStartDate || currentEndDate ||
+                             currentUsername || currentActionType || currentEntityType;
 
     container.innerHTML = `
         <div class="mb-4 flex items-start justify-between">
@@ -74,12 +140,62 @@ async function loadAuditLog(container) {
                 <p class="text-gray-600 dark:text-gray-400">System activity and security events</p>
             </div>
             <div class="flex items-center gap-2">
-                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${isDebugModeActive ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}">
+                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium cursor-help ${isDebugModeActive ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}" title="Debug mode can be enabled in the System Information settings">
                     <span class="w-2 h-2 ${isDebugModeActive ? 'bg-purple-500' : 'bg-gray-400'} rounded-full mr-1.5"></span>
                     Debug ${isDebugModeActive ? 'ON' : 'OFF'}
                 </span>
-                <a href="#system-info" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">Settings</a>
+                <a href="#/system-info" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">Settings</a>
             </div>
+        </div>
+
+        <!-- Stats Row -->
+        <div class="mb-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-3">
+                <div class="text-xs text-gray-500 dark:text-gray-400">Total Entries</div>
+                <div class="text-xl font-bold text-gray-900 dark:text-white">${total.toLocaleString()}</div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-3 ${stats.errorsLast24h > 0 ? 'border-l-4 border-l-red-500' : ''}">
+                <div class="text-xs text-gray-500 dark:text-gray-400">Errors (24h)</div>
+                <div class="text-xl font-bold ${stats.errorsLast24h > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'}">${stats.errorsLast24h}</div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-3 ${stats.securityLast24h > 0 ? 'border-l-4 border-l-orange-500' : ''}">
+                <div class="text-xs text-gray-500 dark:text-gray-400">Security (24h)</div>
+                <div class="text-xl font-bold ${stats.securityLast24h > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-gray-900 dark:text-white'}">${stats.securityLast24h}</div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-3 ${stats.warningsLast24h > 0 ? 'border-l-4 border-l-yellow-500' : ''}">
+                <div class="text-xs text-gray-500 dark:text-gray-400">Warnings (24h)</div>
+                <div class="text-xl font-bold ${stats.warningsLast24h > 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-900 dark:text-white'}">${stats.warningsLast24h}</div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-3">
+                <div class="text-xs text-gray-500 dark:text-gray-400">Info (24h)</div>
+                <div class="text-xl font-bold text-blue-600 dark:text-blue-400">${stats.infoLast24h}</div>
+            </div>
+        </div>
+
+        <!-- Actions Row -->
+        <div class="mb-4 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <button id="refresh-btn" class="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 dark:text-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700 rounded-lg shadow transition-colors" title="Refresh now">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    Refresh
+                </button>
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <div class="relative">
+                        <input type="checkbox" id="auto-refresh-toggle" class="sr-only peer" ${autoRefreshEnabled ? 'checked' : ''}>
+                        <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </div>
+                    <span class="text-sm text-gray-700 dark:text-gray-300">Auto-refresh</span>
+                    <span id="auto-refresh-indicator" class="text-xs text-gray-500 dark:text-gray-400 ${autoRefreshEnabled ? '' : 'hidden'}">(every 10s)</span>
+                </label>
+            </div>
+            <button id="export-csv-btn" class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 dark:text-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700 rounded-lg shadow transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                </svg>
+                Export CSV
+            </button>
         </div>
 
         ${isDebugModeActive ? `
@@ -94,20 +210,117 @@ async function loadAuditLog(container) {
             </div>
         ` : ''}
 
-        <!-- Filters and Top Navigation -->
+        <!-- Search and Quick Filters -->
+        <div class="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+            <div class="flex flex-wrap gap-4 items-end">
+                <!-- Search Box -->
+                <div class="flex-1 min-w-[200px]">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Search</label>
+                    <div class="relative">
+                        <input type="text" id="search-input" value="${escapeHtml(currentSearch)}" placeholder="Search logs..."
+                            class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                            <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                            </svg>
+                        </div>
+                        ${currentSearch ? `
+                            <button id="clear-search" class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                </svg>
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+
+                <!-- Quick Filters -->
+                <div class="flex gap-2">
+                    <button id="quick-filter-errors" class="px-3 py-2 text-xs font-medium rounded-lg border ${currentLevels.length === 1 && currentLevels[0] === 'ERROR' ? 'bg-red-600 text-white border-red-600' : 'bg-white text-red-700 border-red-300 hover:bg-red-50 dark:bg-gray-800 dark:text-red-400 dark:border-red-700'}">
+                        Errors Only
+                    </button>
+                    <button id="quick-filter-1h" class="px-3 py-2 text-xs font-medium rounded-lg border ${isLastHourFilter() ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600'}">
+                        Last Hour
+                    </button>
+                    <button id="quick-filter-24h" class="px-3 py-2 text-xs font-medium rounded-lg border ${isLast24hFilter() ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600'}">
+                        Last 24h
+                    </button>
+                    <button id="quick-filter-7d" class="px-3 py-2 text-xs font-medium rounded-lg border ${isLast7dFilter() ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600'}">
+                        Last 7 Days
+                    </button>
+                    ${hasActiveFilters ? `
+                        <button id="clear-all-filters" class="px-3 py-2 text-xs font-medium rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700">
+                            Clear All
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+
+            <!-- Level Pills -->
+            <div class="mt-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Filter by Level</label>
+                <div class="flex flex-wrap gap-2">
+                    ${['ERROR', 'SECURITY', 'WARNING', 'INFO', 'DEBUG'].map(level => {
+                        const isActive = currentLevels.includes(level);
+                        const colors = LEVEL_PILL_COLORS[level];
+                        return `<button data-level="${level}" class="level-pill px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${isActive ? colors.active : colors.inactive}">
+                            ${level}
+                        </button>`;
+                    }).join('')}
+                </div>
+            </div>
+
+            <!-- Advanced Filters (collapsible) -->
+            <details class="mt-4">
+                <summary class="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400">
+                    Advanced Filters ${(currentStartDate || currentEndDate || currentUsername || currentActionType || currentEntityType) ? '(active)' : ''}
+                </summary>
+                <div class="mt-3 grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <!-- Date Range -->
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
+                        <input type="date" id="start-date-filter" value="${currentStartDate}"
+                            class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">End Date</label>
+                        <input type="date" id="end-date-filter" value="${currentEndDate}"
+                            class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                    </div>
+
+                    <!-- User Filter -->
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">User</label>
+                        <select id="user-filter" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                            <option value="">All Users</option>
+                            ${filterOptions.users.map(u => `<option value="${escapeHtml(u)}" ${currentUsername === u ? 'selected' : ''}>${escapeHtml(u)}</option>`).join('')}
+                        </select>
+                    </div>
+
+                    <!-- Action Type Filter -->
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Action</label>
+                        <select id="action-type-filter" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                            <option value="">All Actions</option>
+                            ${filterOptions.actionTypes.map(a => `<option value="${escapeHtml(a)}" ${currentActionType === a ? 'selected' : ''}>${escapeHtml(a)}</option>`).join('')}
+                        </select>
+                    </div>
+
+                    <!-- Entity Type Filter -->
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Entity</label>
+                        <select id="entity-type-filter" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                            <option value="">All Entities</option>
+                            ${filterOptions.entityTypes.map(e => `<option value="${escapeHtml(e)}" ${currentEntityType === e ? 'selected' : ''}>${escapeHtml(e)}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
+            </details>
+        </div>
+
+        <!-- Per Page and Top Pagination -->
         <div class="mb-4 flex flex-wrap gap-4 items-end justify-between">
             <div class="flex flex-wrap gap-4 items-end">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Level</label>
-                    <select id="level-filter" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                        <option value="">All Levels</option>
-                        <option value="ERROR" ${currentLevel === 'ERROR' ? 'selected' : ''}>Error</option>
-                        <option value="SECURITY" ${currentLevel === 'SECURITY' ? 'selected' : ''}>Security</option>
-                        <option value="WARNING" ${currentLevel === 'WARNING' ? 'selected' : ''}>Warning</option>
-                        <option value="INFO" ${currentLevel === 'INFO' ? 'selected' : ''}>Info</option>
-                        <option value="DEBUG" ${currentLevel === 'DEBUG' ? 'selected' : ''}>Debug</option>
-                    </select>
-                </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Per Page</label>
                     <select id="page-size" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
@@ -115,7 +328,7 @@ async function loadAuditLog(container) {
                     </select>
                 </div>
                 <div class="text-sm text-gray-600 dark:text-gray-400 pb-2">
-                    ${total} entries total
+                    ${total} entries ${hasActiveFilters ? '(filtered)' : 'total'}
                 </div>
             </div>
             ${total > 0 ? `
@@ -152,7 +365,7 @@ async function loadAuditLog(container) {
                         ${entries.length === 0 ? `
                             <tr>
                                 <td colspan="7" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                                    No audit log entries yet
+                                    ${hasActiveFilters ? 'No entries match the current filters' : 'No audit log entries yet'}
                                 </td>
                             </tr>
                         ` : entries.map(entry => renderRow(entry)).join('')}
@@ -176,6 +389,28 @@ async function loadAuditLog(container) {
     `;
 
     setupEventListeners(container);
+}
+
+// Helper functions for quick filter detection
+function isLastHourFilter() {
+    if (!currentStartDate || currentEndDate) return false;
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const filterDate = new Date(currentStartDate);
+    return Math.abs(filterDate - oneHourAgo) < 60000; // Within a minute
+}
+
+function isLast24hFilter() {
+    if (!currentStartDate || currentEndDate) return false;
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const filterDate = new Date(currentStartDate);
+    return Math.abs(filterDate - oneDayAgo) < 60000;
+}
+
+function isLast7dFilter() {
+    if (!currentStartDate || currentEndDate) return false;
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const filterDate = new Date(currentStartDate);
+    return Math.abs(filterDate - sevenDaysAgo) < 60000;
 }
 
 function renderRow(entry) {
@@ -296,16 +531,152 @@ function renderDetailsRow(entry) {
 }
 
 function setupEventListeners(container) {
-    // Level filter
-    const levelFilter = document.getElementById('level-filter');
-    if (levelFilter) {
-        levelFilter.addEventListener('change', async () => {
-            currentLevel = levelFilter.value;
+    // Search input with debounce
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = setTimeout(async () => {
+                currentSearch = e.target.value.trim();
+                currentPage = 1;
+                expandedRows.clear();
+                await loadAuditLog(container);
+            }, SEARCH_DEBOUNCE_MS);
+        });
+    }
+
+    // Clear search button
+    document.getElementById('clear-search')?.addEventListener('click', async () => {
+        currentSearch = '';
+        currentPage = 1;
+        expandedRows.clear();
+        await loadAuditLog(container);
+    });
+
+    // Level pill buttons (multi-select toggle)
+    document.querySelectorAll('.level-pill').forEach(pill => {
+        pill.addEventListener('click', async () => {
+            const level = pill.dataset.level;
+            if (currentLevels.includes(level)) {
+                currentLevels = currentLevels.filter(l => l !== level);
+            } else {
+                currentLevels.push(level);
+            }
             currentPage = 1;
             expandedRows.clear();
             await loadAuditLog(container);
         });
-    }
+    });
+
+    // Quick filter: Errors only
+    document.getElementById('quick-filter-errors')?.addEventListener('click', async () => {
+        if (currentLevels.length === 1 && currentLevels[0] === 'ERROR') {
+            currentLevels = [];
+        } else {
+            currentLevels = ['ERROR'];
+        }
+        currentPage = 1;
+        expandedRows.clear();
+        await loadAuditLog(container);
+    });
+
+    // Quick filter: Last hour
+    document.getElementById('quick-filter-1h')?.addEventListener('click', async () => {
+        if (isLastHourFilter()) {
+            currentStartDate = '';
+            currentEndDate = '';
+        } else {
+            const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+            currentStartDate = oneHourAgo.toISOString();
+            currentEndDate = '';
+        }
+        currentPage = 1;
+        expandedRows.clear();
+        await loadAuditLog(container);
+    });
+
+    // Quick filter: Last 24h
+    document.getElementById('quick-filter-24h')?.addEventListener('click', async () => {
+        if (isLast24hFilter()) {
+            currentStartDate = '';
+            currentEndDate = '';
+        } else {
+            const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            currentStartDate = oneDayAgo.toISOString();
+            currentEndDate = '';
+        }
+        currentPage = 1;
+        expandedRows.clear();
+        await loadAuditLog(container);
+    });
+
+    // Quick filter: Last 7 days
+    document.getElementById('quick-filter-7d')?.addEventListener('click', async () => {
+        if (isLast7dFilter()) {
+            currentStartDate = '';
+            currentEndDate = '';
+        } else {
+            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+            currentStartDate = sevenDaysAgo.toISOString();
+            currentEndDate = '';
+        }
+        currentPage = 1;
+        expandedRows.clear();
+        await loadAuditLog(container);
+    });
+
+    // Clear all filters
+    document.getElementById('clear-all-filters')?.addEventListener('click', async () => {
+        currentLevels = [];
+        currentSearch = '';
+        currentStartDate = '';
+        currentEndDate = '';
+        currentUsername = '';
+        currentActionType = '';
+        currentEntityType = '';
+        currentPage = 1;
+        expandedRows.clear();
+        await loadAuditLog(container);
+    });
+
+    // Date range filters
+    document.getElementById('start-date-filter')?.addEventListener('change', async (e) => {
+        currentStartDate = e.target.value ? new Date(e.target.value).toISOString() : '';
+        currentPage = 1;
+        expandedRows.clear();
+        await loadAuditLog(container);
+    });
+
+    document.getElementById('end-date-filter')?.addEventListener('change', async (e) => {
+        currentEndDate = e.target.value ? new Date(e.target.value + 'T23:59:59').toISOString() : '';
+        currentPage = 1;
+        expandedRows.clear();
+        await loadAuditLog(container);
+    });
+
+    // User filter
+    document.getElementById('user-filter')?.addEventListener('change', async (e) => {
+        currentUsername = e.target.value;
+        currentPage = 1;
+        expandedRows.clear();
+        await loadAuditLog(container);
+    });
+
+    // Action type filter
+    document.getElementById('action-type-filter')?.addEventListener('change', async (e) => {
+        currentActionType = e.target.value;
+        currentPage = 1;
+        expandedRows.clear();
+        await loadAuditLog(container);
+    });
+
+    // Entity type filter
+    document.getElementById('entity-type-filter')?.addEventListener('change', async (e) => {
+        currentEntityType = e.target.value;
+        currentPage = 1;
+        expandedRows.clear();
+        await loadAuditLog(container);
+    });
 
     // Page size filter
     const pageSizeFilter = document.getElementById('page-size');
@@ -373,6 +744,104 @@ function setupEventListeners(container) {
             });
         }
     }
+
+    // Export CSV button
+    document.getElementById('export-csv-btn')?.addEventListener('click', async () => {
+        const btn = document.getElementById('export-csv-btn');
+        const originalContent = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-sm"></span> Exporting...';
+
+        try {
+            const blob = await api.exportAuditLog({
+                levels: currentLevels.length > 0 ? currentLevels.join(',') : undefined,
+                search: currentSearch || undefined,
+                startDate: currentStartDate || undefined,
+                endDate: currentEndDate || undefined,
+                username: currentUsername || undefined,
+                actionType: currentActionType || undefined,
+                entityType: currentEntityType || undefined
+            });
+
+            // Trigger download
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `audit-log-${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Export failed:', error);
+            alert('Export failed: ' + error.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalContent;
+        }
+    });
+
+    // Manual refresh button
+    document.getElementById('refresh-btn')?.addEventListener('click', async () => {
+        const btn = document.getElementById('refresh-btn');
+        const svg = btn.querySelector('svg');
+        svg.classList.add('animate-spin');
+        btn.disabled = true;
+
+        try {
+            // Reload stats too
+            const statsResponse = await api.getAuditLogStats();
+            stats = {
+                errorsLast24h: statsResponse.errorsLast24h || 0,
+                warningsLast24h: statsResponse.warningsLast24h || 0,
+                securityLast24h: statsResponse.securityLast24h || 0,
+                infoLast24h: statsResponse.infoLast24h || 0
+            };
+            await loadAuditLog(container);
+        } finally {
+            svg.classList.remove('animate-spin');
+            btn.disabled = false;
+        }
+    });
+
+    // Auto-refresh toggle
+    document.getElementById('auto-refresh-toggle')?.addEventListener('change', (e) => {
+        autoRefreshEnabled = e.target.checked;
+        const indicator = document.getElementById('auto-refresh-indicator');
+
+        if (autoRefreshEnabled) {
+            indicator?.classList.remove('hidden');
+            // Start auto-refresh interval
+            autoRefreshInterval = setInterval(async () => {
+                // Only refresh if we're still on this page
+                if (document.getElementById('audit-log-body')) {
+                    try {
+                        const statsResponse = await api.getAuditLogStats();
+                        stats = {
+                            errorsLast24h: statsResponse.errorsLast24h || 0,
+                            warningsLast24h: statsResponse.warningsLast24h || 0,
+                            securityLast24h: statsResponse.securityLast24h || 0,
+                            infoLast24h: statsResponse.infoLast24h || 0
+                        };
+                        await loadAuditLog(container);
+                    } catch (e) {
+                        console.error('Auto-refresh failed:', e);
+                    }
+                } else {
+                    // Stop if we navigated away
+                    clearInterval(autoRefreshInterval);
+                    autoRefreshInterval = null;
+                }
+            }, AUTO_REFRESH_INTERVAL_MS);
+        } else {
+            indicator?.classList.add('hidden');
+            // Stop auto-refresh
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+        }
+    });
 
     // Row expansion - remove old handler to prevent duplicate listeners
     const tbody = document.getElementById('audit-log-body');

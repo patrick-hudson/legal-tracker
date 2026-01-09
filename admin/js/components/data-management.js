@@ -1177,6 +1177,60 @@ function setupEventListeners() {
                                 </p>
                             </div>
                         </div>
+
+                        <!-- Audit Log Generation Section -->
+                        <div class="border-t border-gray-200 dark:border-gray-600 pt-4 mt-4">
+                            <p class="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                                Audit Log Entries
+                                <span class="text-xs font-normal text-purple-600 dark:text-purple-400 ml-1">(System)</span>
+                            </p>
+
+                            <div class="mb-3">
+                                <label class="flex items-center cursor-pointer">
+                                    <input type="checkbox" id="modal-generate-audit-log"
+                                        class="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 dark:focus:ring-purple-600 dark:ring-offset-gray-800 dark:bg-gray-700 dark:border-gray-600">
+                                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Generate audit log entries</span>
+                                </label>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 ml-6">Populate audit log with realistic system activity (logins, CRUD operations, errors)</p>
+                            </div>
+
+                            <div id="audit-log-options" class="hidden ml-6 space-y-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Number of entries (50-500)</label>
+                                    <input type="number" id="modal-audit-log-count" value="100" min="50" max="500"
+                                        class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
+                                        <input type="date" id="modal-audit-log-start-date" value="${formatDate(oneYearAgo)}"
+                                            class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">End Date</label>
+                                        <input type="date" id="modal-audit-log-end-date" value="${formatDate(today)}"
+                                            class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="flex items-center cursor-pointer ${!isClaudeKeyValidated || !aiSettings.selectedModel ? 'opacity-50' : ''}">
+                                        <input type="checkbox" id="modal-audit-log-use-ai" ${!isClaudeKeyValidated || !aiSettings.selectedModel ? 'disabled' : ''}
+                                            class="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 dark:focus:ring-purple-600 dark:ring-offset-gray-800 dark:bg-gray-700 dark:border-gray-600">
+                                        <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Use AI for realistic entries</span>
+                                    </label>
+                                    ${!isClaudeKeyValidated || !aiSettings.selectedModel
+                                        ? '<p class="text-xs text-amber-600 dark:text-amber-400 ml-6">Configure Claude API to enable AI-generated entries</p>'
+                                        : `<p class="text-xs text-gray-500 dark:text-gray-400 ml-6">Uses AI to generate realistic log summaries @ <span class="font-medium text-purple-600 dark:text-purple-400">${getSpiceLevelName(aiSettings.spiceLevel)}</span></p>`
+                                    }
+                                </div>
+
+                                <p class="text-xs text-gray-500 dark:text-gray-400">
+                                    Generates a mix of INFO, WARNING, ERROR, SECURITY, and DEBUG entries with realistic timestamps (weighted toward business hours).
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -1244,6 +1298,17 @@ function setupEventListeners() {
                     }
                 });
 
+                // Wire up audit log checkbox toggle
+                const auditLogCheckbox = modal.querySelector('#modal-generate-audit-log');
+                const auditLogOptions = modal.querySelector('#audit-log-options');
+                auditLogCheckbox?.addEventListener('change', (e) => {
+                    if (e.target.checked) {
+                        auditLogOptions?.classList.remove('hidden');
+                    } else {
+                        auditLogOptions?.classList.add('hidden');
+                    }
+                });
+
                 // Wire up the quick generate button
                 const quickBtn = modal.querySelector('#modal-quick-generate-btn');
                 quickBtn?.addEventListener('click', async () => {
@@ -1294,7 +1359,13 @@ function setupEventListeners() {
                             maxNotes: parseInt(modal.querySelector('#modal-max-notes')?.value || 3),
                             // Attachment generation options
                             generateAttachments: modal.querySelector('#modal-generate-attachments')?.checked ?? false,
-                            attachmentsPercentage: parseInt(modal.querySelector('#modal-attachments-percentage')?.value || 25)
+                            attachmentsPercentage: parseInt(modal.querySelector('#modal-attachments-percentage')?.value || 25),
+                            // Audit log generation options
+                            generateAuditLog: modal.querySelector('#modal-generate-audit-log')?.checked ?? false,
+                            auditLogCount: parseInt(modal.querySelector('#modal-audit-log-count')?.value || 100),
+                            auditLogStartDate: modal.querySelector('#modal-audit-log-start-date')?.value,
+                            auditLogEndDate: modal.querySelector('#modal-audit-log-end-date')?.value,
+                            auditLogUseAi: modal.querySelector('#modal-audit-log-use-ai')?.checked ?? false
                         };
                     }, { capture: true }); // Use capture to run before the modal's click handler
                 });
@@ -1303,7 +1374,12 @@ function setupEventListeners() {
 
         // Handle Generate button click
         if (result === 'generate' && capturedFormValues) {
-            const { count: modalCount, startDate, endDate, minCost, maxCost, wholeDollars, useAi, generateNotes, notesPercentage, minNotes, maxNotes, generateAttachments, attachmentsPercentage } = capturedFormValues;
+            const {
+                count: modalCount, startDate, endDate, minCost, maxCost, wholeDollars, useAi,
+                generateNotes, notesPercentage, minNotes, maxNotes,
+                generateAttachments, attachmentsPercentage,
+                generateAuditLog, auditLogCount, auditLogStartDate, auditLogEndDate, auditLogUseAi
+            } = capturedFormValues;
 
             // Validation
             if (modalCount < 1 || modalCount > 1000) {
@@ -1318,12 +1394,17 @@ function setupEventListeners() {
                 showToast('Minimum cost cannot exceed maximum cost', 'error');
                 return;
             }
+            if (generateAuditLog && (auditLogCount < 50 || auditLogCount > 500)) {
+                showToast('Audit log count must be between 50 and 500', 'error');
+                return;
+            }
 
             // Show persistent loading toast FIRST (before any button manipulation)
             let loadingMsg = `Generating ${modalCount} matters`;
             if (useAi) loadingMsg += ` with AI (${getSpiceLevelName(aiSettings.spiceLevel)})`;
             if (generateNotes) loadingMsg += ` + notes`;
             if (generateAttachments) loadingMsg += ` + documents`;
+            if (generateAuditLog) loadingMsg += ` + ${auditLogCount} audit log entries`;
             loadingMsg += '... please wait';
             showPersistentToast(loadingMsg, 'loading');
 
@@ -1355,12 +1436,30 @@ function setupEventListeners() {
                     attachmentsPercentage: generateAttachments ? attachmentsPercentage : undefined
                 });
 
+                // Generate audit log entries if requested (separate API call)
+                let auditLogResult = null;
+                if (generateAuditLog) {
+                    try {
+                        auditLogResult = await api.populateAuditLogSampleData({
+                            count: auditLogCount,
+                            startDate: auditLogStartDate,
+                            endDate: auditLogEndDate,
+                            useAi: auditLogUseAi,
+                            spiceLevelOverride: auditLogUseAi ? aiSettings.spiceLevel : undefined
+                        });
+                    } catch (auditError) {
+                        console.error('Failed to generate audit log entries:', auditError);
+                        // Continue - we'll show partial success
+                    }
+                }
+
                 // Dismiss loading toast and show success
                 dismissPersistentToast();
                 const aiNote = response.used_ai_descriptions ? ` (AI @ ${getSpiceLevelName(aiSettings.spiceLevel)})` : '';
                 const notesNote = response.private_notes_generated ? ` + ${response.private_notes_generated} notes` : '';
                 const attachmentsNote = response.attachments_generated ? ` + ${response.attachments_generated} documents` : '';
-                showToast(`Successfully added ${response.matters_added} sample matters ($${response.total_cost_added.toFixed(2)})${aiNote}${notesNote}${attachmentsNote}`, 'success');
+                const auditLogNote = auditLogResult?.created ? ` + ${auditLogResult.created} audit log entries` : '';
+                showToast(`Successfully added ${response.matters_added} sample matters ($${response.total_cost_added.toFixed(2)})${aiNote}${notesNote}${attachmentsNote}${auditLogNote}`, 'success');
             } catch (error) {
                 dismissPersistentToast();
                 showToast(`Error: ${error.message}`, 'error');

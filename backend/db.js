@@ -951,19 +951,41 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
     },
 
     getAll(options = {}) {
-      const { page = 1, limit = 50, level = null, userId = null, entityType = null, entityId = null } = options;
+      const {
+        page = 1,
+        limit = 50,
+        level = null,
+        levels = null, // Support multiple levels as array
+        userId = null,
+        username = null,
+        entityType = null,
+        entityId = null,
+        actionType = null,
+        search = null,
+        startDate = null,
+        endDate = null
+      } = options;
       const offset = (page - 1) * limit;
 
       let whereClause = '1=1';
       const params = [];
 
-      if (level) {
+      // Support single level or multiple levels
+      if (levels && Array.isArray(levels) && levels.length > 0) {
+        const placeholders = levels.map(() => '?').join(', ');
+        whereClause += ` AND level IN (${placeholders})`;
+        params.push(...levels);
+      } else if (level) {
         whereClause += ' AND level = ?';
         params.push(level);
       }
       if (userId) {
         whereClause += ' AND user_id = ?';
         params.push(userId);
+      }
+      if (username) {
+        whereClause += ' AND username = ?';
+        params.push(username);
       }
       if (entityType) {
         whereClause += ' AND entity_type = ?';
@@ -972,6 +994,25 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
       if (entityId) {
         whereClause += ' AND entity_id = ?';
         params.push(entityId);
+      }
+      if (actionType) {
+        whereClause += ' AND action_type = ?';
+        params.push(actionType);
+      }
+      // Text search - searches summary and details
+      if (search) {
+        whereClause += ' AND (summary LIKE ? OR details LIKE ?)';
+        const searchPattern = `%${search}%`;
+        params.push(searchPattern, searchPattern);
+      }
+      // Date range filters
+      if (startDate) {
+        whereClause += ' AND timestamp >= ?';
+        params.push(startDate);
+      }
+      if (endDate) {
+        whereClause += ' AND timestamp <= ?';
+        params.push(endDate);
       }
 
       // Get total count
@@ -1021,6 +1062,122 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
     getCount() {
       const result = db.exec('SELECT COUNT(*) as count FROM audit_log');
       return result[0]?.values[0]?.[0] || 0;
+    },
+
+    // Get distinct values for filter dropdowns
+    getDistinctUsers() {
+      const result = db.exec(`
+        SELECT DISTINCT username FROM audit_log
+        WHERE username IS NOT NULL AND username != ''
+        ORDER BY username
+      `);
+      if (result.length > 0) {
+        return result[0].values.map(row => row[0]);
+      }
+      return [];
+    },
+
+    getDistinctActionTypes() {
+      const result = db.exec(`
+        SELECT DISTINCT action_type FROM audit_log
+        WHERE action_type IS NOT NULL AND action_type != ''
+        ORDER BY action_type
+      `);
+      if (result.length > 0) {
+        return result[0].values.map(row => row[0]);
+      }
+      return [];
+    },
+
+    getDistinctEntityTypes() {
+      const result = db.exec(`
+        SELECT DISTINCT entity_type FROM audit_log
+        WHERE entity_type IS NOT NULL AND entity_type != ''
+        ORDER BY entity_type
+      `);
+      if (result.length > 0) {
+        return result[0].values.map(row => row[0]);
+      }
+      return [];
+    },
+
+    // Get stats for header display
+    getStats() {
+      const now = new Date();
+      const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+
+      const errorsResult = db.exec(
+        'SELECT COUNT(*) FROM audit_log WHERE level = ? AND timestamp >= ?',
+        ['ERROR', last24h]
+      );
+      const warningsResult = db.exec(
+        'SELECT COUNT(*) FROM audit_log WHERE level = ? AND timestamp >= ?',
+        ['WARNING', last24h]
+      );
+      const securityResult = db.exec(
+        'SELECT COUNT(*) FROM audit_log WHERE level = ? AND timestamp >= ?',
+        ['SECURITY', last24h]
+      );
+      const infoResult = db.exec(
+        'SELECT COUNT(*) FROM audit_log WHERE level = ? AND timestamp >= ?',
+        ['INFO', last24h]
+      );
+
+      return {
+        errorsLast24h: errorsResult[0]?.values[0]?.[0] || 0,
+        warningsLast24h: warningsResult[0]?.values[0]?.[0] || 0,
+        securityLast24h: securityResult[0]?.values[0]?.[0] || 0,
+        infoLast24h: infoResult[0]?.values[0]?.[0] || 0
+      };
+    },
+
+    // Bulk create for sample data generation
+    bulkCreate(entries) {
+      let created = 0;
+      for (const entry of entries) {
+        const {
+          timestamp = new Date().toISOString(),
+          level,
+          user_id = null,
+          username = null,
+          action_type,
+          entity_type = null,
+          entity_id = null,
+          summary,
+          request = null,
+          response = null,
+          details = null,
+          ip_address = null,
+          duration_ms = null,
+          stack_trace = null
+        } = entry;
+
+        db.run(`
+          INSERT INTO audit_log (
+            timestamp, level, user_id, username, action_type, entity_type, entity_id,
+            summary, request, response, details, ip_address, duration_ms, stack_trace
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          timestamp,
+          level,
+          user_id,
+          username,
+          action_type,
+          entity_type,
+          entity_id,
+          summary,
+          request ? JSON.stringify(request) : null,
+          response ? JSON.stringify(response) : null,
+          details ? JSON.stringify(details) : null,
+          ip_address,
+          duration_ms,
+          stack_trace
+        ]);
+        created++;
+      }
+
+      saveDatabase();
+      return { created };
     }
   };
 

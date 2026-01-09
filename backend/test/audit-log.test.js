@@ -593,4 +593,292 @@ describe('Audit Log Tests', () => {
       assert.strictEqual(entry.level, 'ERROR');
     });
   });
+
+  describe('Advanced Filtering', () => {
+    beforeEach(() => {
+      // Create some test entries with different attributes for filtering
+      const { auditLogDb } = server.db;
+
+      // Clear existing test entries by creating new identifiable ones
+      auditLogDb.create({
+        level: 'ERROR',
+        user_id: 1,
+        username: 'admin',
+        action_type: 'login_failed',
+        entity_type: 'user',
+        summary: 'Failed login attempt for search test'
+      });
+
+      auditLogDb.create({
+        level: 'WARNING',
+        user_id: 1,
+        username: 'testuser',
+        action_type: 'update',
+        entity_type: 'matter',
+        entity_id: 100,
+        summary: 'Matter warning for search test'
+      });
+
+      auditLogDb.create({
+        level: 'INFO',
+        user_id: 2,
+        username: 'admin',
+        action_type: 'create',
+        entity_type: 'matter',
+        entity_id: 101,
+        summary: 'Matter created for search test'
+      });
+    });
+
+    it('should filter by multiple levels', async () => {
+      const response = await fetch(`${baseURL}/admin/api/audit-log?levels=ERROR,WARNING`, {
+        headers: { 'Cookie': adminCookie }
+      });
+
+      const data = await response.json();
+      assert.ok(data.entries.every(e => e.level === 'ERROR' || e.level === 'WARNING'));
+    });
+
+    it('should search by summary text', async () => {
+      const response = await fetch(`${baseURL}/admin/api/audit-log?search=search%20test`, {
+        headers: { 'Cookie': adminCookie }
+      });
+
+      const data = await response.json();
+      assert.ok(data.entries.length > 0, 'Should find entries with search text');
+      assert.ok(data.entries.every(e => e.summary.toLowerCase().includes('search test')));
+    });
+
+    it('should filter by username', async () => {
+      const response = await fetch(`${baseURL}/admin/api/audit-log?username=admin`, {
+        headers: { 'Cookie': adminCookie }
+      });
+
+      const data = await response.json();
+      assert.ok(data.entries.length > 0);
+      assert.ok(data.entries.every(e => e.username === 'admin'));
+    });
+
+    it('should filter by action type', async () => {
+      const response = await fetch(`${baseURL}/admin/api/audit-log?actionType=create`, {
+        headers: { 'Cookie': adminCookie }
+      });
+
+      const data = await response.json();
+      assert.ok(data.entries.length > 0);
+      assert.ok(data.entries.every(e => e.action_type === 'create'));
+    });
+
+    it('should filter by entity type', async () => {
+      const response = await fetch(`${baseURL}/admin/api/audit-log?entityType=matter`, {
+        headers: { 'Cookie': adminCookie }
+      });
+
+      const data = await response.json();
+      assert.ok(data.entries.length > 0);
+      assert.ok(data.entries.every(e => e.entity_type === 'matter'));
+    });
+
+    it('should filter by date range', async () => {
+      const now = new Date();
+      const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+      const response = await fetch(`${baseURL}/admin/api/audit-log?startDate=${yesterday.toISOString()}&endDate=${now.toISOString()}`, {
+        headers: { 'Cookie': adminCookie }
+      });
+
+      const data = await response.json();
+      assert.ok(data.entries.length > 0);
+      // All entries should be within the date range
+      data.entries.forEach(e => {
+        const entryDate = new Date(e.timestamp);
+        assert.ok(entryDate >= yesterday && entryDate <= now);
+      });
+    });
+
+    it('should combine multiple filters with AND logic', async () => {
+      const response = await fetch(`${baseURL}/admin/api/audit-log?levels=INFO&username=admin&entityType=matter`, {
+        headers: { 'Cookie': adminCookie }
+      });
+
+      const data = await response.json();
+      data.entries.forEach(e => {
+        assert.strictEqual(e.level, 'INFO');
+        assert.strictEqual(e.username, 'admin');
+        assert.strictEqual(e.entity_type, 'matter');
+      });
+    });
+  });
+
+  describe('Filter Values Endpoint', () => {
+    it('should return distinct filter values', async () => {
+      const response = await fetch(`${baseURL}/admin/api/audit-log/filters`, {
+        headers: { 'Cookie': adminCookie }
+      });
+
+      assert.strictEqual(response.status, 200);
+      const data = await response.json();
+
+      assert.ok(Array.isArray(data.users), 'users should be an array');
+      assert.ok(Array.isArray(data.actionTypes), 'actionTypes should be an array');
+      assert.ok(Array.isArray(data.entityTypes), 'entityTypes should be an array');
+    });
+  });
+
+  describe('Stats Endpoint', () => {
+    it('should return error and warning counts for last 24h', async () => {
+      const response = await fetch(`${baseURL}/admin/api/audit-log/stats`, {
+        headers: { 'Cookie': adminCookie }
+      });
+
+      assert.strictEqual(response.status, 200);
+      const data = await response.json();
+
+      assert.ok(typeof data.errorsLast24h === 'number', 'errorsLast24h should be a number');
+      assert.ok(typeof data.warningsLast24h === 'number', 'warningsLast24h should be a number');
+    });
+  });
+
+  describe('CSV Export', () => {
+    it('should export audit log as CSV', async () => {
+      const response = await fetch(`${baseURL}/admin/api/audit-log/export`, {
+        headers: { 'Cookie': adminCookie }
+      });
+
+      assert.strictEqual(response.status, 200);
+      assert.ok(response.headers.get('content-type').includes('text/csv'));
+      assert.ok(response.headers.get('content-disposition').includes('attachment'));
+
+      const text = await response.text();
+      // CSV should have header row
+      assert.ok(text.includes('timestamp'));
+      assert.ok(text.includes('level'));
+      assert.ok(text.includes('summary'));
+    });
+
+    it('should export filtered results', async () => {
+      const response = await fetch(`${baseURL}/admin/api/audit-log/export?levels=ERROR`, {
+        headers: { 'Cookie': adminCookie }
+      });
+
+      assert.strictEqual(response.status, 200);
+      const text = await response.text();
+
+      // Parse CSV to verify filter was applied
+      const lines = text.trim().split('\n');
+      // Skip header, check data rows
+      for (let i = 1; i < lines.length; i++) {
+        assert.ok(lines[i].includes('ERROR'));
+      }
+    });
+  });
+
+  describe('Sample Data Generation', () => {
+    it('should generate audit log sample data', async () => {
+      const { auditLogDb } = server.db;
+      const initialCount = auditLogDb.getCount();
+
+      const response = await fetch(`${baseURL}/admin/api/data/populate-audit-log`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
+        body: JSON.stringify({
+          count: 50
+        })
+      });
+
+      assert.strictEqual(response.status, 200);
+      const data = await response.json();
+
+      assert.ok(data.success);
+      assert.strictEqual(data.entries_generated, 50);
+
+      const newCount = auditLogDb.getCount();
+      // The generated entries + 1 log entry for the generation action itself
+      assert.ok(newCount >= initialCount + 50, `Expected at least ${initialCount + 50} entries, got ${newCount}`);
+    });
+
+    it('should respect date range for sample data', async () => {
+      const { auditLogDb } = server.db;
+
+      const startDate = '2025-01-01';
+      const endDate = '2025-06-30';
+
+      const response = await fetch(`${baseURL}/admin/api/data/populate-audit-log`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
+        body: JSON.stringify({
+          count: 50,
+          startDate,
+          endDate
+        })
+      });
+
+      assert.strictEqual(response.status, 200);
+
+      // Check that entries are within the date range
+      const logs = auditLogDb.getAll({
+        startDate: new Date(startDate).toISOString(),
+        endDate: new Date(endDate + 'T23:59:59').toISOString(),
+        limit: 100
+      });
+
+      assert.ok(logs.entries.length > 0, 'Should have entries in the date range');
+    });
+
+    it('should validate count range (50-500)', async () => {
+      // Try count too low
+      const lowResponse = await fetch(`${baseURL}/admin/api/data/populate-audit-log`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
+        body: JSON.stringify({
+          count: 10
+        })
+      });
+
+      assert.strictEqual(lowResponse.status, 400);
+
+      // Try count too high
+      const highResponse = await fetch(`${baseURL}/admin/api/data/populate-audit-log`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
+        body: JSON.stringify({
+          count: 1000
+        })
+      });
+
+      assert.strictEqual(highResponse.status, 400);
+    });
+  });
+
+  describe('Bulk Create', () => {
+    it('should bulk create entries', () => {
+      const { auditLogDb } = server.db;
+      const initialCount = auditLogDb.getCount();
+
+      const entries = [
+        { level: 'INFO', action_type: 'create', summary: 'Bulk test 1' },
+        { level: 'WARNING', action_type: 'update', summary: 'Bulk test 2' },
+        { level: 'ERROR', action_type: 'delete', summary: 'Bulk test 3' }
+      ];
+
+      const result = auditLogDb.bulkCreate(entries);
+
+      assert.strictEqual(result.created, 3);
+
+      const newCount = auditLogDb.getCount();
+      assert.strictEqual(newCount, initialCount + 3);
+    });
+  });
 });

@@ -18,7 +18,6 @@ import { createServer } from 'http';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { statSync, readdirSync, readFileSync } from 'fs';
-import { createDatabase } from './db.js';
 import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -51,67 +50,12 @@ let lastRestartReason = null;
 let restartCount = 0;
 let fileSnapshotTime = null;
 let fileSnapshot = new Map(); // path -> mtime
+let intentionalRestart = false; // Track when we're intentionally restarting
 
-// Database for audit logging
-let db = null;
-
-/**
- * Initialize audit logging database connection
- */
-async function initAuditDb() {
-  try {
-    const dbResult = await createDatabase();
-    db = dbResult;
-    console.log('[watchdog] Audit database connected');
-  } catch (err) {
-    console.error('[watchdog] Failed to connect to audit database:', err.message);
-  }
-}
-
-/**
- * Log a restart event to the audit log
- */
-function logRestart(reason, details = {}) {
-  if (!db?.auditLogDb) return;
-
-  try {
-    db.auditLogDb.create({
-      level: 'INFO',
-      action_type: 'server_restart',
-      entity_type: 'system',
-      summary: `Server restart: ${reason}`,
-      details: {
-        ...details,
-        restartCount,
-        uptime: serverStartTime ? Math.floor((Date.now() - serverStartTime) / 1000) : 0
-      }
-    });
-  } catch (err) {
-    console.error('[watchdog] Failed to log restart:', err.message);
-  }
-}
-
-/**
- * Log watchdog startup
- */
-function logWatchdogStart() {
-  if (!db?.auditLogDb) return;
-
-  try {
-    db.auditLogDb.create({
-      level: 'INFO',
-      action_type: 'watchdog_start',
-      entity_type: 'system',
-      summary: 'Watchdog process manager started',
-      details: {
-        watchdogPort: WATCHDOG_PORT,
-        serverPort: SERVER_PORT
-      }
-    });
-  } catch (err) {
-    console.error('[watchdog] Failed to log startup:', err.message);
-  }
-}
+// Note: Watchdog does NOT connect to the database directly.
+// This prevents the watchdog and server from having separate in-memory
+// copies of the SQLite database that overwrite each other on save.
+// The server will log its own startup/restart events.
 
 /**
  * Check if a path should be ignored
@@ -226,18 +170,21 @@ function startServer() {
   serverStartTime = Date.now();
 
   serverProcess.on('exit', (code, signal) => {
-    console.log(`[watchdog] Server exited with code ${code}, signal ${signal}`);
+    console.log(`[watchdog] startServer exit handler: code=${code}, signal=${signal}`);
     serverProcess = null;
     serverStartTime = null;
 
-    // Auto-restart on crash (but not if killed intentionally)
-    if (code !== 0 && signal !== 'SIGTERM' && signal !== 'SIGINT') {
+    // Don't auto-restart if this was an intentional restart (handled by restartServer)
+    // or if killed by SIGTERM/SIGINT/SIGKILL (graceful shutdown, including force kill after timeout)
+    const wasIntentional = intentionalRestart || signal === 'SIGTERM' || signal === 'SIGINT' || signal === 'SIGKILL' || code === 0;
+    intentionalRestart = false; // Reset flag
+
+    if (!wasIntentional) {
       console.log('[watchdog] Server crashed, restarting in 2 seconds...');
       setTimeout(() => {
         restartCount++;
         lastRestartTime = Date.now();
         lastRestartReason = `crash (exit code: ${code})`;
-        logRestart('crash', { exitCode: code, signal });
         startServer();
         takeSnapshot();
       }, 2000);
@@ -257,25 +204,38 @@ function startServer() {
 function stopServer() {
   return new Promise((resolve) => {
     if (!serverProcess) {
+      console.log('[watchdog] stopServer: no process to stop');
       resolve();
       return;
     }
 
     console.log('[watchdog] Stopping server...');
 
-    serverProcess.once('exit', () => {
+    const proc = serverProcess; // Capture reference before it gets nulled
+
+    console.log('[watchdog] stopServer: registering exit handler on proc');
+    proc.once('exit', (code, signal) => {
+      console.log(`[watchdog] stopServer exit handler: code=${code}, signal=${signal}, resolving promise`);
       serverProcess = null;
       serverStartTime = null;
       resolve();
     });
 
-    serverProcess.kill('SIGTERM');
+    console.log('[watchdog] stopServer: sending SIGTERM');
+    proc.kill('SIGTERM');
 
     // Force kill after 5 seconds
     setTimeout(() => {
-      if (serverProcess) {
-        console.log('[watchdog] Force killing server...');
-        serverProcess.kill('SIGKILL');
+      // Use proc (captured reference) not serverProcess (might be nulled)
+      try {
+        if (!proc.killed) {
+          console.log('[watchdog] Force killing server with SIGKILL...');
+          proc.kill('SIGKILL');
+        } else {
+          console.log('[watchdog] Timeout fired but process already killed');
+        }
+      } catch (err) {
+        console.log(`[watchdog] Force kill error: ${err.message}`);
       }
     }, 5000);
   });
@@ -288,13 +248,21 @@ async function restartServer(reason = 'manual') {
   restartCount++;
   lastRestartTime = Date.now();
   lastRestartReason = reason;
+  intentionalRestart = true; // Mark this as intentional so exit handler doesn't treat it as crash
 
-  const modifiedFiles = getModifiedFiles();
-  logRestart(reason, { modifiedFiles: modifiedFiles.slice(0, 10) });
+  console.log(`[watchdog] Restarting server: ${reason}`);
 
-  await stopServer();
-  startServer();
-  takeSnapshot();
+  try {
+    await stopServer();
+    console.log('[watchdog] stopServer completed, calling startServer...');
+    startServer();
+    takeSnapshot();
+  } catch (err) {
+    console.error('[watchdog] Error in restartServer:', err);
+    // Try to start anyway
+    startServer();
+    takeSnapshot();
+  }
 }
 
 /**
@@ -415,9 +383,6 @@ async function main() {
 [watchdog] API Key configured: ${WATCHDOG_API_KEY ? 'yes' : 'no'}
 `);
 
-  // Initialize audit database
-  await initAuditDb();
-
   // Take initial file snapshot
   takeSnapshot();
   console.log(`[watchdog] Tracking ${fileSnapshot.size} files for changes`);
@@ -430,7 +395,6 @@ async function main() {
 
   // Start the main server
   startServer();
-  logWatchdogStart();
 
   // Handle shutdown gracefully
   process.on('SIGINT', async () => {

@@ -12,6 +12,76 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 
+- **Audit log filtering and search**: Comprehensive filtering capabilities for audit log
+  - Text search across summary and details fields with debounce
+  - Multi-select level filter pills (ERROR, SECURITY, WARNING, INFO, DEBUG)
+  - Date range filters (start/end date)
+  - Dropdown filters for user, action type, and entity type
+  - Quick filter buttons: "Errors Only", "Last Hour", "Last 24h", "Last 7 Days"
+  - "Clear All" button when filters are active
+  - All filters combinable with AND logic
+
+- **Audit log stats dashboard**: Header stats row with key metrics
+  - Total entries count (filtered or total)
+  - Errors in last 24 hours with visual indicator
+  - Security events in last 24 hours with visual indicator
+  - Warnings in last 24 hours with visual indicator
+  - Info events in last 24 hours counter
+
+- **Audit log auto-refresh**: Real-time monitoring with automatic updates
+  - Manual refresh button with spinning indicator
+  - Auto-refresh toggle (polls every 10 seconds when enabled)
+  - Auto-refresh stops when navigating away from audit log page
+  - Indicator shows when auto-refresh is active
+
+- **Audit log CSV export**: Export filtered audit log entries
+  - Exports with current filter settings applied
+  - Includes timestamp, level, username, action_type, entity_type, entity_id, summary, ip_address, duration_ms
+  - Auto-named with current date
+
+- **Audit log sample data generation**: Generate test audit log entries
+  - New section in sample data modal: "Audit Log Entries"
+  - Configurable entry count (50-500) and date range
+  - 30+ static entry templates covering all log levels
+  - Optional AI-generated entries with spice level support
+  - Realistic timestamp distribution weighted toward business hours
+  - `POST /admin/api/data/populate-audit-log` endpoint
+  - `bulkCreate()` method for efficient batch inserts
+
+- **Audit log API enhancements**:
+  - `GET /admin/api/audit-log/filters` returns distinct users, action types, entity types
+  - `GET /admin/api/audit-log/stats` returns errors/warnings count for last 24h
+  - `GET /admin/api/audit-log/export` generates CSV download
+  - Updated main endpoint to support `levels` (comma-separated), `search`, `startDate`, `endDate`, `username`, `actionType`, `entityType` parameters
+
+### Changed
+
+- Audit log UI now loads filter options and stats on initial render
+- Advanced filters section is collapsible (shows "(active)" when filters applied)
+- Level filter changed from dropdown to multi-select pill buttons
+- Debug mode badge now shows tooltip explaining how to enable debug mode in System Information
+- Sample data generation response now includes `_enabled` flags to clarify what options were requested
+- **Server restart UX**: Restart button now shows countdown and automatically redirects to login page after 7 seconds (allows time for graceful shutdown and restart)
+
+### Fixed
+
+- **Login/logout events now logged at SECURITY level**: Login, logout, and failed login attempts are now correctly logged at SECURITY level instead of INFO level for proper security audit trail
+- **Settings link in audit log header**: Fixed navigation to System Information settings (was missing leading slash in hash route)
+- **Database persistence on restart**: Removed watchdog's separate database connection that was overwriting the server's database on restart. The watchdog and server were each loading their own in-memory copy of the SQLite database, causing data loss when either saved. Now only the server manages the database.
+- **Graceful shutdown handling**: Server now saves database synchronously on SIGTERM/SIGINT before shutdown. Watchdog tracks intentional restarts separately from crashes to prevent false "crash" logs when server is restarted via admin UI.
+- **Comprehensive sample data audit logging**: Added detailed audit log entries throughout sample data generation:
+  - Each matter creation logged with ID, note, cost, date, lawyer info
+  - Private notes generation logged with matter ID, note count, AI vs static source
+  - Attachment generation logged with matter ID, document type, filename, size
+  - AI API calls logged with request/response details
+  - Summary log includes all matter IDs, percentages requested vs generated
+
+---
+
+## [0.11.5] - 2026-01-09
+
+### Added
+
 - **Claude API call logging**: Wrapper function for logging all Claude API interactions
   - `callClaudeWithLogging()` logs request before call and response after
   - Captures model, duration, token usage, content length

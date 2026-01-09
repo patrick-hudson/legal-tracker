@@ -7,7 +7,7 @@ import rateLimit from '@fastify/rate-limit';
 import fastifyMultipart from '@fastify/multipart';
 import Anthropic from '@anthropic-ai/sdk';
 import { createDatabase } from './db.js';
-import { initAudit, logInfo, logError, logWarning, logSecurity, logInfoFromRequest, logErrorFromRequest, logSecurityFromRequest, logDebugFromRequest, getUserContext, callClaudeWithLogging, ACTION_TYPES, ENTITY_TYPES } from './audit.js';
+import { initAudit, logInfo, logError, logWarning, logSecurity, logInfoFromRequest, logErrorFromRequest, logSecurityFromRequest, logWarningFromRequest, logDebugFromRequest, getUserContext, callClaudeWithLogging, ACTION_TYPES, ENTITY_TYPES } from './audit.js';
 import { hashPassword, verifyPassword, generateTokenId, generateApiKey, createAdminAuthMiddleware, getTokenExpiration, generateBootstrapToken, hashBootstrapToken, getBootstrapTokenExpiration, validatePasswordStrength } from './auth.js';
 import { createStorage, createStorageFromConfig, validateFileType, sanitizeFilename, MAX_FILE_SIZE } from './storage.js';
 import { generateLegalDocument, generatePlaceholderDocument } from './legal-docs.js';
@@ -81,7 +81,7 @@ export async function createServer(options = {}) {
   } = options;
 
   // Create database instance
-  const { settingsDb, mattersDb, adminUsersDb, adminSessionsDb, adminBootstrapTokensDb, privateNotesDb, attachmentsDb, auditLogDb } = await createDatabase(dbPath);
+  const { settingsDb, mattersDb, adminUsersDb, adminSessionsDb, adminBootstrapTokensDb, privateNotesDb, attachmentsDb, auditLogDb, saveDatabase } = await createDatabase(dbPath);
 
   // Initialize audit logging service
   initAudit({ auditLogDb, settingsDb });
@@ -734,6 +734,14 @@ export async function createServer(options = {}) {
     const { reason } = request.body || {};
     const watchdogApiKey = process.env.WATCHDOG_API_KEY || process.env.API_KEY || 'watchdog-dev-key';
 
+    // Log the restart request BEFORE sending to watchdog (so it persists before restart)
+    logSecurityFromRequest(request, {
+      actionType: ACTION_TYPES.SETTINGS_CHANGE,
+      entityType: ENTITY_TYPES.SYSTEM,
+      summary: `Server restart requested: ${reason || 'admin_request'}`,
+      details: { reason: reason || 'admin_request' }
+    });
+
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 5000);
@@ -753,14 +761,6 @@ export async function createServer(options = {}) {
         const err = await response.json().catch(() => ({}));
         return reply.code(response.status).send({ error: err.error || 'Watchdog error' });
       }
-
-      // Log the restart request
-      logInfoFromRequest(request, {
-        actionType: ACTION_TYPES.SETTINGS_CHANGE,
-        entityType: ENTITY_TYPES.SYSTEM,
-        summary: 'Requested server restart via watchdog',
-        details: { reason: reason || 'admin_request' }
-      });
 
       return await response.json();
     } catch (err) {
@@ -1143,8 +1143,8 @@ export async function createServer(options = {}) {
     const clientIP = getClientIP(request);
 
     if (!user) {
-      // Log failed login - user not found
-      logInfo({
+      // Log failed login - user not found (security event)
+      logSecurity({
         actionType: ACTION_TYPES.LOGIN_FAILED,
         entityType: ENTITY_TYPES.USER,
         summary: `Failed login attempt for unknown user "${username}"`,
@@ -1156,8 +1156,8 @@ export async function createServer(options = {}) {
 
     // Check if user is active
     if (!user.is_active) {
-      // Log failed login - user inactive
-      logInfo({
+      // Log failed login - user inactive (security event)
+      logSecurity({
         userId: user.id,
         username: user.username,
         actionType: ACTION_TYPES.LOGIN_FAILED,
@@ -1172,8 +1172,8 @@ export async function createServer(options = {}) {
     // Verify hashed password (server stores bcrypt(hashedPassword))
     const validPassword = await verifyPassword(hashedPassword, user.password_hash);
     if (!validPassword) {
-      // Log failed login - wrong password
-      logInfo({
+      // Log failed login - wrong password (security event)
+      logSecurity({
         userId: user.id,
         username: user.username,
         actionType: ACTION_TYPES.LOGIN_FAILED,
@@ -1208,8 +1208,8 @@ export async function createServer(options = {}) {
       maxAge: 7 * 24 * 60 * 60 // 7 days in seconds
     });
 
-    // Log successful login
-    logInfo({
+    // Log successful login (security event)
+    logSecurity({
       userId: user.id,
       username: user.username,
       actionType: ACTION_TYPES.LOGIN,
@@ -1243,8 +1243,8 @@ export async function createServer(options = {}) {
       sameSite: 'strict'
     });
 
-    // Log logout
-    logInfoFromRequest(request, {
+    // Log logout (security event)
+    logSecurityFromRequest(request, {
       actionType: ACTION_TYPES.LOGOUT,
       entityType: ENTITY_TYPES.USER,
       summary: `User "${request.adminUser.username}" logged out`
@@ -3108,10 +3108,29 @@ Return ONLY a JSON array of strings, no other text. Example format:
 
         if (useAiDescriptions) {
           const userContext = getUserContext(request);
+          logDebugFromRequest(request, {
+            actionType: ACTION_TYPES.SAMPLE_DATA_GENERATE,
+            entityType: ENTITY_TYPES.MATTER,
+            summary: `Requesting ${matterCount} AI-generated matter descriptions`,
+            details: { count: matterCount, spiceLevel: spiceLevelOverride }
+          });
           const aiDescriptions = await generateClaudeDescriptions(matterCount, spiceLevelOverride, userContext);
           if (aiDescriptions && aiDescriptions.length > 0) {
             descriptions = aiDescriptions;
             usedAi = true;
+            logInfoFromRequest(request, {
+              actionType: ACTION_TYPES.SAMPLE_DATA_GENERATE,
+              entityType: ENTITY_TYPES.MATTER,
+              summary: `Generated ${aiDescriptions.length} AI matter descriptions`,
+              details: { count: aiDescriptions.length, spiceLevel: spiceLevelOverride, sample: aiDescriptions.slice(0, 3) }
+            });
+          } else {
+            logWarningFromRequest(request, {
+              actionType: ACTION_TYPES.SAMPLE_DATA_GENERATE,
+              entityType: ENTITY_TYPES.MATTER,
+              summary: `AI description generation failed, using ${staticDescriptions.length} static descriptions`,
+              details: { requestedCount: matterCount, staticCount: staticDescriptions.length }
+            });
           }
         }
 
@@ -3180,6 +3199,17 @@ Return ONLY a JSON array of strings, no other text. Example format:
       let lastDate = new Date(initialLastDate || sampleMatters[0]?.matter_date || Date.now());
       const createdMatterIds = [];
 
+      logDebugFromRequest(request, {
+        actionType: ACTION_TYPES.SAMPLE_DATA_GENERATE,
+        entityType: ENTITY_TYPES.MATTER,
+        summary: `Creating ${sampleMatters.length} sample matters`,
+        details: {
+          count: sampleMatters.length,
+          usedAi,
+          dateRange: { start: sampleMatters[0]?.matter_date, end: sampleMatters[sampleMatters.length - 1]?.matter_date }
+        }
+      });
+
       for (const matter of sampleMatters) {
         const matterDate = new Date(matter.matter_date);
         const daysSince = Math.floor((matterDate - lastDate) / (1000 * 60 * 60 * 24));
@@ -3201,6 +3231,23 @@ Return ONLY a JSON array of strings, no other text. Example format:
         createdMatterIds.push(result.id);
         totalCost += matter.cost;
         lastDate = matterDate;
+
+        // Log each matter creation at DEBUG level
+        logDebugFromRequest(request, {
+          actionType: ACTION_TYPES.CREATE,
+          entityType: ENTITY_TYPES.MATTER,
+          entityId: result.id,
+          summary: `Created matter #${result.id}: "${matter.note?.substring(0, 50) || 'N/A'}..."`,
+          details: {
+            matterId: result.id,
+            note: matter.note,
+            cost: matter.cost,
+            date: matter.matter_date,
+            lawyerName: matter.lawyer_name,
+            caseNumber: matter.case_number,
+            usedAiDescription: usedAi
+          }
+        });
       }
 
       // Generate private notes if requested
@@ -3213,6 +3260,13 @@ Return ONLY a JSON array of strings, no other text. Example format:
         // Determine which matters get notes
         const mattersWithNotes = createdMatterIds.filter(() => Math.random() * 100 < pct);
 
+        logDebugFromRequest(request, {
+          actionType: ACTION_TYPES.SAMPLE_DATA_GENERATE,
+          entityType: ENTITY_TYPES.PRIVATE_NOTE,
+          summary: `Generating notes for ${mattersWithNotes.length}/${createdMatterIds.length} matters (${pct}% chance)`,
+          details: { mattersWithNotes: mattersWithNotes.length, totalMatters: createdMatterIds.length, percentage: pct }
+        });
+
         if (mattersWithNotes.length > 0) {
           // Calculate total notes needed
           const noteCounts = mattersWithNotes.map(() =>
@@ -3220,19 +3274,40 @@ Return ONLY a JSON array of strings, no other text. Example format:
           );
           const totalNotesNeeded = noteCounts.reduce((a, b) => a + b, 0);
 
-          // Get notes (AI or static)
+          // Get notes (AI or static) - only use AI if useAiDescriptions is enabled
           let notePool = [];
+          let usedAiNotes = false;
+
           if (useAiDescriptions) {
             const userContext = getUserContext(request);
+            logDebugFromRequest(request, {
+              actionType: ACTION_TYPES.SAMPLE_DATA_GENERATE,
+              entityType: ENTITY_TYPES.PRIVATE_NOTE,
+              summary: `Requesting ${totalNotesNeeded} AI-generated notes`,
+              details: { count: totalNotesNeeded, spiceLevel: spiceLevelOverride }
+            });
             const aiNotes = await generateClaudePrivateNotes(totalNotesNeeded, spiceLevelOverride, userContext);
             if (aiNotes && aiNotes.length > 0) {
               notePool = aiNotes;
+              usedAiNotes = true;
+              logInfoFromRequest(request, {
+                actionType: ACTION_TYPES.SAMPLE_DATA_GENERATE,
+                entityType: ENTITY_TYPES.PRIVATE_NOTE,
+                summary: `Generated ${aiNotes.length} AI notes for sample data`,
+                details: { count: aiNotes.length, spiceLevel: spiceLevelOverride }
+              });
             }
           }
 
-          // Fall back to static notes if AI didn't work
+          // Fall back to static notes if AI wasn't enabled or didn't work
           if (notePool.length === 0) {
             notePool = staticPrivateNotes;
+            logDebugFromRequest(request, {
+              actionType: ACTION_TYPES.SAMPLE_DATA_GENERATE,
+              entityType: ENTITY_TYPES.PRIVATE_NOTE,
+              summary: `Using ${staticPrivateNotes.length} static notes (AI ${useAiDescriptions ? 'failed' : 'not enabled'})`,
+              details: { staticNoteCount: staticPrivateNotes.length, aiEnabled: useAiDescriptions }
+            });
           }
 
           // Create notes for each selected matter
@@ -3265,6 +3340,15 @@ Return ONLY a JSON array of strings, no other text. Example format:
               noteIndex++;
               notesGenerated++;
             }
+
+            // Log progress for each matter with notes
+            logDebugFromRequest(request, {
+              actionType: ACTION_TYPES.CREATE,
+              entityType: ENTITY_TYPES.PRIVATE_NOTE,
+              entityId: matterId,
+              summary: `Created ${noteCount} notes for matter #${matterId}: "${matterData?.note?.substring(0, 50) || 'N/A'}..."`,
+              details: { matterId, matterNote: matterData?.note, noteCount, usedAi: usedAiNotes }
+            });
           }
         }
       }
@@ -3281,6 +3365,19 @@ Return ONLY a JSON array of strings, no other text. Example format:
         // Determine which matters get attachments (max 1 per matter)
         const mattersWithAttachments = createdMatterIds.filter(() => Math.random() * 100 < pct);
 
+        logDebugFromRequest(request, {
+          actionType: ACTION_TYPES.SAMPLE_DATA_GENERATE,
+          entityType: ENTITY_TYPES.ATTACHMENT,
+          summary: `Generating attachments for ${mattersWithAttachments.length}/${createdMatterIds.length} matters (${pct}% chance)`,
+          details: {
+            mattersWithAttachments: mattersWithAttachments.length,
+            totalMatters: createdMatterIds.length,
+            percentage: pct,
+            aiConfigured: !!(claudeApiKey && model),
+            spiceLevel
+          }
+        });
+
         if (mattersWithAttachments.length > 0) {
           const storage = createStorage(settingsDb);
 
@@ -3290,18 +3387,34 @@ Return ONLY a JSON array of strings, no other text. Example format:
               const matterData = mattersDb.getById(matterId);
 
               let docResult;
+              let usedAiDoc = false;
               if (claudeApiKey && model) {
                 // Use Claude API to generate document
                 const client = new Anthropic({ apiKey: claudeApiKey });
                 const userContext = getUserContext(request);
+                logDebugFromRequest(request, {
+                  actionType: ACTION_TYPES.SAMPLE_DATA_GENERATE,
+                  entityType: ENTITY_TYPES.ATTACHMENT,
+                  entityId: matterId,
+                  summary: `Generating AI document for matter #${matterId}: "${matterData?.note?.substring(0, 40) || 'N/A'}..."`,
+                  details: { matterId, matterNote: matterData?.note, model, spiceLevel }
+                });
                 docResult = await generateLegalDocument(client, model, matterData, spiceLevel, userContext);
+                usedAiDoc = true;
               } else {
                 // Generate placeholder document
+                logDebugFromRequest(request, {
+                  actionType: ACTION_TYPES.SAMPLE_DATA_GENERATE,
+                  entityType: ENTITY_TYPES.ATTACHMENT,
+                  entityId: matterId,
+                  summary: `Generating placeholder document for matter #${matterId} (AI not configured)`,
+                  details: { matterId, matterNote: matterData?.note }
+                });
                 docResult = await generatePlaceholderDocument(matterData);
               }
 
-              // Store the document (reuse userContext from above or create if using placeholder)
-              const storageContext = (claudeApiKey && model) ? userContext : getUserContext(request);
+              // Store the document
+              const storageContext = getUserContext(request);
               const storageResult = await storage.putObject(
                 docResult.buffer,
                 docResult.filename,
@@ -3336,8 +3449,33 @@ Return ONLY a JSON array of strings, no other text. Example format:
               );
 
               attachmentsGenerated++;
+
+              // Log successful attachment creation
+              logInfoFromRequest(request, {
+                actionType: ACTION_TYPES.CREATE,
+                entityType: ENTITY_TYPES.ATTACHMENT,
+                entityId: matterId,
+                summary: `Created ${usedAiDoc ? 'AI-generated' : 'placeholder'} ${docResult.docType || 'document'} for matter #${matterId}`,
+                details: {
+                  matterId,
+                  matterNote: matterData?.note,
+                  filename: docResult.filename,
+                  docType: docResult.docType,
+                  docName: docResult.docName,
+                  sizeBytes: storageResult.size_bytes,
+                  usedAi: usedAiDoc,
+                  direction
+                }
+              });
             } catch (err) {
-              fastify.log.warn({ matterId, error: err.message }, 'Failed to generate attachment for matter');
+              // Log to audit log, not just fastify.log
+              logWarningFromRequest(request, {
+                actionType: ACTION_TYPES.SAMPLE_DATA_GENERATE,
+                entityType: ENTITY_TYPES.ATTACHMENT,
+                entityId: matterId,
+                summary: `Failed to generate attachment for matter #${matterId}: ${err.message}`,
+                details: { matterId, error: err.message, stack: err.stack }
+              });
             }
           }
         }
@@ -3350,18 +3488,26 @@ Return ONLY a JSON array of strings, no other text. Example format:
         settingsDb.set('last_matter_date', sampleMatters[sampleMatters.length - 1].matter_date);
       }
 
-      // Audit log the sample data generation
+      // Audit log the sample data generation summary
       logInfoFromRequest(request, {
         actionType: ACTION_TYPES.SAMPLE_DATA_GENERATE,
         entityType: ENTITY_TYPES.SYSTEM,
         summary: source && source !== 'generate'
           ? `Loaded ${sampleMatters.length} matters from ${source}`
-          : `Generated ${sampleMatters.length} sample matters`,
+          : `Generated ${sampleMatters.length} sample matters${usedAi ? ' (AI)' : ''}${notesGenerated > 0 ? `, ${notesGenerated} notes` : ''}${attachmentsGenerated > 0 ? `, ${attachmentsGenerated} attachments` : ''}`,
         details: {
           matters_added: sampleMatters.length,
+          matter_ids: createdMatterIds,
           source: (source === 'generate' || !source) ? 'generated' : source,
-          used_ai: usedAi,
+          total_cost_cents: totalCost,
+          used_ai_descriptions: usedAi,
+          // Notes configuration
+          notes_requested: generatePrivateNotes,
+          notes_percentage: generatePrivateNotes ? notesPercentage : null,
           notes_generated: notesGenerated,
+          // Attachments configuration
+          attachments_requested: generateAttachments,
+          attachments_percentage: generateAttachments ? attachmentsPercentage : null,
           attachments_generated: attachmentsGenerated
         }
       });
@@ -3375,7 +3521,10 @@ Return ONLY a JSON array of strings, no other text. Example format:
         total_cost_added: totalCost / 100,
         source: (source === 'generate' || !source) ? 'generated' : source,
         used_ai_descriptions: usedAi,
+        // Include flags to show what was requested vs what was generated
+        private_notes_enabled: generatePrivateNotes,
         private_notes_generated: notesGenerated,
+        attachments_enabled: generateAttachments,
         attachments_generated: attachmentsGenerated
       };
     } catch (error) {
@@ -3472,6 +3621,237 @@ Return ONLY a JSON array of strings, no other text. Example format:
       return reply.code(500).send({
         error: 'SERVER_ERROR',
         message: `Failed to regenerate sample files: ${error.message}`
+      });
+    }
+  });
+
+  // Generate sample audit log entries
+  fastify.post('/admin/api/data/populate-audit-log', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    try {
+      const {
+        count = 100,
+        startDate,
+        endDate,
+        useAi = false,
+        spiceLevelOverride = null
+      } = request.body || {};
+
+      // Validate count range (50-500)
+      const entryCount = parseInt(count, 10);
+      if (isNaN(entryCount) || entryCount < 50 || entryCount > 500) {
+        return reply.code(400).send({
+          error: 'VALIDATION_ERROR',
+          message: 'Count must be between 50 and 500'
+        });
+      }
+
+      // Date range - default to past 30 days
+      const now = new Date();
+      let dateStart, dateEnd;
+
+      if (startDate) {
+        dateStart = new Date(startDate);
+      } else {
+        dateStart = new Date(now);
+        dateStart.setDate(now.getDate() - 30);
+      }
+
+      if (endDate) {
+        dateEnd = new Date(endDate);
+      } else {
+        dateEnd = now;
+      }
+
+      let entries = [];
+      let usedAi = false;
+
+      // Static fallback data
+      const staticEntries = [
+        // INFO - Login activity
+        { level: 'INFO', action_type: 'login', entity_type: 'user', summary: 'User logged in successfully' },
+        { level: 'INFO', action_type: 'logout', entity_type: 'user', summary: 'User logged out' },
+        { level: 'INFO', action_type: 'login', entity_type: 'user', summary: 'Session started from new device' },
+        // INFO - CRUD operations
+        { level: 'INFO', action_type: 'create', entity_type: 'matter', summary: 'Created new legal matter' },
+        { level: 'INFO', action_type: 'update', entity_type: 'matter', summary: 'Updated matter details' },
+        { level: 'INFO', action_type: 'delete', entity_type: 'matter', summary: 'Deleted matter record' },
+        { level: 'INFO', action_type: 'create', entity_type: 'private_note', summary: 'Added private note to matter' },
+        { level: 'INFO', action_type: 'update', entity_type: 'private_note', summary: 'Updated private note' },
+        { level: 'INFO', action_type: 'create', entity_type: 'attachment', summary: 'Uploaded document attachment' },
+        { level: 'INFO', action_type: 'delete', entity_type: 'attachment', summary: 'Removed attachment from matter' },
+        { level: 'INFO', action_type: 'settings_change', entity_type: 'system', summary: 'Updated system settings' },
+        { level: 'INFO', action_type: 'export', entity_type: 'matter', summary: 'Exported matters to CSV' },
+        { level: 'INFO', action_type: 'sample_data', entity_type: 'system', summary: 'Generated sample data' },
+        // WARNING - Validation issues, rate limits
+        { level: 'WARNING', action_type: 'validation', entity_type: 'matter', summary: 'Invalid date format in matter creation' },
+        { level: 'WARNING', action_type: 'rate_limit', entity_type: 'api', summary: 'Rate limit threshold reached (80%)' },
+        { level: 'WARNING', action_type: 'config', entity_type: 'system', summary: 'Claude API key not configured' },
+        { level: 'WARNING', action_type: 'auth', entity_type: 'user', summary: 'Multiple failed login attempts detected' },
+        { level: 'WARNING', action_type: 'storage', entity_type: 'attachment', summary: 'Storage usage exceeding 80% of quota' },
+        { level: 'WARNING', action_type: 'validation', entity_type: 'attachment', summary: 'File type not in allowed list' },
+        // ERROR - Failures, exceptions
+        { level: 'ERROR', action_type: 'api_call', entity_type: 'claude_api', summary: 'Claude API request failed: rate limited', stack_trace: 'Error: Rate limited\n    at callClaudeApi (server.js:1234)\n    at generateDescription (server.js:2345)' },
+        { level: 'ERROR', action_type: 'database', entity_type: 'system', summary: 'Database query timeout after 30s', stack_trace: 'Error: Query timeout\n    at executeQuery (db.js:456)\n    at getMatters (db.js:789)' },
+        { level: 'ERROR', action_type: 'storage', entity_type: 'attachment', summary: 'Failed to upload file to S3', stack_trace: 'Error: Access Denied\n    at S3Storage.putObject (storage.js:234)\n    at uploadAttachment (server.js:3456)' },
+        { level: 'ERROR', action_type: 'auth', entity_type: 'user', summary: 'Session validation failed: token expired', stack_trace: 'Error: Token expired\n    at validateSession (auth.js:123)\n    at adminAuthMiddleware (server.js:567)' },
+        { level: 'ERROR', action_type: 'validation', entity_type: 'matter', summary: 'Foreign key constraint violation', stack_trace: 'Error: SQLITE_CONSTRAINT: FOREIGN KEY constraint failed\n    at mattersDb.create (db.js:890)' },
+        // SECURITY - Security events
+        { level: 'SECURITY', action_type: 'auth', entity_type: 'user', summary: 'Login from unrecognized IP address' },
+        { level: 'SECURITY', action_type: 'auth', entity_type: 'user', summary: 'Password changed' },
+        { level: 'SECURITY', action_type: 'session', entity_type: 'user', summary: 'Session invalidated by user' },
+        { level: 'SECURITY', action_type: 'bootstrap', entity_type: 'system', summary: 'Bootstrap token used for initial setup' },
+        // DEBUG - API calls, storage operations (usually not shown but for sample completeness)
+        { level: 'DEBUG', action_type: 'api_call', entity_type: 'claude_api', summary: 'Claude API request: claude-3-5-sonnet', duration_ms: 1234 },
+        { level: 'DEBUG', action_type: 'api_call', entity_type: 'attachment', summary: 'Storage putObject: uuid/document.pdf (45678 bytes, 89ms)', duration_ms: 89 },
+        { level: 'DEBUG', action_type: 'api_call', entity_type: 'attachment', summary: 'Storage getObjectStream: uuid/document.pdf (45678 bytes, 12ms)', duration_ms: 12 }
+      ];
+
+      const usernames = ['admin', 'jsmith', 'mwilson', 'ljohnson', 'kbrown', 'agarcia', 'rmartin', null];
+      const ipAddresses = ['192.168.1.100', '10.0.0.50', '172.16.0.25', '127.0.0.1', '::1', '203.0.113.42'];
+
+      // Try AI generation if requested
+      if (useAi) {
+        const claudeApiKey = settingsDb.get('claude_api_key');
+        const model = settingsDb.get('claude_model');
+
+        if (claudeApiKey && model) {
+          try {
+            const spiceLevel = parseInt(spiceLevelOverride || settingsDb.get('ai_spice_level') || '1', 10);
+            const client = new Anthropic({ apiKey: claudeApiKey });
+
+            const spiceInstructions = {
+              1: 'Generate professional, realistic log entries.',
+              2: 'Generate professional entries with subtle dry humor.',
+              3: 'Generate entries with witty observations.',
+              4: 'Generate dramatic entries - everything is CRITICAL.',
+              5: 'Generate increasingly absurd scenarios.',
+              6: 'Generate chaotic entries with passive-aggressive tones.',
+              7: 'Generate entries hinting at cosmic horror and impossible events.',
+              8: 'Generate completely unhinged, reality-breaking entries.'
+            };
+
+            const prompt = `Generate ${entryCount} realistic audit log entries for a legal matter tracking system.
+${spiceInstructions[spiceLevel] || spiceInstructions[1]}
+
+Each entry should be a JSON object with these fields:
+- level: "INFO", "WARNING", "ERROR", "SECURITY", or "DEBUG"
+- action_type: like "login", "logout", "create", "update", "delete", "api_call", "export", "settings_change", etc.
+- entity_type: like "user", "matter", "attachment", "private_note", "system", "claude_api", etc.
+- summary: brief description of the event
+- username: optional username (null for system events)
+- ip_address: optional IP address
+- duration_ms: optional duration in milliseconds (for API calls)
+- stack_trace: optional for ERROR entries
+- details: optional JSON object with extra info
+
+Distribution should be roughly:
+- 60% INFO (normal operations)
+- 15% WARNING (issues, near-limits)
+- 10% ERROR (failures)
+- 10% SECURITY (auth events)
+- 5% DEBUG (API calls, storage ops)
+
+Return ONLY a valid JSON array, no other text. Example:
+[{"level":"INFO","action_type":"login","entity_type":"user","summary":"User logged in","username":"admin","ip_address":"192.168.1.1"}]`;
+
+            const userContext = getUserContext(request);
+            const response = await callClaudeWithLogging(client, {
+              model,
+              max_tokens: 4096,
+              messages: [{ role: 'user', content: prompt }]
+            }, userContext);
+
+            const content = response.content?.[0]?.text;
+            if (content) {
+              // Try to parse JSON from response
+              const jsonMatch = content.match(/\[[\s\S]*\]/);
+              if (jsonMatch) {
+                const parsed = JSON.parse(jsonMatch[0]);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  entries = parsed;
+                  usedAi = true;
+                }
+              }
+            }
+          } catch (err) {
+            fastify.log.warn({ error: err.message }, 'AI audit log generation failed, using static data');
+          }
+        }
+      }
+
+      // Fall back to static data if AI didn't work
+      if (entries.length === 0) {
+        // Generate entries from static templates
+        for (let i = 0; i < entryCount; i++) {
+          const template = staticEntries[Math.floor(Math.random() * staticEntries.length)];
+          entries.push({
+            ...template,
+            username: usernames[Math.floor(Math.random() * usernames.length)],
+            ip_address: ipAddresses[Math.floor(Math.random() * ipAddresses.length)],
+            entity_id: template.entity_type === 'matter' ? Math.floor(Math.random() * 100) + 1 : null
+          });
+        }
+      }
+
+      // Assign timestamps with realistic patterns (more activity during business hours)
+      const dateRange = dateEnd.getTime() - dateStart.getTime();
+      const processedEntries = entries.map(entry => {
+        // Random timestamp within range
+        const randomTime = dateStart.getTime() + Math.random() * dateRange;
+        const timestamp = new Date(randomTime);
+
+        // Skew toward business hours (9 AM - 6 PM)
+        if (Math.random() > 0.3) {
+          timestamp.setHours(9 + Math.floor(Math.random() * 9));
+        }
+
+        return {
+          timestamp: timestamp.toISOString(),
+          level: entry.level,
+          user_id: null, // No real user IDs
+          username: entry.username || null,
+          action_type: entry.action_type,
+          entity_type: entry.entity_type || null,
+          entity_id: entry.entity_id || null,
+          summary: entry.summary,
+          request: entry.request || null,
+          response: entry.response || null,
+          details: entry.details || null,
+          ip_address: entry.ip_address || null,
+          duration_ms: entry.duration_ms || null,
+          stack_trace: entry.stack_trace || null
+        };
+      });
+
+      // Sort by timestamp descending before insert (newest first)
+      processedEntries.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+      // Bulk create entries
+      const result = auditLogDb.bulkCreate(processedEntries);
+
+      // Log the generation
+      logInfoFromRequest(request, {
+        actionType: ACTION_TYPES.SAMPLE_DATA_GENERATE,
+        entityType: ENTITY_TYPES.SYSTEM,
+        summary: `Generated ${result.created} sample audit log entries`,
+        details: { entries_generated: result.created, used_ai: usedAi }
+      });
+
+      return {
+        success: true,
+        message: `Generated ${result.created} audit log entries`,
+        entries_generated: result.created,
+        used_ai: usedAi
+      };
+    } catch (error) {
+      logErrorFromRequest(request, {
+        error,
+        entityType: ENTITY_TYPES.SYSTEM,
+        summary: 'Failed to generate audit log sample data'
+      });
+      return reply.code(500).send({
+        error: 'SERVER_ERROR',
+        message: `Failed to generate audit log sample data: ${error.message}`
       });
     }
   });
@@ -3789,27 +4169,126 @@ Return ONLY a JSON array of strings, no other text. Example format:
 
   // ============ AUDIT LOG API ============
 
-  // Get audit log entries (paginated)
+  // Get audit log entries (paginated with advanced filtering)
   fastify.get('/admin/api/audit-log', { preHandler: adminAuthMiddleware }, async (request) => {
     const {
       page = 1,
       limit = 50,
       level,
+      levels, // Comma-separated list of levels
       userId,
+      username,
       entityType,
-      entityId
+      entityId,
+      actionType,
+      search,
+      startDate,
+      endDate
     } = request.query;
+
+    // Parse levels if provided as comma-separated string
+    let levelsArray = null;
+    if (levels) {
+      levelsArray = levels.split(',').map(l => l.trim().toUpperCase()).filter(l => l);
+    }
 
     const result = auditLogDb.getAll({
       page: parseInt(page),
       limit: Math.min(parseInt(limit) || 50, 100), // Max 100 per page
-      level,
+      level: levelsArray ? null : level, // Use single level only if levels array not provided
+      levels: levelsArray,
       userId: userId ? parseInt(userId) : null,
-      entityType,
-      entityId: entityId ? parseInt(entityId) : null
+      username: username || null,
+      entityType: entityType || null,
+      entityId: entityId ? parseInt(entityId) : null,
+      actionType: actionType || null,
+      search: search || null,
+      startDate: startDate || null,
+      endDate: endDate || null
     });
 
     return result;
+  });
+
+  // Get distinct filter values for dropdowns
+  fastify.get('/admin/api/audit-log/filters', { preHandler: adminAuthMiddleware }, async () => {
+    return {
+      users: auditLogDb.getDistinctUsers(),
+      actionTypes: auditLogDb.getDistinctActionTypes(),
+      entityTypes: auditLogDb.getDistinctEntityTypes()
+    };
+  });
+
+  // Get audit log stats (errors/warnings in last 24h)
+  fastify.get('/admin/api/audit-log/stats', { preHandler: adminAuthMiddleware }, async () => {
+    return auditLogDb.getStats();
+  });
+
+  // Export audit log as CSV
+  fastify.get('/admin/api/audit-log/export', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const {
+      level,
+      levels,
+      userId,
+      username,
+      entityType,
+      actionType,
+      search,
+      startDate,
+      endDate
+    } = request.query;
+
+    // Parse levels if provided
+    let levelsArray = null;
+    if (levels) {
+      levelsArray = levels.split(',').map(l => l.trim().toUpperCase()).filter(l => l);
+    }
+
+    // Get all matching entries (no pagination for export)
+    const result = auditLogDb.getAll({
+      page: 1,
+      limit: 10000, // Reasonable limit for export
+      level: levelsArray ? null : level,
+      levels: levelsArray,
+      userId: userId ? parseInt(userId) : null,
+      username: username || null,
+      entityType: entityType || null,
+      actionType: actionType || null,
+      search: search || null,
+      startDate: startDate || null,
+      endDate: endDate || null
+    });
+
+    // Build CSV
+    const headers = ['timestamp', 'level', 'username', 'action_type', 'entity_type', 'entity_id', 'summary', 'ip_address', 'duration_ms'];
+    const rows = result.entries.map(entry => {
+      return headers.map(h => {
+        const val = entry[h];
+        if (val === null || val === undefined) return '';
+        // Escape quotes and wrap in quotes if contains comma or quote
+        const str = String(val);
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      }).join(',');
+    });
+
+    const csv = [headers.join(','), ...rows].join('\n');
+
+    // Generate filename with date range info
+    let filename = 'audit-log';
+    if (startDate || endDate) {
+      if (startDate) filename += `-from-${startDate.split('T')[0]}`;
+      if (endDate) filename += `-to-${endDate.split('T')[0]}`;
+    } else {
+      filename += '-all';
+    }
+    filename += '.csv';
+
+    reply.header('Content-Type', 'text/csv');
+    reply.header('Content-Disposition', `attachment; filename="${filename}"`);
+    return csv;
   });
 
   // Get single audit log entry
@@ -3824,14 +4303,15 @@ Return ONLY a JSON array of strings, no other text. Example format:
     return { entry };
   });
 
-  // Expose database instances for testing
+  // Expose database instances for testing and graceful shutdown
   fastify.db = {
     mattersDb,
     settingsDb,
     adminUsersDb,
     adminSessionsDb,
     adminBootstrapTokensDb,
-    auditLogDb
+    auditLogDb,
+    saveDatabase
   };
 
   return fastify;
@@ -3866,6 +4346,46 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     });
     fastify.log.error(error, 'Unhandled rejection');
   });
+
+  // Graceful shutdown handlers - ensure database is saved before exit
+  let isShuttingDown = false;
+  const gracefulShutdown = (signal) => {
+    // Prevent multiple shutdown attempts
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+
+    console.log(`[server] Received ${signal}, shutting down gracefully...`);
+
+    // Save database synchronously before anything else
+    if (fastify.db?.saveDatabase) {
+      try {
+        fastify.db.saveDatabase();
+        console.log('[server] Database saved');
+      } catch (err) {
+        console.error('[server] Error saving database:', err);
+      }
+    }
+
+    // Close server (async but we'll exit after a timeout regardless)
+    // Use shorter timeout since watchdog will force kill after 5s anyway
+    fastify.close().then(() => {
+      console.log('[server] Server closed');
+      process.exit(0);
+    }).catch((err) => {
+      console.error('[server] Error during shutdown:', err);
+      process.exit(1);
+    });
+
+    // Force exit after 3 seconds if close() hangs
+    // This gives us time to exit cleanly before watchdog's 5s force kill
+    setTimeout(() => {
+      console.log('[server] Forcing exit after timeout');
+      process.exit(0);
+    }, 3000);
+  };
+
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
   try {
     await fastify.listen({ port: PORT, host: HOST });

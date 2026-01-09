@@ -505,6 +505,38 @@ class AdminAPI {
     async getAuditLogEntry(id) {
         return this.request(`/audit-log/${id}`);
     }
+
+    async getAuditLogFilters() {
+        return this.request('/audit-log/filters');
+    }
+
+    async getAuditLogStats() {
+        return this.request('/audit-log/stats');
+    }
+
+    async exportAuditLog(params = {}) {
+        const cleanParams = Object.fromEntries(
+            Object.entries(params).filter(([_, v]) => v != null)
+        );
+        const queryString = new URLSearchParams(cleanParams).toString();
+        const response = await fetch(`${this.baseURL}/audit-log/export${queryString ? `?${queryString}` : ''}`, {
+            credentials: 'same-origin'
+        });
+
+        if (!response.ok) {
+            throw new Error('Export failed');
+        }
+
+        return response.blob();
+    }
+
+    async populateAuditLogSampleData(options = {}) {
+        const { count, startDate, endDate, useAi, spiceLevelOverride } = options;
+        return this.request('/data/populate-audit-log', {
+            method: 'POST',
+            body: JSON.stringify({ count, startDate, endDate, useAi, spiceLevelOverride })
+        });
+    }
 }
 
 // Create singleton instance
