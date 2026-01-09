@@ -6,6 +6,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+#### Audit Logging System
+- **Comprehensive Audit Trail**: Track all admin actions and system events
+  - INFO level logging for CRUD operations, settings changes, auth events
+  - WARNING level for suspicious activity or near-failures
+  - ERROR level with stack traces for exceptions
+  - DEBUG level for detailed diagnostic information
+- **Database Table**: New `audit_log` table with columns:
+  - `id`, `timestamp`, `level` (ERROR/WARNING/INFO/DEBUG)
+  - `user_id`, `username` for action attribution
+  - `action_type`, `entity_type`, `entity_id` for categorization
+  - `summary` for human-readable description
+  - `request`, `response`, `details` (JSON) for structured data
+  - `ip_address`, `duration_ms`, `stack_trace` for diagnostics
+- **Logged Operations**:
+  - Matter CRUD: create, update, delete
+  - Private note CRUD: create, update, delete
+  - Attachment operations: upload, update, delete
+  - Auth events: login success, login failure (wrong password, user not found, account locked), logout
+  - Settings changes: generic settings, storage settings, AI settings, Claude API key
+  - Data operations: wipe matters, wipe matters+settings, wipe everything, sample data generation
+- **Graceful Failure**: Logging errors never break main operations
+- **Admin API Endpoints**:
+  - `GET /admin/api/audit-log` - Paginated list with filters (level, userId, entityType, entityId)
+  - `GET /admin/api/audit-log/:id` - Single entry details
+- **Admin UI Page**: New "Audit Log" page in admin navigation
+  - Paginated table with 50 entries per page
+  - Level filter dropdown (All/Error/Warning/Info/Debug)
+  - Color-coded level badges
+  - Expandable rows for details, request/response data, and stack traces
+  - Timestamp, user, action type, entity, and summary columns
+
 ---
 
 ## [0.9.4] - 2026-01-09
@@ -697,6 +730,9 @@ Initial development phase establishing core functionality.
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| Unreleased | - | Audit logging system |
+| 0.9.4 | 2026-01-09 | GitHub Release creation with changelog notes |
+| 0.9.3 | 2026-01-09 | Test performance improvements with disableRateLimit |
 | 0.9.2 | 2026-01-09 | Collapsible sections, improved timeline display |
 | 0.9.1 | 2026-01-09 | Counsel tracking, timeline view, interaction types |
 | 0.9.0 | 2026-01-09 | Counsel tracking, timeline view, interaction types |

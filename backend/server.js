@@ -7,6 +7,7 @@ import rateLimit from '@fastify/rate-limit';
 import fastifyMultipart from '@fastify/multipart';
 import Anthropic from '@anthropic-ai/sdk';
 import { createDatabase } from './db.js';
+import { initAudit, logInfo, logError, logWarning, logInfoFromRequest, logErrorFromRequest, getUserContext, ACTION_TYPES, ENTITY_TYPES } from './audit.js';
 import { hashPassword, verifyPassword, generateTokenId, generateApiKey, createAdminAuthMiddleware, getTokenExpiration, generateBootstrapToken, hashBootstrapToken, getBootstrapTokenExpiration, validatePasswordStrength } from './auth.js';
 import { createStorage, createStorageFromConfig, validateFileType, sanitizeFilename, MAX_FILE_SIZE } from './storage.js';
 import { generateLegalDocument, generatePlaceholderDocument } from './legal-docs.js';
@@ -80,7 +81,10 @@ export async function createServer(options = {}) {
   } = options;
 
   // Create database instance
-  const { settingsDb, mattersDb, adminUsersDb, adminSessionsDb, adminBootstrapTokensDb, privateNotesDb, attachmentsDb } = await createDatabase(dbPath);
+  const { settingsDb, mattersDb, adminUsersDb, adminSessionsDb, adminBootstrapTokensDb, privateNotesDb, attachmentsDb, auditLogDb } = await createDatabase(dbPath);
+
+  // Initialize audit logging service
+  initAudit({ auditLogDb, settingsDb });
 
   const fastify = Fastify({
     logger,
@@ -863,25 +867,54 @@ export async function createServer(options = {}) {
 
     // Get user
     const user = adminUsersDb.getByUsername(username);
+    const clientIP = getClientIP(request);
+
     if (!user) {
+      // Log failed login - user not found
+      logInfo({
+        actionType: ACTION_TYPES.LOGIN_FAILED,
+        entityType: ENTITY_TYPES.USER,
+        summary: `Failed login attempt for unknown user "${username}"`,
+        details: { reason: 'user_not_found' },
+        ipAddress: clientIP
+      });
       return reply.code(401).send({ error: 'INVALID_CREDENTIALS', message: 'Invalid username or password' });
     }
 
     // Check if user is active
     if (!user.is_active) {
+      // Log failed login - user inactive
+      logInfo({
+        userId: user.id,
+        username: user.username,
+        actionType: ACTION_TYPES.LOGIN_FAILED,
+        entityType: ENTITY_TYPES.USER,
+        summary: `Failed login attempt for inactive user "${username}"`,
+        details: { reason: 'user_inactive' },
+        ipAddress: clientIP
+      });
       return reply.code(401).send({ error: 'USER_INACTIVE', message: 'User account is not active' });
     }
 
     // Verify hashed password (server stores bcrypt(hashedPassword))
     const validPassword = await verifyPassword(hashedPassword, user.password_hash);
     if (!validPassword) {
+      // Log failed login - wrong password
+      logInfo({
+        userId: user.id,
+        username: user.username,
+        actionType: ACTION_TYPES.LOGIN_FAILED,
+        entityType: ENTITY_TYPES.USER,
+        summary: `Failed login attempt for user "${username}"`,
+        details: { reason: 'invalid_password' },
+        ipAddress: clientIP
+      });
       return reply.code(401).send({ error: 'INVALID_CREDENTIALS', message: 'Invalid username or password' });
     }
 
     // Create session
     const jti = generateTokenId();
     const expiration = getTokenExpiration(7); // 7 days
-    const clientIP = getClientIP(request);
     const userAgent = request.headers['user-agent'] || null;
 
     adminSessionsDb.create(user.id, jti, expiration.toISOString(), clientIP, userAgent);
@@ -902,6 +935,16 @@ export async function createServer(options = {}) {
       maxAge: 7 * 24 * 60 * 60 // 7 days in seconds
     });
 
+    // Log successful login
+    logInfo({
+      userId: user.id,
+      username: user.username,
+      actionType: ACTION_TYPES.LOGIN,
+      entityType: ENTITY_TYPES.USER,
+      summary: `User "${username}" logged in`,
+      ipAddress: clientIP
+    });
+
     return {
       success: true,
       user: {
@@ -919,6 +962,13 @@ export async function createServer(options = {}) {
     // Invalidate session in database - this is what actually logs the user out
     // The cookie will still exist in browser but will be rejected by auth middleware
     adminSessionsDb.invalidate(jti);
+
+    // Log logout
+    logInfoFromRequest(request, {
+      actionType: ACTION_TYPES.LOGOUT,
+      entityType: ENTITY_TYPES.USER,
+      summary: `User "${request.adminUser.username}" logged out`
+    });
 
     return { success: true, message: 'Logged out successfully' };
   });
@@ -1106,12 +1156,26 @@ export async function createServer(options = {}) {
         settingsDb.set('lifetime_spent', currentSpentCents + costCents);
       }
 
+      // Log the creation
+      logInfoFromRequest(request, {
+        actionType: ACTION_TYPES.CREATE,
+        entityType: ENTITY_TYPES.MATTER,
+        entityId: result.id,
+        summary: `Created matter #${result.id}`,
+        details: { note: note || 'Matter', matter_date, cost: costDollars }
+      });
+
       reply.code(201);
       return {
         success: true,
         matter: result
       };
     } catch (error) {
+      logErrorFromRequest(request, {
+        error,
+        entityType: ENTITY_TYPES.MATTER,
+        summary: 'Failed to create matter'
+      });
       return reply.code(500).send({ error: 'SERVER_ERROR', message: error.message });
     }
   });
@@ -1196,6 +1260,14 @@ export async function createServer(options = {}) {
         // Continue deleting others
       }
     }
+
+    // Log the bulk deletion
+    logInfoFromRequest(request, {
+      actionType: ACTION_TYPES.DELETE,
+      entityType: ENTITY_TYPES.MATTER,
+      summary: `Bulk deleted ${deleted} matters`,
+      details: { ids, deleted }
+    });
 
     return { success: true, deleted };
   });
@@ -1392,8 +1464,23 @@ export async function createServer(options = {}) {
         case_number
       });
 
+      // Log the update
+      logInfoFromRequest(request, {
+        actionType: ACTION_TYPES.UPDATE,
+        entityType: ENTITY_TYPES.MATTER,
+        entityId: parseInt(id),
+        summary: `Updated matter #${id}`,
+        details: { before: { note: existing.note, cost: existing.cost / 100 }, after: { note: matterNote, cost: costCents / 100 } }
+      });
+
       return { success: true };
     } catch (error) {
+      logErrorFromRequest(request, {
+        error,
+        entityType: ENTITY_TYPES.MATTER,
+        entityId: parseInt(id),
+        summary: `Failed to update matter #${id}`
+      });
       return reply.code(500).send({ error: 'SERVER_ERROR', message: error.message });
     }
   });
@@ -1424,8 +1511,24 @@ export async function createServer(options = {}) {
 
       // Private notes and attachments are deleted automatically via ON DELETE CASCADE
       mattersDb.delete(parseInt(id));
+
+      // Log the deletion
+      logInfoFromRequest(request, {
+        actionType: ACTION_TYPES.DELETE,
+        entityType: ENTITY_TYPES.MATTER,
+        entityId: parseInt(id),
+        summary: `Deleted matter #${id}`,
+        details: { note: existing.note }
+      });
+
       return { success: true };
     } catch (error) {
+      logErrorFromRequest(request, {
+        error,
+        entityType: ENTITY_TYPES.MATTER,
+        entityId: parseInt(id),
+        summary: `Failed to delete matter #${id}`
+      });
       return reply.code(500).send({ error: 'SERVER_ERROR', message: error.message });
     }
   });
@@ -1475,12 +1578,26 @@ export async function createServer(options = {}) {
         interaction_type: interaction_type || 'note'
       });
 
+      // Log the creation
+      logInfoFromRequest(request, {
+        actionType: ACTION_TYPES.CREATE,
+        entityType: ENTITY_TYPES.PRIVATE_NOTE,
+        entityId: result.id,
+        summary: `Created note #${result.id} on matter #${matterId}`,
+        details: { matterId: parseInt(matterId), interaction_type: interaction_type || 'note' }
+      });
+
       reply.code(201);
       return {
         success: true,
         note: privateNotesDb.getById(result.id)
       };
     } catch (error) {
+      logErrorFromRequest(request, {
+        error,
+        entityType: ENTITY_TYPES.PRIVATE_NOTE,
+        summary: `Failed to create note on matter #${matterId}`
+      });
       return reply.code(500).send({ error: 'SERVER_ERROR', message: error.message });
     }
   });
@@ -1511,11 +1628,27 @@ export async function createServer(options = {}) {
         interaction_date,
         interaction_type
       });
+
+      // Log the update
+      logInfoFromRequest(request, {
+        actionType: ACTION_TYPES.UPDATE,
+        entityType: ENTITY_TYPES.PRIVATE_NOTE,
+        entityId: parseInt(noteId),
+        summary: `Updated note #${noteId}`,
+        details: { matterId: existing.matter_id }
+      });
+
       return {
         success: true,
         note: privateNotesDb.getById(parseInt(noteId))
       };
     } catch (error) {
+      logErrorFromRequest(request, {
+        error,
+        entityType: ENTITY_TYPES.PRIVATE_NOTE,
+        entityId: parseInt(noteId),
+        summary: `Failed to update note #${noteId}`
+      });
       return reply.code(500).send({ error: 'SERVER_ERROR', message: error.message });
     }
   });
@@ -1531,8 +1664,24 @@ export async function createServer(options = {}) {
 
     try {
       privateNotesDb.delete(parseInt(noteId));
+
+      // Log the deletion
+      logInfoFromRequest(request, {
+        actionType: ACTION_TYPES.DELETE,
+        entityType: ENTITY_TYPES.PRIVATE_NOTE,
+        entityId: parseInt(noteId),
+        summary: `Deleted note #${noteId}`,
+        details: { matterId: existing.matter_id }
+      });
+
       return { success: true };
     } catch (error) {
+      logErrorFromRequest(request, {
+        error,
+        entityType: ENTITY_TYPES.PRIVATE_NOTE,
+        entityId: parseInt(noteId),
+        summary: `Failed to delete note #${noteId}`
+      });
       return reply.code(500).send({ error: 'SERVER_ERROR', message: error.message });
     }
   });
@@ -1618,6 +1767,15 @@ export async function createServer(options = {}) {
         { document_date: documentDate, direction }
       );
 
+      // Log the upload
+      logInfoFromRequest(request, {
+        actionType: ACTION_TYPES.CREATE,
+        entityType: ENTITY_TYPES.ATTACHMENT,
+        entityId: attachment.id,
+        summary: `Uploaded attachment "${sanitizeFilename(file.filename)}" to matter #${matterId}`,
+        details: { matterId: parseInt(matterId), filename: sanitizeFilename(file.filename), size_bytes: result.size_bytes }
+      });
+
       return {
         success: true,
         attachment: {
@@ -1630,6 +1788,11 @@ export async function createServer(options = {}) {
         }
       };
     } catch (error) {
+      logErrorFromRequest(request, {
+        error,
+        entityType: ENTITY_TYPES.ATTACHMENT,
+        summary: `Failed to upload attachment to matter #${matterId}`
+      });
       fastify.log.error({ error: error.message }, 'File upload failed');
       return reply.code(500).send({ error: 'UPLOAD_FAILED', message: error.message });
     }
@@ -1682,8 +1845,23 @@ export async function createServer(options = {}) {
       // Delete database record
       attachmentsDb.delete(parseInt(attachmentId));
 
+      // Log the deletion
+      logInfoFromRequest(request, {
+        actionType: ACTION_TYPES.DELETE,
+        entityType: ENTITY_TYPES.ATTACHMENT,
+        entityId: parseInt(attachmentId),
+        summary: `Deleted attachment "${attachment.original_filename}"`,
+        details: { matterId: attachment.matter_id, filename: attachment.original_filename }
+      });
+
       return { success: true };
     } catch (error) {
+      logErrorFromRequest(request, {
+        error,
+        entityType: ENTITY_TYPES.ATTACHMENT,
+        entityId: parseInt(attachmentId),
+        summary: `Failed to delete attachment #${attachmentId}`
+      });
       fastify.log.error({ error: error.message, attachmentId }, 'Attachment deletion failed');
       return reply.code(500).send({ error: 'DELETE_FAILED', message: error.message });
     }
@@ -1701,11 +1879,27 @@ export async function createServer(options = {}) {
 
     try {
       attachmentsDb.update(parseInt(attachmentId), { document_date, direction });
+
+      // Log the update
+      logInfoFromRequest(request, {
+        actionType: ACTION_TYPES.UPDATE,
+        entityType: ENTITY_TYPES.ATTACHMENT,
+        entityId: parseInt(attachmentId),
+        summary: `Updated attachment "${attachment.original_filename}"`,
+        details: { matterId: attachment.matter_id, document_date, direction }
+      });
+
       return {
         success: true,
         attachment: attachmentsDb.getById(parseInt(attachmentId))
       };
     } catch (error) {
+      logErrorFromRequest(request, {
+        error,
+        entityType: ENTITY_TYPES.ATTACHMENT,
+        entityId: parseInt(attachmentId),
+        summary: `Failed to update attachment #${attachmentId}`
+      });
       return reply.code(500).send({ error: 'SERVER_ERROR', message: error.message });
     }
   });
@@ -1775,6 +1969,14 @@ export async function createServer(options = {}) {
     if (filesystem_path !== undefined) {
       settingsDb.set('storage_filesystem_path', filesystem_path);
     }
+
+    // Log settings change
+    logInfoFromRequest(request, {
+      actionType: ACTION_TYPES.SETTINGS_CHANGE,
+      entityType: ENTITY_TYPES.SETTINGS,
+      summary: 'Updated storage settings',
+      details: { storage_backend }
+    });
 
     return { success: true };
   });
@@ -1850,13 +2052,28 @@ export async function createServer(options = {}) {
 
     settingsDb.set(key, value);
 
+    // Log settings change
+    logInfoFromRequest(request, {
+      actionType: ACTION_TYPES.SETTINGS_CHANGE,
+      entityType: ENTITY_TYPES.SETTINGS,
+      summary: `Updated setting "${key}"`,
+      details: { key }
+    });
+
     return { success: true, key, value };
   });
 
   // Generate new API key
-  fastify.post('/admin/api/settings/api-key/generate', { preHandler: adminAuthMiddleware }, async () => {
+  fastify.post('/admin/api/settings/api-key/generate', { preHandler: adminAuthMiddleware }, async (request) => {
     const newApiKey = generateApiKey();
     settingsDb.set('api_key', newApiKey);
+
+    // Log API key generation
+    logInfoFromRequest(request, {
+      actionType: ACTION_TYPES.SETTINGS_CHANGE,
+      entityType: ENTITY_TYPES.SETTINGS,
+      summary: 'Generated new API key'
+    });
 
     return { success: true, api_key: newApiKey };
   });
@@ -1891,6 +2108,13 @@ export async function createServer(options = {}) {
         .map(m => ({ id: m.id, name: m.display_name || m.id }))
         .sort((a, b) => a.name.localeCompare(b.name));
 
+      // Log Claude API key configuration
+      logInfoFromRequest(request, {
+        actionType: ACTION_TYPES.SETTINGS_CHANGE,
+        entityType: ENTITY_TYPES.SETTINGS,
+        summary: 'Configured Claude API key'
+      });
+
       return {
         valid: true,
         message: 'API key validated and saved',
@@ -1907,10 +2131,18 @@ export async function createServer(options = {}) {
   });
 
   // Clear Claude API key
-  fastify.delete('/admin/api/settings/claude-api-key', { preHandler: adminAuthMiddleware }, async () => {
+  fastify.delete('/admin/api/settings/claude-api-key', { preHandler: adminAuthMiddleware }, async (request) => {
     settingsDb.set('claude_api_key', '');
     settingsDb.set('claude_key_validated', 'false');
     settingsDb.set('claude_model', '');
+
+    // Log Claude API key removal
+    logInfoFromRequest(request, {
+      actionType: ACTION_TYPES.SETTINGS_CHANGE,
+      entityType: ENTITY_TYPES.SETTINGS,
+      summary: 'Removed Claude API key'
+    });
+
     return { success: true };
   });
 
@@ -1952,6 +2184,14 @@ export async function createServer(options = {}) {
     if (customPrompt !== undefined) {
       settingsDb.set('ai_custom_prompt', customPrompt);
     }
+
+    // Log AI settings change
+    logInfoFromRequest(request, {
+      actionType: ACTION_TYPES.SETTINGS_CHANGE,
+      entityType: ENTITY_TYPES.SETTINGS,
+      summary: 'Updated AI settings',
+      details: { model, spiceLevel }
+    });
 
     return { success: true };
   });
@@ -2819,6 +3059,22 @@ Return ONLY a JSON array of strings, no other text. Example format:
         settingsDb.set('last_matter_date', sampleMatters[sampleMatters.length - 1].matter_date);
       }
 
+      // Audit log the sample data generation
+      logInfoFromRequest(request, {
+        actionType: ACTION_TYPES.SAMPLE_DATA_GENERATE,
+        entityType: ENTITY_TYPES.SYSTEM,
+        summary: source && source !== 'generate'
+          ? `Loaded ${sampleMatters.length} matters from ${source}`
+          : `Generated ${sampleMatters.length} sample matters`,
+        details: {
+          matters_added: sampleMatters.length,
+          source: (source === 'generate' || !source) ? 'generated' : source,
+          used_ai: usedAi,
+          notes_generated: notesGenerated,
+          attachments_generated: attachmentsGenerated
+        }
+      });
+
       return {
         success: true,
         message: source && source !== 'generate'
@@ -2832,6 +3088,11 @@ Return ONLY a JSON array of strings, no other text. Example format:
         attachments_generated: attachmentsGenerated
       };
     } catch (error) {
+      logErrorFromRequest(request, {
+        error,
+        entityType: ENTITY_TYPES.SYSTEM,
+        summary: 'Failed to generate sample data'
+      });
       return reply.code(500).send({
         error: 'SERVER_ERROR',
         message: `Failed to populate sample data: ${error.message}`
@@ -2974,12 +3235,25 @@ Return ONLY a JSON array of strings, no other text. Example format:
         matters_deleted: matterCount
       }, 'Matters wipe completed successfully');
 
+      // Audit log the wipe
+      logInfoFromRequest(request, {
+        actionType: ACTION_TYPES.DATA_WIPE,
+        entityType: ENTITY_TYPES.SYSTEM,
+        summary: `Wiped ${matterCount} matters and all private notes`,
+        details: { matters_deleted: matterCount, scope: 'matters_only' }
+      });
+
       return {
         success: true,
         message: `Successfully deleted ${matterCount} matter records and all private notes`,
         matters_deleted: matterCount
       };
     } catch (error) {
+      logErrorFromRequest(request, {
+        error,
+        entityType: ENTITY_TYPES.SYSTEM,
+        summary: 'Failed to wipe matters'
+      });
       fastify.log.error({ error: error.message }, 'Failed to wipe matters');
       return reply.code(500).send({
         error: 'SERVER_ERROR',
@@ -3056,6 +3330,14 @@ Return ONLY a JSON array of strings, no other text. Example format:
         settings_reset: true
       }, 'Matters and settings wipe completed successfully');
 
+      // Audit log the wipe
+      logInfoFromRequest(request, {
+        actionType: ACTION_TYPES.DATA_WIPE,
+        entityType: ENTITY_TYPES.SYSTEM,
+        summary: `Wiped ${matterCount} matters, notes, and reset settings`,
+        details: { matters_deleted: matterCount, settings_reset: true, scope: 'matters_and_settings' }
+      });
+
       return {
         success: true,
         message: `Successfully deleted ${matterCount} matter records, all private notes, and reset settings to defaults`,
@@ -3063,6 +3345,11 @@ Return ONLY a JSON array of strings, no other text. Example format:
         settings_reset: true
       };
     } catch (error) {
+      logErrorFromRequest(request, {
+        error,
+        entityType: ENTITY_TYPES.SYSTEM,
+        summary: 'Failed to wipe matters and settings'
+      });
       fastify.log.error({
         action: 'WIPE_MATTERS_AND_SETTINGS_FAILED',
         error: error.message
@@ -3108,7 +3395,8 @@ Return ONLY a JSON array of strings, no other text. Example format:
 
     try {
       // Log the wipe action (with user redacted for security)
-      const userId = request.adminUser?.id || 'unknown';
+      const userId = request.adminUser?.id || null;
+      const username = request.adminUser?.username || null;
       const ip = request.ip || 'unknown';
       fastify.log.warn({
         action: 'WIPE_EVERYTHING',
@@ -3163,6 +3451,22 @@ Return ONLY a JSON array of strings, no other text. Example format:
         bootstrap_token_created: true
       }, 'Database wipe completed successfully');
 
+      // Note: Audit log won't persist since user is deleted, but log anyway for consistency
+      logInfo({
+        userId,
+        username,
+        actionType: ACTION_TYPES.DATA_WIPE,
+        entityType: ENTITY_TYPES.SYSTEM,
+        summary: 'Full database wipe performed',
+        details: {
+          matters_deleted: matterCount,
+          admins_deleted: adminCount,
+          sessions_invalidated: sessionCount,
+          scope: 'everything'
+        },
+        ipAddress: ip
+      });
+
       return {
         success: true,
         message: 'All data has been wiped successfully. Database reset to fresh install state.',
@@ -3174,6 +3478,12 @@ Return ONLY a JSON array of strings, no other text. Example format:
         bootstrap_url: `/admin/bootstrap.html?token=${bootstrapToken}`
       };
     } catch (error) {
+      logError({
+        error,
+        entityType: ENTITY_TYPES.SYSTEM,
+        summary: 'Failed to perform full database wipe',
+        ipAddress: ip
+      });
       fastify.log.error({
         action: 'WIPE_EVERYTHING_FAILED',
         error: error.message
@@ -3186,13 +3496,51 @@ Return ONLY a JSON array of strings, no other text. Example format:
     }
   });
 
+  // ============ AUDIT LOG API ============
+
+  // Get audit log entries (paginated)
+  fastify.get('/admin/api/audit-log', { preHandler: adminAuthMiddleware }, async (request) => {
+    const {
+      page = 1,
+      limit = 50,
+      level,
+      userId,
+      entityType,
+      entityId
+    } = request.query;
+
+    const result = auditLogDb.getAll({
+      page: parseInt(page),
+      limit: Math.min(parseInt(limit) || 50, 100), // Max 100 per page
+      level,
+      userId: userId ? parseInt(userId) : null,
+      entityType,
+      entityId: entityId ? parseInt(entityId) : null
+    });
+
+    return result;
+  });
+
+  // Get single audit log entry
+  fastify.get('/admin/api/audit-log/:id', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { id } = request.params;
+
+    const entry = auditLogDb.getById(parseInt(id));
+    if (!entry) {
+      return reply.code(404).send({ error: 'NOT_FOUND', message: 'Audit log entry not found' });
+    }
+
+    return { entry };
+  });
+
   // Expose database instances for testing
   fastify.db = {
     mattersDb,
     settingsDb,
     adminUsersDb,
     adminSessionsDb,
-    adminBootstrapTokensDb
+    adminBootstrapTokensDb,
+    auditLogDb
   };
 
   return fastify;

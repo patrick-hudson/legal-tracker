@@ -129,6 +129,30 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
       FOREIGN KEY (created_by_user_id) REFERENCES admin_users(id)
     );
 
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+      level TEXT NOT NULL,
+      user_id INTEGER,
+      username TEXT,
+      action_type TEXT NOT NULL,
+      entity_type TEXT,
+      entity_id INTEGER,
+      summary TEXT NOT NULL,
+      request TEXT,
+      response TEXT,
+      details TEXT,
+      ip_address TEXT,
+      duration_ms INTEGER,
+      stack_trace TEXT,
+      FOREIGN KEY (user_id) REFERENCES admin_users(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp DESC);
+    CREATE INDEX IF NOT EXISTS idx_audit_log_level ON audit_log(level);
+    CREATE INDEX IF NOT EXISTS idx_audit_log_user_id ON audit_log(user_id);
+    CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id);
+
     -- Initialize default settings if they don't exist
     INSERT OR IGNORE INTO settings (key, value) VALUES ('lifetime_spent', '0');
     INSERT OR IGNORE INTO settings (key, value) VALUES ('last_matter_date', datetime('now'));
@@ -843,7 +867,148 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
     }
   };
 
-  return { db, settingsDb, mattersDb, adminUsersDb, adminSessionsDb, adminBootstrapTokensDb, privateNotesDb, attachmentsDb, saveDatabase };
+  const auditLogDb = {
+    create(entry) {
+      const {
+        level,
+        user_id = null,
+        username = null,
+        action_type,
+        entity_type = null,
+        entity_id = null,
+        summary,
+        request = null,
+        response = null,
+        details = null,
+        ip_address = null,
+        duration_ms = null,
+        stack_trace = null
+      } = entry;
+
+      db.run(`
+        INSERT INTO audit_log (
+          timestamp, level, user_id, username, action_type, entity_type, entity_id,
+          summary, request, response, details, ip_address, duration_ms, stack_trace
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        new Date().toISOString(),
+        level,
+        user_id,
+        username,
+        action_type,
+        entity_type,
+        entity_id,
+        summary,
+        request ? JSON.stringify(request) : null,
+        response ? JSON.stringify(response) : null,
+        details ? JSON.stringify(details) : null,
+        ip_address,
+        duration_ms,
+        stack_trace
+      ]);
+
+      const result = db.exec('SELECT last_insert_rowid() as id');
+      const id = result[0].values[0][0];
+
+      saveDatabase();
+      return { id };
+    },
+
+    getById(id) {
+      const result = db.exec(`
+        SELECT * FROM audit_log WHERE id = ?
+      `, [id]);
+      if (result.length > 0 && result[0].values.length > 0) {
+        const columns = result[0].columns;
+        const row = result[0].values[0];
+        const obj = {};
+        columns.forEach((col, i) => {
+          obj[col] = row[i];
+        });
+        // Parse JSON fields
+        if (obj.request) obj.request = JSON.parse(obj.request);
+        if (obj.response) obj.response = JSON.parse(obj.response);
+        if (obj.details) obj.details = JSON.parse(obj.details);
+        return obj;
+      }
+      return null;
+    },
+
+    getAll(options = {}) {
+      const { page = 1, limit = 50, level = null, userId = null, entityType = null, entityId = null } = options;
+      const offset = (page - 1) * limit;
+
+      let whereClause = '1=1';
+      const params = [];
+
+      if (level) {
+        whereClause += ' AND level = ?';
+        params.push(level);
+      }
+      if (userId) {
+        whereClause += ' AND user_id = ?';
+        params.push(userId);
+      }
+      if (entityType) {
+        whereClause += ' AND entity_type = ?';
+        params.push(entityType);
+      }
+      if (entityId) {
+        whereClause += ' AND entity_id = ?';
+        params.push(entityId);
+      }
+
+      // Get total count
+      const countResult = db.exec(`SELECT COUNT(*) as count FROM audit_log WHERE ${whereClause}`, params);
+      const total = countResult[0]?.values[0]?.[0] || 0;
+
+      // Get paginated results
+      const result = db.exec(`
+        SELECT * FROM audit_log
+        WHERE ${whereClause}
+        ORDER BY timestamp DESC
+        LIMIT ? OFFSET ?
+      `, [...params, limit, offset]);
+
+      let entries = [];
+      if (result.length > 0) {
+        const columns = result[0].columns;
+        entries = result[0].values.map(row => {
+          const obj = {};
+          columns.forEach((col, i) => {
+            obj[col] = row[i];
+          });
+          // Parse JSON fields
+          if (obj.request) obj.request = JSON.parse(obj.request);
+          if (obj.response) obj.response = JSON.parse(obj.response);
+          if (obj.details) obj.details = JSON.parse(obj.details);
+          return obj;
+        });
+      }
+
+      return {
+        entries,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      };
+    },
+
+    deleteOlderThan(days) {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - days);
+      db.run('DELETE FROM audit_log WHERE timestamp < ?', [cutoff.toISOString()]);
+      saveDatabase();
+    },
+
+    getCount() {
+      const result = db.exec('SELECT COUNT(*) as count FROM audit_log');
+      return result[0]?.values[0]?.[0] || 0;
+    }
+  };
+
+  return { db, settingsDb, mattersDb, adminUsersDb, adminSessionsDb, adminBootstrapTokensDb, privateNotesDb, attachmentsDb, auditLogDb, saveDatabase };
 }
 
 // Create default database instance for backwards compatibility

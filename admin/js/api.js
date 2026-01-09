@@ -491,6 +491,16 @@ class AdminAPI {
 
         return response.json();
     }
+
+    // Audit Log
+    async getAuditLog(params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        return this.request(`/audit-log${queryString ? `?${queryString}` : ''}`);
+    }
+
+    async getAuditLogEntry(id) {
+        return this.request(`/audit-log/${id}`);
+    }
 }
 
 // Create singleton instance

@@ -12,6 +12,7 @@ import { renderSecurity } from './components/security.js';
 import { renderTrackerSettings } from './components/tracker-settings.js';
 import { renderDataManagement } from './components/data-management.js';
 import { renderSystemInfo } from './components/system-info.js';
+import { renderAuditLog } from './components/audit-log.js';
 
 class Router {
     constructor() {
@@ -22,7 +23,8 @@ class Router {
             '/security': renderSecurity,
             '/tracker-settings': renderTrackerSettings,
             '/data-management': renderDataManagement,
-            '/system-info': renderSystemInfo
+            '/system-info': renderSystemInfo,
+            '/audit-log': renderAuditLog
         };
         // Dynamic routes with patterns
         this.dynamicRoutes = [
