@@ -1608,7 +1608,7 @@ function setupEventListeners() {
             return;
         }
 
-        const confirmed = await showConfirm('Are you sure you want to delete all matters AND reset all settings?\n\nThis will:\n- Delete all matter records\n- Reset lifetime legal fees to $0\n- Reset drain rate to 0\n- Disable auto-drain\n- Reset drain timer\n- Clear API key\n- Disable authentication requirement\n- Clear IP whitelist\n- Clear Claude API key and AI settings\n\nYour admin account will be preserved.\n\nThis action CANNOT be undone!', {
+        const confirmed = await showConfirm('Are you sure you want to delete all matters AND reset all settings?\n\nThis will DELETE:\n- All matter records\n- All private notes\n- All attachments (files deleted from storage)\n- All audit log history (only wipe action kept)\n\nThis will RESET:\n- ID sequences to 0 (new records start at ID 1)\n- Lifetime legal fees to $0\n- Drain rate to 0\n- Auto-drain disabled\n- Drain timer reset\n- API key cleared\n- Authentication requirement disabled\n- IP whitelist cleared\n- Claude API key and AI settings cleared\n\nYour admin account will be preserved.\n\nThis action CANNOT be undone!', {
             title: 'Wipe + Reset',
             confirmText: 'Wipe + Reset',
             cancelText: 'Cancel',

@@ -86,6 +86,22 @@ const COLUMN_DEFINITIONS = {
                 ${matter.private_notes_count > 1 ? `<span class="ml-0.5 text-xs text-amber-600 font-medium">${matter.private_notes_count}</span>` : ''}
             </span>` : ''
     },
+    attachments: {
+        key: 'attachments',
+        label: 'Docs',
+        sortable: false,
+        hideable: true,
+        headerClass: 'px-3 py-3 text-center w-16',
+        cellClass: 'px-3 py-4 text-center',
+        renderHeader: () => `<svg class="w-4 h-4 mx-auto text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" title="Attachments"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>`,
+        renderCell: (matter) => matter.attachments_count > 0 ? `
+            <span class="inline-flex items-center justify-center" title="${matter.attachments_count} document${matter.attachments_count > 1 ? 's' : ''}">
+                <svg class="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/>
+                </svg>
+                ${matter.attachments_count > 1 ? `<span class="ml-0.5 text-xs text-blue-600 dark:text-blue-400 font-medium">${matter.attachments_count}</span>` : ''}
+            </span>` : ''
+    },
     actions: {
         key: 'actions',
         label: 'Actions',
@@ -103,7 +119,7 @@ const COLUMN_DEFINITIONS = {
 };
 
 // Default column order
-const DEFAULT_COLUMN_ORDER = ['checkbox', 'id', 'matter_date', 'note', 'cost', 'private_notes', 'actions'];
+const DEFAULT_COLUMN_ORDER = ['checkbox', 'id', 'matter_date', 'note', 'cost', 'private_notes', 'attachments', 'actions'];
 const DEFAULT_HIDDEN_COLUMNS = [];
 
 // Storage keys
@@ -128,10 +144,26 @@ function getColumnPreferences() {
 
         if (savedOrder) {
             const parsed = JSON.parse(savedOrder);
-            // Validate and merge with defaults (add any new columns)
+            // Validate saved order (remove any columns that no longer exist)
             const validOrder = parsed.filter(key => COLUMN_DEFINITIONS[key]);
+            // Find columns in defaults that aren't in saved order
             const missingColumns = DEFAULT_COLUMN_ORDER.filter(key => !validOrder.includes(key));
-            order = [...validOrder, ...missingColumns];
+            // Insert missing columns at their default position relative to existing columns
+            order = [...validOrder];
+            for (const missing of missingColumns) {
+                const defaultIndex = DEFAULT_COLUMN_ORDER.indexOf(missing);
+                // Find the best insertion point by looking for the nearest column that exists in both
+                let insertIndex = order.length;
+                for (let i = defaultIndex - 1; i >= 0; i--) {
+                    const prevCol = DEFAULT_COLUMN_ORDER[i];
+                    const existingIndex = order.indexOf(prevCol);
+                    if (existingIndex !== -1) {
+                        insertIndex = existingIndex + 1;
+                        break;
+                    }
+                }
+                order.splice(insertIndex, 0, missing);
+            }
         }
 
         if (savedHidden) {

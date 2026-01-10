@@ -481,6 +481,20 @@ export async function createServer(options = {}) {
       return { error: 'NOT_FOUND', message: 'Matter not found' };
     }
 
+    // Delete attachments from storage before deleting matter
+    const attachments = attachmentsDb.getByMatterId(parseInt(id));
+    if (attachments.length > 0) {
+      const storage = createStorage(settingsDb);
+      for (const attachment of attachments) {
+        try {
+          await storage.deleteObject(attachment.storage_key);
+        } catch (err) {
+          fastify.log.warn({ attachmentId: attachment.id, error: err.message }, 'Failed to delete attachment from storage');
+        }
+      }
+      // DB records are deleted via ON DELETE CASCADE
+    }
+
     mattersDb.delete(id);
 
     // Recalculate last matter date from remaining matters
@@ -1379,11 +1393,12 @@ export async function createServer(options = {}) {
     const endIndex = startIndex + parseInt(limit);
     const paginatedMatters = matters.slice(startIndex, endIndex);
 
-    // Convert costs from cents to dollars and include note counts
+    // Convert costs from cents to dollars and include counts
     const mattersWithDetails = paginatedMatters.map(inc => ({
       ...inc,
       cost: inc.cost / 100, // Convert cents to dollars
-      private_notes_count: privateNotesDb.getCountByMatterId(inc.id)
+      private_notes_count: privateNotesDb.getCountByMatterId(inc.id),
+      attachments_count: attachmentsDb.getCountByMatterId(inc.id)
     }));
 
     return {
@@ -1531,9 +1546,24 @@ export async function createServer(options = {}) {
       return reply.code(400).send({ error: 'BAD_REQUEST', message: 'IDs array required' });
     }
 
+    const storage = createStorage(settingsDb);
+    const userContext = getUserContext(request);
+
     let deleted = 0;
+    let attachmentsDeleted = 0;
     for (const id of ids) {
       try {
+        // Delete attachments from storage before deleting matter
+        const attachments = attachmentsDb.getByMatterId(parseInt(id));
+        for (const attachment of attachments) {
+          try {
+            await storage.deleteObject(attachment.storage_key, userContext);
+            attachmentsDeleted++;
+          } catch (err) {
+            fastify.log.warn({ attachmentId: attachment.id, error: err.message }, 'Failed to delete attachment from storage during bulk delete');
+          }
+        }
+        // DB records are deleted via ON DELETE CASCADE
         mattersDb.delete(id);
         deleted++;
       } catch (error) {
@@ -1546,10 +1576,10 @@ export async function createServer(options = {}) {
       actionType: ACTION_TYPES.DELETE,
       entityType: ENTITY_TYPES.MATTER,
       summary: `Bulk deleted ${deleted} matters`,
-      details: { ids, deleted }
+      details: { ids, deleted, attachments_deleted: attachmentsDeleted }
     });
 
-    return { success: true, deleted };
+    return { success: true, deleted, attachments_deleted: attachmentsDeleted };
   });
 
   // Export matters as CSV or JSON
@@ -4234,33 +4264,47 @@ Return ONLY a valid JSON array, no other text. Example:
       const matterCount = mattersDb.getAll().length;
       const adminCount = adminUsersDb.getAll().length;
       const sessionCount = adminSessionsDb.getAll().length;
+      const attachments = attachmentsDb.deleteAll(); // Returns all attachments for storage cleanup
+      const attachmentCount = attachments.length;
 
       // Delete all data - this must be atomic
-      // 1. Delete all matters
+      // 1. Delete storage files for attachments (before settings reset)
+      if (attachments.length > 0) {
+        const storage = createStorage(settingsDb);
+        for (const attachment of attachments) {
+          try {
+            await storage.deleteObject(attachment.storage_key, { userId, username, ipAddress: ip });
+          } catch (err) {
+            fastify.log.warn({ error: err.message, key: attachment.storage_key }, 'Failed to delete attachment from storage during wipe');
+          }
+        }
+      }
+
+      // 2. Delete all matters
       const matters = mattersDb.getAll();
       for (const matter of matters) {
         mattersDb.delete(matter.id);
       }
 
-      // 2. Delete all admin sessions
+      // 3. Delete all admin sessions
       const sessions = adminSessionsDb.getAll();
       for (const session of sessions) {
         adminSessionsDb.invalidate(session.token_jti);
       }
 
-      // 3. Delete ALL admin users (including current user)
+      // 4. Delete ALL admin users (including current user)
       adminUsersDb.deleteAll();
 
-      // 4. Invalidate all bootstrap tokens
+      // 5. Invalidate all bootstrap tokens
       adminBootstrapTokensDb.invalidateAll();
 
-      // 5. Create a new bootstrap token for fresh setup
+      // 6. Create a new bootstrap token for fresh setup
       const bootstrapToken = generateBootstrapToken();
       const tokenHash = hashBootstrapToken(bootstrapToken);
       const expiresAt = getBootstrapTokenExpiration(60); // 60 minutes
       adminBootstrapTokensDb.create(tokenHash, expiresAt, ip);
 
-      // 6. Reset all settings to defaults (fresh install state)
+      // 7. Reset all settings to defaults (fresh install state)
       for (const [key, value] of Object.entries(DEFAULT_APP_SETTINGS)) {
         settingsDb.set(key, value);
       }
@@ -4271,6 +4315,7 @@ Return ONLY a valid JSON array, no other text. Example:
       fastify.log.info({
         action: 'WIPE_EVERYTHING_COMPLETE',
         matters_deleted: matterCount,
+        attachments_deleted: attachmentCount,
         admins_deleted: adminCount,
         sessions_invalidated: sessionCount,
         bootstrap_token_created: true
@@ -4285,6 +4330,7 @@ Return ONLY a valid JSON array, no other text. Example:
         summary: 'Full database wipe performed',
         details: {
           matters_deleted: matterCount,
+          attachments_deleted: attachmentCount,
           admins_deleted: adminCount,
           sessions_invalidated: sessionCount,
           scope: 'everything'
@@ -4296,6 +4342,7 @@ Return ONLY a valid JSON array, no other text. Example:
         success: true,
         message: 'All data has been wiped successfully. Database reset to fresh install state.',
         matters_deleted: matterCount,
+        attachments_deleted: attachmentCount,
         admins_deleted: adminCount,
         sessions_invalidated: sessionCount,
         settings_reset: true,

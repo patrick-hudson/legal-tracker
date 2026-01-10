@@ -16,6 +16,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 
+- **Attachments column on matters list**: New "Docs" column shows document/attachment count per matter
+  - Blue document icon displayed when matter has attachments
+  - Shows count badge when matter has multiple attachments
+  - Hover tooltip shows exact count (e.g., "3 documents")
+  - Column is hideable and follows same pattern as private notes column
+
 - **Context-aware private notes generation**: AI-generated private notes now reference the matter's description
   - New `generateContextualPrivateNotes()` function processes matters in batches (default 10 per API call)
   - Each note specifically relates to its matter's description rather than being generic
@@ -36,6 +42,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Server restart redirect behavior**: Fixed countdown redirect after server restart
   - Increased redirect delay from 7 to 8 seconds to accommodate server restart time
   - Changed from URL navigation to page reload to prevent countdown hanging when already on target page
+
+- **Storage file deletion on all delete operations**: Fixed orphaned files remaining after matter deletion
+  - Full database wipe (`/admin/api/data/wipe`) now deletes attachment files from storage
+  - Bulk matter delete now deletes associated attachment files
+  - Public API matter delete now deletes associated attachment files
+  - All endpoints now properly clean up both filesystem and S3 storage
 
 ---
 
