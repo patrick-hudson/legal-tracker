@@ -2,6 +2,12 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert';
 
 describe('Unit Tests', () => {
+  describe('Intentional failure test', () => {
+    it('should fail to test CI failure recording', () => {
+      assert.strictEqual(1, 2, 'This test intentionally fails to test CI failure recording');
+    });
+  });
+
   describe('Date calculations', () => {
     it('should calculate days between dates correctly', () => {
       const date1 = new Date('2024-01-01');
