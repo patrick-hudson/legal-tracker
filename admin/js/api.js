@@ -446,6 +446,70 @@ class AdminAPI {
         });
     }
 
+    // Backup & Restore
+
+    async getBackupStats() {
+        return this.request('/backup/stats');
+    }
+
+    async createBackup(options = {}) {
+        const { includeAttachments = true, includeAuditLog = false, s3Mode = 'full' } = options;
+
+        const response = await fetch(`${this.baseURL}/backup`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ includeAttachments, includeAuditLog, s3Mode })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || `HTTP ${response.status}`);
+        }
+
+        // Return blob for download
+        const blob = await response.blob();
+        const filename = response.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] || 'backup.zip';
+        return { blob, filename };
+    }
+
+    async previewBackup(file) {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch(`${this.baseURL}/backup/preview`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            body: formData
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.message || data.error || `HTTP ${response.status}`);
+        }
+        return data;
+    }
+
+    async restoreBackup(file, confirmation) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('confirmation', confirmation);
+
+        const response = await fetch(`${this.baseURL}/restore`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            body: formData
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.message || data.error || `HTTP ${response.status}`);
+        }
+        return data;
+    }
+
     // Bootstrap methods
     async getBootstrapStatus() {
         // No auth required for bootstrap status

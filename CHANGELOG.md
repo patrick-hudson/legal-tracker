@@ -14,6 +14,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [0.11.7] - 2026-01-09
 
+### Added
+
+- **Full backup and restore functionality**: Comprehensive backup system for all data
+  - Create backup as ZIP archive containing manifest.json, database.json, and attachment files
+  - Backup includes all matters, private notes, attachments (files + metadata), settings, and admin users
+  - Optional audit log backup (excluded by default due to size)
+  - AI settings (Claude API key, model, spice level, custom prompt) excluded from backups for security
+  - S3 storage supports two modes: full backup (downloads files) or references only (metadata only)
+  - Preview uploaded backup before restore to verify contents and see warnings
+  - Restore backup with confirmation ("RESTORE BACKUP") to prevent accidental data loss
+  - Storage backend mismatch handling: filesystem→S3 uploads files, S3→filesystem extracts files
+  - All sessions invalidated after restore, forcing re-login for security
+  - New UI section in Data Management page with Create Backup (blue) and Restore Backup (purple) cards
+  - Progress indicators for backup creation and restore operations
+
 ---
 
 ## [0.11.6] - 2026-01-09

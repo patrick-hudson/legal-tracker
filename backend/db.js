@@ -489,6 +489,27 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
         });
       }
       return [];
+    },
+
+    getAllWithHashes() {
+      // For backup - includes password hashes
+      const result = db.exec('SELECT * FROM admin_users ORDER BY id');
+      if (result.length > 0) {
+        const columns = result[0].columns;
+        return result[0].values.map(row => {
+          const obj = {};
+          columns.forEach((col, i) => {
+            obj[col] = row[i];
+          });
+          return obj;
+        });
+      }
+      return [];
+    },
+
+    getCount() {
+      const result = db.exec('SELECT COUNT(*) as count FROM admin_users');
+      return result[0]?.values[0]?.[0] || 0;
     }
   };
 
@@ -757,6 +778,23 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
       }
       saveDatabase();
       return insertedIds;
+    },
+
+    getAll() {
+      const result = db.exec(`
+        SELECT * FROM private_notes ORDER BY id
+      `);
+      if (result.length > 0) {
+        const columns = result[0].columns;
+        return result[0].values.map(row => {
+          const obj = {};
+          columns.forEach((col, i) => {
+            obj[col] = row[i];
+          });
+          return obj;
+        });
+      }
+      return [];
     }
   };
 
@@ -879,6 +917,28 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
 
     getTotalSize() {
       const result = db.exec('SELECT SUM(size_bytes) as total FROM matter_attachments');
+      return result[0]?.values[0]?.[0] || 0;
+    },
+
+    getAll() {
+      const result = db.exec(`
+        SELECT * FROM matter_attachments ORDER BY id
+      `);
+      if (result.length > 0) {
+        const columns = result[0].columns;
+        return result[0].values.map(row => {
+          const obj = {};
+          columns.forEach((col, i) => {
+            obj[col] = row[i];
+          });
+          return obj;
+        });
+      }
+      return [];
+    },
+
+    getCount() {
+      const result = db.exec('SELECT COUNT(*) as count FROM matter_attachments');
       return result[0]?.values[0]?.[0] || 0;
     }
   };

@@ -59,6 +59,217 @@ function getSpiceLevelName(level) {
     return names[level] || 'Professional';
 }
 
+// Backup & Restore state
+let backupStats = null;
+let selectedRestoreFile = null;
+let restorePreview = null;
+
+// Format bytes to human-readable size
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Load backup stats
+async function loadBackupStats() {
+    try {
+        backupStats = await api.getBackupStats();
+
+        // Update UI
+        document.getElementById('backup-stats-loading')?.classList.add('hidden');
+        document.getElementById('backup-stats-container')?.classList.remove('hidden');
+
+        document.getElementById('backup-matters-count').textContent = backupStats.counts.matters;
+        document.getElementById('backup-notes-count').textContent = backupStats.counts.private_notes;
+        document.getElementById('backup-attachments-count').textContent = backupStats.counts.attachments;
+        document.getElementById('backup-attachments-size').textContent = formatBytes(backupStats.attachment_total_size);
+        document.getElementById('backup-audit-count').textContent = backupStats.counts.audit_log;
+        document.getElementById('backup-users-count').textContent = backupStats.counts.users;
+
+        // Show S3 options if using S3
+        if (backupStats.storage_backend === 's3') {
+            document.getElementById('backup-s3-options')?.classList.remove('hidden');
+        }
+    } catch (error) {
+        console.error('Failed to load backup stats:', error);
+        document.getElementById('backup-stats-loading').textContent = 'Failed to load backup info';
+    }
+}
+
+// Handle create backup
+async function handleCreateBackup() {
+    const btn = document.getElementById('create-backup-btn');
+    const progressDiv = document.getElementById('backup-progress');
+    const progressBar = document.getElementById('backup-progress-bar');
+    const progressText = document.getElementById('backup-progress-text');
+
+    const includeAttachments = document.getElementById('backup-include-attachments')?.checked ?? true;
+    const includeAuditLog = document.getElementById('backup-include-audit')?.checked ?? false;
+    const s3Mode = document.querySelector('input[name="backup-s3-mode"]:checked')?.value || 'full';
+
+    btn.disabled = true;
+    progressDiv?.classList.remove('hidden');
+    progressBar.style.width = '0%';
+    progressText.textContent = 'Creating backup...';
+
+    // Simulate progress (we don't have real progress from streaming)
+    let progress = 0;
+    const progressInterval = setInterval(() => {
+        progress = Math.min(progress + Math.random() * 10, 90);
+        progressBar.style.width = `${progress}%`;
+    }, 200);
+
+    try {
+        const { blob, filename } = await api.createBackup({
+            includeAttachments,
+            includeAuditLog,
+            s3Mode
+        });
+
+        // Download the file
+        clearInterval(progressInterval);
+        progressBar.style.width = '100%';
+        progressText.textContent = 'Download starting...';
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+        showToast('Backup created successfully', 'success');
+    } catch (error) {
+        console.error('Backup failed:', error);
+        showToast(`Backup failed: ${error.message}`, 'error');
+    } finally {
+        clearInterval(progressInterval);
+        btn.disabled = false;
+        progressDiv?.classList.add('hidden');
+    }
+}
+
+// Handle restore file selection
+async function handleRestoreFileSelected(file) {
+    selectedRestoreFile = file;
+
+    const dropzone = document.getElementById('restore-dropzone');
+    const preview = document.getElementById('restore-preview');
+    const warningsDiv = document.getElementById('restore-warnings');
+
+    dropzone?.classList.add('hidden');
+
+    try {
+        restorePreview = await api.previewBackup(file);
+
+        // Update preview UI
+        const backupDate = new Date(restorePreview.manifest.created_at);
+        document.getElementById('restore-backup-date').textContent =
+            `Backup from: ${backupDate.toLocaleDateString()} ${backupDate.toLocaleTimeString()}`;
+        document.getElementById('restore-backup-version').textContent =
+            `App version: ${restorePreview.manifest.app_version}`;
+
+        document.getElementById('restore-matters-count').textContent = restorePreview.counts.matters;
+        document.getElementById('restore-notes-count').textContent = restorePreview.counts.private_notes;
+        document.getElementById('restore-attachments-count').textContent = restorePreview.counts.attachments;
+        document.getElementById('restore-audit-count').textContent = restorePreview.counts.audit_log_entries;
+        document.getElementById('restore-users-count').textContent = restorePreview.counts.users;
+
+        // Show warnings if any
+        if (restorePreview.warnings && restorePreview.warnings.length > 0) {
+            warningsDiv.innerHTML = restorePreview.warnings.map(w => `
+                <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2 mb-2">
+                    <p class="text-xs text-amber-700 dark:text-amber-300 flex items-center">
+                        <svg class="w-4 h-4 mr-1 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                        </svg>
+                        ${w.message}
+                    </p>
+                </div>
+            `).join('');
+            warningsDiv.classList.remove('hidden');
+        } else {
+            warningsDiv.classList.add('hidden');
+        }
+
+        preview?.classList.remove('hidden');
+        document.getElementById('restore-confirmation').value = '';
+        document.getElementById('restore-backup-btn').disabled = true;
+    } catch (error) {
+        console.error('Preview failed:', error);
+        showToast(`Invalid backup file: ${error.message}`, 'error');
+        dropzone?.classList.remove('hidden');
+        selectedRestoreFile = null;
+    }
+}
+
+// Handle restore backup
+async function handleRestoreBackup() {
+    if (!selectedRestoreFile || !restorePreview) return;
+
+    const btn = document.getElementById('restore-backup-btn');
+    const progressDiv = document.getElementById('restore-progress');
+    const progressBar = document.getElementById('restore-progress-bar');
+    const progressText = document.getElementById('restore-progress-text');
+
+    // Confirm with modal
+    const confirmed = await showConfirm(
+        'Restore Backup',
+        `This will replace ALL existing data with the backup contents. This action cannot be undone.\n\n` +
+        `The backup contains:\n` +
+        `- ${restorePreview.counts.matters} matters\n` +
+        `- ${restorePreview.counts.private_notes} private notes\n` +
+        `- ${restorePreview.counts.attachments} attachments\n` +
+        `- ${restorePreview.counts.users} users\n\n` +
+        `After restore, you will be logged out and redirected to the login page.`,
+        'Restore',
+        'Cancel',
+        'destructive'
+    );
+
+    if (!confirmed) return;
+
+    btn.disabled = true;
+    document.getElementById('restore-cancel-btn').disabled = true;
+    progressDiv?.classList.remove('hidden');
+    progressBar.style.width = '0%';
+    progressText.textContent = 'Restoring backup...';
+
+    // Simulate progress
+    let progress = 0;
+    const progressInterval = setInterval(() => {
+        progress = Math.min(progress + Math.random() * 5, 90);
+        progressBar.style.width = `${progress}%`;
+    }, 300);
+
+    try {
+        const result = await api.restoreBackup(selectedRestoreFile, 'RESTORE BACKUP');
+
+        clearInterval(progressInterval);
+        progressBar.style.width = '100%';
+        progressText.textContent = 'Restore complete! Redirecting to login...';
+
+        showToast('Backup restored successfully. Redirecting to login...', 'success');
+
+        // Redirect to login after a short delay
+        setTimeout(() => {
+            window.location.href = '/admin/login.html';
+        }, 2000);
+    } catch (error) {
+        clearInterval(progressInterval);
+        console.error('Restore failed:', error);
+        showToast(`Restore failed: ${error.message}`, 'error');
+        btn.disabled = false;
+        document.getElementById('restore-cancel-btn').disabled = false;
+        progressDiv?.classList.add('hidden');
+    }
+}
+
 export async function renderDataManagement(container) {
     container.innerHTML = '<div class="flex justify-center items-center h-64"><div class="spinner"></div></div>';
 
@@ -267,6 +478,135 @@ export async function renderDataManagement(container) {
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Backup & Restore Section -->
+            <div class="mb-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Create Backup -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border-2 border-blue-500">
+                    <h3 class="text-lg font-semibold text-blue-600 dark:text-blue-500 mb-4 flex items-center">
+                        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z"></path>
+                            <path fill-rule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clip-rule="evenodd"></path>
+                        </svg>
+                        Create Backup
+                    </h3>
+                    <div id="backup-stats-loading" class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                        Loading backup info...
+                    </div>
+                    <div id="backup-stats-container" class="hidden mb-4">
+                        <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                            <p class="text-sm text-blue-800 dark:text-blue-400 font-semibold mb-2">Current Data</p>
+                            <ul class="text-xs text-blue-700 dark:text-blue-300 space-y-1">
+                                <li><span id="backup-matters-count">0</span> matters</li>
+                                <li><span id="backup-notes-count">0</span> private notes</li>
+                                <li><span id="backup-attachments-count">0</span> attachments (<span id="backup-attachments-size">0 MB</span>)</li>
+                                <li><span id="backup-audit-count">0</span> audit log entries</li>
+                                <li><span id="backup-users-count">0</span> users</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="space-y-3">
+                        <label class="flex items-center cursor-pointer">
+                            <input type="checkbox" id="backup-include-attachments" checked class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600">
+                            <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Include attachments</span>
+                        </label>
+                        <label class="flex items-center cursor-pointer">
+                            <input type="checkbox" id="backup-include-audit" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600">
+                            <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Include audit log</span>
+                        </label>
+                        <div id="backup-s3-options" class="hidden">
+                            <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">S3 Backup Mode:</p>
+                            <label class="flex items-center cursor-pointer mb-1">
+                                <input type="radio" name="backup-s3-mode" value="full" checked class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600">
+                                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Full (download files)</span>
+                            </label>
+                            <label class="flex items-center cursor-pointer">
+                                <input type="radio" name="backup-s3-mode" value="references" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600">
+                                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">References only (faster)</span>
+                            </label>
+                        </div>
+                        <button id="create-backup-btn" class="w-full text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg px-4 py-2 text-sm font-semibold flex items-center justify-center">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                            </svg>
+                            Create Backup
+                        </button>
+                        <div id="backup-progress" class="hidden">
+                            <div class="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
+                                <div id="backup-progress-bar" class="bg-blue-600 h-2 rounded-full transition-all" style="width: 0%"></div>
+                            </div>
+                            <p id="backup-progress-text" class="text-xs text-gray-500 dark:text-gray-400 mt-1">Creating backup...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Restore Backup -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 border-2 border-purple-500">
+                    <h3 class="text-lg font-semibold text-purple-600 dark:text-purple-500 mb-4 flex items-center">
+                        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"></path>
+                        </svg>
+                        Restore Backup
+                    </h3>
+                    <div class="space-y-3">
+                        <div id="restore-dropzone" class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center cursor-pointer hover:border-purple-400 dark:hover:border-purple-500 transition-colors">
+                            <svg class="w-10 h-10 mx-auto text-gray-400 dark:text-gray-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                            </svg>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">Drop backup ZIP here or click to select</p>
+                            <input type="file" id="restore-file-input" accept=".zip" class="hidden">
+                        </div>
+
+                        <div id="restore-preview" class="hidden">
+                            <div class="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-3">
+                                <p class="text-sm text-purple-800 dark:text-purple-400 font-semibold mb-2">Backup Contents</p>
+                                <p class="text-xs text-purple-700 dark:text-purple-300" id="restore-backup-date"></p>
+                                <p class="text-xs text-purple-700 dark:text-purple-300 mb-2" id="restore-backup-version"></p>
+                                <ul class="text-xs text-purple-700 dark:text-purple-300 space-y-1">
+                                    <li><span id="restore-matters-count">0</span> matters</li>
+                                    <li><span id="restore-notes-count">0</span> private notes</li>
+                                    <li><span id="restore-attachments-count">0</span> attachments</li>
+                                    <li><span id="restore-audit-count">0</span> audit log entries</li>
+                                    <li><span id="restore-users-count">0</span> users</li>
+                                </ul>
+                            </div>
+
+                            <div id="restore-warnings" class="hidden mt-3">
+                            </div>
+
+                            <div class="mt-3">
+                                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    Confirmation required: type <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-purple-600 dark:text-purple-400 font-mono text-xs">RESTORE BACKUP</code>
+                                </label>
+                                <input
+                                    type="text"
+                                    id="restore-confirmation"
+                                    placeholder="RESTORE BACKUP"
+                                    autocomplete="off"
+                                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-purple-500 focus:border-purple-500">
+                            </div>
+
+                            <button id="restore-backup-btn" class="w-full mt-3 text-white bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg px-4 py-2 text-sm font-semibold flex items-center justify-center" disabled>
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                </svg>
+                                Restore Backup
+                            </button>
+
+                            <button id="restore-cancel-btn" class="w-full mt-2 text-gray-700 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-300 dark:hover:bg-gray-500 rounded-lg px-4 py-2 text-xs">
+                                Cancel
+                            </button>
+                        </div>
+
+                        <div id="restore-progress" class="hidden">
+                            <div class="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
+                                <div id="restore-progress-bar" class="bg-purple-600 h-2 rounded-full transition-all" style="width: 0%"></div>
+                            </div>
+                            <p id="restore-progress-text" class="text-xs text-gray-500 dark:text-gray-400 mt-1">Restoring backup...</p>
                         </div>
                     </div>
                 </div>
@@ -482,6 +822,62 @@ export async function renderDataManagement(container) {
 }
 
 function setupEventListeners() {
+    // ========== Backup & Restore Section ==========
+
+    // Load backup stats
+    loadBackupStats();
+
+    // Create Backup button
+    document.getElementById('create-backup-btn')?.addEventListener('click', handleCreateBackup);
+
+    // Restore file dropzone and input
+    const dropzone = document.getElementById('restore-dropzone');
+    const fileInput = document.getElementById('restore-file-input');
+
+    dropzone?.addEventListener('click', () => fileInput?.click());
+    dropzone?.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropzone.classList.add('border-purple-500', 'bg-purple-50', 'dark:bg-purple-900/20');
+    });
+    dropzone?.addEventListener('dragleave', () => {
+        dropzone.classList.remove('border-purple-500', 'bg-purple-50', 'dark:bg-purple-900/20');
+    });
+    dropzone?.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('border-purple-500', 'bg-purple-50', 'dark:bg-purple-900/20');
+        const file = e.dataTransfer?.files[0];
+        if (file && file.name.endsWith('.zip')) {
+            handleRestoreFileSelected(file);
+        } else {
+            showToast('Please select a valid ZIP file', 'error');
+        }
+    });
+    fileInput?.addEventListener('change', (e) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            handleRestoreFileSelected(file);
+        }
+    });
+
+    // Restore confirmation input
+    document.getElementById('restore-confirmation')?.addEventListener('input', (e) => {
+        const btn = document.getElementById('restore-backup-btn');
+        if (btn) {
+            btn.disabled = e.target.value !== 'RESTORE BACKUP';
+        }
+    });
+
+    // Restore backup button
+    document.getElementById('restore-backup-btn')?.addEventListener('click', handleRestoreBackup);
+
+    // Cancel restore button
+    document.getElementById('restore-cancel-btn')?.addEventListener('click', () => {
+        document.getElementById('restore-preview')?.classList.add('hidden');
+        document.getElementById('restore-dropzone')?.classList.remove('hidden');
+        document.getElementById('restore-file-input').value = '';
+        selectedRestoreFile = null;
+    });
+
     // ========== Claude API Integration Section ==========
 
     // Toggle API key visibility
