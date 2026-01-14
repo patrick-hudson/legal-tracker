@@ -38,47 +38,47 @@ jobs:
 
     - name: Test Auth
       working-directory: ./backend
-      run: node --test 'test/auth/*.test.js'
+      run: node --test test/auth/*.test.js
       timeout-minutes: 10
 
     - name: Test Matters
       working-directory: ./backend
-      run: node --test 'test/matters/*.test.js'
+      run: node --test test/matters/*.test.js
       timeout-minutes: 5
 
     - name: Test Private Notes
       working-directory: ./backend
-      run: node --test 'test/private-notes/*.test.js'
+      run: node --test test/private-notes/*.test.js
       timeout-minutes: 5
 
     - name: Test Attachments
       working-directory: ./backend
-      run: node --test 'test/attachments/*.test.js'
+      run: node --test test/attachments/*.test.js
       timeout-minutes: 5
 
     - name: Test Audit Log
       working-directory: ./backend
-      run: node --test 'test/audit-log/*.test.js'
+      run: node --test test/audit-log/*.test.js
       timeout-minutes: 5
 
     - name: Test Data Management
       working-directory: ./backend
-      run: node --test 'test/data-management/*.test.js'
+      run: node --test test/data-management/*.test.js
       timeout-minutes: 15
 
     - name: Test Sample Data
       working-directory: ./backend
-      run: node --test 'test/sample-data/*.test.js'
+      run: node --test test/sample-data/*.test.js
       timeout-minutes: 5
 
     - name: Test Security
       working-directory: ./backend
-      run: node --test 'test/security/*.test.js'
+      run: node --test test/security/*.test.js
       timeout-minutes: 5
 
     - name: Test Utils
       working-directory: ./backend
-      run: node --test 'test/utils/*.test.js'
+      run: node --test test/utils/*.test.js
       timeout-minutes: 5
 
     - name: Determine version bump type
