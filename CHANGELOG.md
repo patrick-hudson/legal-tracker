@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+---
+
+## [0.11.10] - 2026-01-14
+
 ### Added
 
 - **Per-type AI spice settings**: Each generation type (Matters, Notes, Attachments, Audit Log) can now have its own spice level
