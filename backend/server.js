@@ -337,6 +337,10 @@ export async function createServer(options = {}) {
     // Helpers
     getClientIP,
 
+    // Watchdog configuration
+    watchdogUrl: `http://localhost:${process.env.WATCHDOG_PORT || 3001}`,
+    watchdogApiKey: process.env.WATCHDOG_API_KEY || process.env.API_KEY || 'watchdog-dev-key',
+
     // Audit logging
     logInfo,
     logError,
