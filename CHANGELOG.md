@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+---
+
+## [0.16.4] - 2026-01-14
+
 ### Fixed
 
 - **Watchdog status showing undefined**: Fixed missing `watchdogUrl` and `watchdogApiKey` in route options after routes extraction refactor
@@ -1334,7 +1338,8 @@ Initial development phase establishing core functionality.
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| Unreleased | - | Fix watchdog status showing undefined |
+| Unreleased | - | |
+| 0.16.4 | 2026-01-14 | Fix watchdog status showing undefined |
 | 0.16.3 | 2026-01-14 | Routes extraction from server.js (90% reduction) |
 | 0.16.2 | 2026-01-14 | Database layer modularized into query objects |
 | 0.16.1 | 2026-01-14 | Version sync release |
