@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **CI runs tests by category with separate steps**: Each test directory now runs in its own collapsible GitHub Actions step
+  - Auth, Matters, Private Notes, Attachments, Audit Log, Data Management, Sample Data, Security, Utils
+  - Individual timeout settings per category prevent cascading failures
+  - Easier to identify which feature area has failing tests
+
 ---
 
 ## [0.12.0] - 2026-01-14
