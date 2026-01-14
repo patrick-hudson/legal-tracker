@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+---
+
+## [0.13.3] - 2026-01-14
+
 ### Added
 
 - **Audit log status indicators**: Shows current log level and API logging status at top of audit log page
