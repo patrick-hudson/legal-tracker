@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **Routes extracted from server.js**: Modularized 5392-line server.js into domain-specific route files
+  - `routes/index.js` - Route registration orchestrator
+  - `routes/public.js` - Public API routes (health, config, version, status, matters)
+  - `routes/admin-static.js` - Admin portal static file serving
+  - `routes/watchdog.js` - Watchdog proxy routes
+  - `routes/bootstrap.js` - Bootstrap token setup
+  - `routes/auth.js` - Login, logout, sessions, password changes
+  - `routes/matters.js` - Matters CRUD and export
+  - `routes/notes.js` - Private notes CRUD
+  - `routes/attachments.js` - Attachment upload/download
+  - `routes/settings.js` - Storage, drain, and AI settings
+  - `routes/users.js` - Admin user management
+  - `routes/api-keys.js` - API key management
+  - `routes/sample-data.js` - Sample data generation
+  - `routes/wipe.js` - Wipe operations
+  - `routes/backup.js` - Backup and restore
+  - `routes/audit-log.js` - Audit log viewing and export
+  - `services/sample-data-service.js` - AI generation logic extracted as service
+  - server.js reduced from 5392 lines to 520 lines (90% reduction)
+
 ---
 
 ## [0.16.2] - 2026-01-14
@@ -1304,7 +1326,16 @@ Initial development phase establishing core functionality.
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| Unreleased | - | |
+| Unreleased | - | Routes extraction from server.js (90% reduction) |
+| 0.16.2 | 2026-01-14 | Database layer modularized into query objects |
+| 0.16.1 | 2026-01-14 | Version sync release |
+| 0.16.0 | 2026-01-14 | Scoped API key permissions, legacy auth system removed |
+| 0.15.0 | 2026-01-14 | Security page restructured into sub-pages |
+| 0.14.0 | 2026-01-14 | Version sync release |
+| 0.13.3 | 2026-01-14 | External API Keys, hybrid auth middleware, audit log status indicators |
+| 0.13.2 | 2026-01-14 | Version sync release |
+| 0.13.1 | 2026-01-14 | S3 presigned URLs, attachment storage debug info |
+| 0.13.0 | 2026-01-14 | Storage migration between filesystem and S3 |
 | 0.12.0 | 2026-01-14 | Unified sample generation with AI optional, per-type spice settings, word bank presets |
 | 0.11.7 | 2026-01-09 | Full backup and restore functionality |
 | 0.11.6 | 2026-01-09 | Attachments column, context-aware notes generation |
