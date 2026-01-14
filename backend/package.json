@@ -1,6 +1,6 @@
 {
   "name": "legal-tracker-backend",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "description": "LEGAL MATTER - Legal Expense Governance Allocation Ledger Management Application for Tracking Time, Expenses, Retainers",
   "main": "server.js",
   "type": "module",
