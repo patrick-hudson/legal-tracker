@@ -314,6 +314,30 @@ class AdminAPI {
         });
     }
 
+    // Per-type AI settings
+    async saveAiSettingsForType(type, { spiceLevel, customPrompt }) {
+        return this.request('/settings/ai/type', {
+            method: 'PUT',
+            body: JSON.stringify({ type, spiceLevel, customPrompt })
+        });
+    }
+
+    // Reset a type's settings to use defaults
+    async resetAiSettingsForType(type) {
+        return this.request('/settings/ai/type', {
+            method: 'PUT',
+            body: JSON.stringify({ type, spiceLevel: '', customPrompt: '' })
+        });
+    }
+
+    // Apply default spice level to all types
+    async applyDefaultToAllTypes() {
+        return this.request('/settings/ai/apply-default-to-all', {
+            method: 'POST',
+            body: JSON.stringify({})
+        });
+    }
+
     // Preview AI descriptions
     async previewAiDescriptions({ count = 5, spiceLevel, customPrompt }) {
         return this.request('/claude/preview-descriptions', {
@@ -441,6 +465,13 @@ class AdminAPI {
 
     async wipeAllData(confirmation) {
         return this.request('/data/wipe', {
+            method: 'POST',
+            body: JSON.stringify({ confirmation })
+        });
+    }
+
+    async wipeAuditLog(confirmation) {
+        return this.request('/data/wipe-audit-log', {
             method: 'POST',
             body: JSON.stringify({ confirmation })
         });

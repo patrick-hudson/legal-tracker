@@ -21,7 +21,16 @@ const EXCLUDED_SETTINGS = [
   'claude_api_key',
   'ai_selected_model',
   'ai_spice_level',
-  'ai_custom_prompt'
+  'ai_custom_prompt',
+  // Per-type AI settings
+  'ai_spice_matters',
+  'ai_spice_notes',
+  'ai_spice_attachments',
+  'ai_spice_audit_log',
+  'ai_prompt_matters',
+  'ai_prompt_notes',
+  'ai_prompt_attachments',
+  'ai_prompt_audit_log'
 ];
 
 /**

@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Per-type AI spice settings**: Each generation type (Matters, Notes, Attachments, Audit Log) can now have its own spice level
+  - New "Per-Type Spice Settings" section in AI Settings page with individual controls
+  - Each type can use the default spice level or have a custom override
+  - Visual indicators show which types have custom settings ("Custom" badge and orange border)
+  - "Apply Default to All" button to set all types to match the current default
+  - "Reset All to Default" button to clear all custom overrides
+  - Individual "reset" links per type to clear specific overrides
+  - Backend `getAiSettingsForType()` helper centralizes settings resolution
+  - New API endpoints: `PUT /admin/api/settings/ai/type` and `POST /admin/api/settings/ai/apply-default-to-all`
+  - Per-type settings excluded from backups (like other AI settings)
+
 ---
 
 ## [0.11.9] - 2026-01-14

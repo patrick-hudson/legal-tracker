@@ -51,7 +51,16 @@ const DEFAULT_APP_SETTINGS = {
   claude_key_validated: 'false',
   claude_model: '',
   ai_spice_level: '1',
-  ai_custom_prompt: ''
+  ai_custom_prompt: '',
+  // Per-type AI settings (null = use default ai_spice_level)
+  ai_spice_matters: '',
+  ai_spice_notes: '',
+  ai_spice_attachments: '',
+  ai_spice_audit_log: '',
+  ai_prompt_matters: '',
+  ai_prompt_notes: '',
+  ai_prompt_attachments: '',
+  ai_prompt_audit_log: ''
   // Note: drain_start_time and last_matter_date are set dynamically to current time
 };
 
@@ -635,6 +644,20 @@ export async function createServer(options = {}) {
   fastify.get('/admin/js/components/:file', async (request, reply) => {
     try {
       const js = serveStaticFile('js/components', request.params.file);
+      // Disable caching for JavaScript files to prevent stale code
+      reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+      reply.header('Pragma', 'no-cache');
+      reply.header('Expires', '0');
+      return reply.type('application/javascript').send(js);
+    } catch (error) {
+      fastify.log.warn({ file: request.params.file, error: error.message }, 'Static file access denied');
+      return reply.code(404).send({ error: 'File not found' });
+    }
+  });
+
+  fastify.get('/admin/js/components/data-management/:file', async (request, reply) => {
+    try {
+      const js = serveStaticFile('js/components/data-management', request.params.file);
       // Disable caching for JavaScript files to prevent stale code
       reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
       reply.header('Pragma', 'no-cache');
@@ -2351,7 +2374,26 @@ export async function createServer(options = {}) {
       aiSettings: {
         selectedModel: settings.claude_model || '',
         spiceLevel: settings.ai_spice_level || '1',
-        customPrompt: settings.ai_custom_prompt || ''
+        customPrompt: settings.ai_custom_prompt || '',
+        // Per-type settings (empty string = use default)
+        perType: {
+          matters: {
+            spiceLevel: settings.ai_spice_matters || '',
+            customPrompt: settings.ai_prompt_matters || ''
+          },
+          notes: {
+            spiceLevel: settings.ai_spice_notes || '',
+            customPrompt: settings.ai_prompt_notes || ''
+          },
+          attachments: {
+            spiceLevel: settings.ai_spice_attachments || '',
+            customPrompt: settings.ai_prompt_attachments || ''
+          },
+          auditLog: {
+            spiceLevel: settings.ai_spice_audit_log || '',
+            customPrompt: settings.ai_prompt_audit_log || ''
+          }
+        }
       }
     };
   });
@@ -2488,7 +2530,7 @@ export async function createServer(options = {}) {
 
   // Save AI settings (model, spice level, custom prompt)
   fastify.put('/admin/api/settings/ai', { preHandler: adminAuthMiddleware }, async (request, reply) => {
-    const { model, spiceLevel, customPrompt } = request.body || {};
+    const { model, spiceLevel, customPrompt, perType } = request.body || {};
 
     if (model !== undefined) {
       settingsDb.set('claude_model', model);
@@ -2500,15 +2542,95 @@ export async function createServer(options = {}) {
       settingsDb.set('ai_custom_prompt', customPrompt);
     }
 
+    // Handle per-type settings
+    if (perType) {
+      const typeKeys = {
+        matters: { spice: 'ai_spice_matters', prompt: 'ai_prompt_matters' },
+        notes: { spice: 'ai_spice_notes', prompt: 'ai_prompt_notes' },
+        attachments: { spice: 'ai_spice_attachments', prompt: 'ai_prompt_attachments' },
+        auditLog: { spice: 'ai_spice_audit_log', prompt: 'ai_prompt_audit_log' }
+      };
+
+      for (const [type, keys] of Object.entries(typeKeys)) {
+        if (perType[type]) {
+          if (perType[type].spiceLevel !== undefined) {
+            settingsDb.set(keys.spice, perType[type].spiceLevel);
+          }
+          if (perType[type].customPrompt !== undefined) {
+            settingsDb.set(keys.prompt, perType[type].customPrompt);
+          }
+        }
+      }
+    }
+
     // Log AI settings change
     logInfoFromRequest(request, {
       actionType: ACTION_TYPES.SETTINGS_CHANGE,
       entityType: ENTITY_TYPES.SETTINGS,
       summary: 'Updated AI settings',
-      details: { model, spiceLevel }
+      details: { model, spiceLevel, hasPerTypeSettings: !!perType }
     });
 
     return { success: true };
+  });
+
+  // Save AI settings for a single type
+  fastify.put('/admin/api/settings/ai/type', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { type, spiceLevel, customPrompt } = request.body || {};
+
+    const typeKeys = {
+      matters: { spice: 'ai_spice_matters', prompt: 'ai_prompt_matters' },
+      notes: { spice: 'ai_spice_notes', prompt: 'ai_prompt_notes' },
+      attachments: { spice: 'ai_spice_attachments', prompt: 'ai_prompt_attachments' },
+      auditLog: { spice: 'ai_spice_audit_log', prompt: 'ai_prompt_audit_log' }
+    };
+
+    const keys = typeKeys[type];
+    if (!keys) {
+      return reply.code(400).send({ error: 'INVALID_TYPE', message: 'Invalid type. Must be: matters, notes, attachments, or auditLog' });
+    }
+
+    if (spiceLevel !== undefined) {
+      settingsDb.set(keys.spice, spiceLevel);
+    }
+    if (customPrompt !== undefined) {
+      settingsDb.set(keys.prompt, customPrompt);
+    }
+
+    // Log per-type AI settings change
+    logInfoFromRequest(request, {
+      actionType: ACTION_TYPES.SETTINGS_CHANGE,
+      entityType: ENTITY_TYPES.SETTINGS,
+      summary: `Updated AI settings for ${type}`,
+      details: { type, spiceLevel, hasCustomPrompt: !!customPrompt }
+    });
+
+    return { success: true, type, spiceLevel, customPrompt };
+  });
+
+  // Apply default spice level to all types
+  fastify.post('/admin/api/settings/ai/apply-default-to-all', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const defaultSpice = settingsDb.get('ai_spice_level') || '1';
+    const defaultPrompt = settingsDb.get('ai_custom_prompt') || '';
+
+    const types = ['matters', 'notes', 'attachments', 'audit_log'];
+    const spiceKeys = ['ai_spice_matters', 'ai_spice_notes', 'ai_spice_attachments', 'ai_spice_audit_log'];
+    const promptKeys = ['ai_prompt_matters', 'ai_prompt_notes', 'ai_prompt_attachments', 'ai_prompt_audit_log'];
+
+    for (let i = 0; i < types.length; i++) {
+      settingsDb.set(spiceKeys[i], defaultSpice);
+      settingsDb.set(promptKeys[i], defaultPrompt);
+    }
+
+    // Log bulk settings change
+    logInfoFromRequest(request, {
+      actionType: ACTION_TYPES.SETTINGS_CHANGE,
+      entityType: ENTITY_TYPES.SETTINGS,
+      summary: 'Applied default AI settings to all types',
+      details: { defaultSpice, hasDefaultPrompt: !!defaultPrompt }
+    });
+
+    return { success: true, appliedSpiceLevel: defaultSpice, appliedToTypes: types };
   });
 
   // Preview AI descriptions (generate without saving)
@@ -2943,6 +3065,35 @@ Return ONLY a JSON array of strings, no other text. Example format:
     return `${year}-${prefix}-${number}`;
   }
 
+  /**
+   * Get AI settings for a specific generation type.
+   * Falls back to default settings if no type-specific override is set.
+   * @param {'matters'|'notes'|'attachments'|'auditLog'} type - The generation type
+   * @param {string|null} overrideSpiceLevel - Optional override from API call
+   * @returns {{ spiceLevel: string, customPrompt: string }}
+   */
+  function getAiSettingsForType(type, overrideSpiceLevel = null) {
+    const typeKeys = {
+      matters: { spice: 'ai_spice_matters', prompt: 'ai_prompt_matters' },
+      notes: { spice: 'ai_spice_notes', prompt: 'ai_prompt_notes' },
+      attachments: { spice: 'ai_spice_attachments', prompt: 'ai_prompt_attachments' },
+      auditLog: { spice: 'ai_spice_audit_log', prompt: 'ai_prompt_audit_log' }
+    };
+
+    const keys = typeKeys[type];
+    const defaultSpice = settingsDb.get('ai_spice_level') || '1';
+    const defaultPrompt = settingsDb.get('ai_custom_prompt') || '';
+
+    // Priority: override > per-type > default
+    const typeSpice = keys ? settingsDb.get(keys.spice) : '';
+    const typePrompt = keys ? settingsDb.get(keys.prompt) : '';
+
+    return {
+      spiceLevel: overrideSpiceLevel || typeSpice || defaultSpice,
+      customPrompt: typePrompt || defaultPrompt
+    };
+  }
+
   // Helper function to generate descriptions using Claude API (with SDK)
   async function generateClaudeDescriptions(count, overrideSpiceLevel = null, context = {}) {
     const claudeApiKey = settingsDb.get('claude_api_key');
@@ -2954,8 +3105,7 @@ Return ONLY a JSON array of strings, no other text. Example format:
 
     try {
       const client = new Anthropic({ apiKey: claudeApiKey });
-      const spiceLevel = overrideSpiceLevel || settingsDb.get('ai_spice_level') || '1';
-      const customPrompt = settingsDb.get('ai_custom_prompt') || '';
+      const { spiceLevel, customPrompt } = getAiSettingsForType('matters', overrideSpiceLevel);
       const prompt = buildDescriptionPrompt(count, spiceLevel, customPrompt);
 
       const response = await callClaudeWithLogging(client, {
@@ -3010,7 +3160,7 @@ Return ONLY a JSON array of strings, no other text. Example format:
     }
 
     const client = new Anthropic({ apiKey: claudeApiKey });
-    const spiceLevel = overrideSpiceLevel || settingsDb.get('ai_spice_level') || '1';
+    const { spiceLevel } = getAiSettingsForType('notes', overrideSpiceLevel);
     const instruction = spiceInstructions[spiceLevel] || spiceInstructions['1'];
 
     // Results map: matterId -> array of notes
@@ -3093,7 +3243,7 @@ Return ONLY a JSON object with matter IDs as keys, each containing an array of n
 
     try {
       const client = new Anthropic({ apiKey: claudeApiKey });
-      const spiceLevel = overrideSpiceLevel || settingsDb.get('ai_spice_level') || '1';
+      const { spiceLevel } = getAiSettingsForType('notes', overrideSpiceLevel);
       const instruction = spiceInstructions[spiceLevel] || spiceInstructions['1'];
 
       const prompt = `Generate ${count} unique internal private notes that lawyers would write about their legal matters. These are internal-only notes not shared with clients.
@@ -3487,7 +3637,8 @@ Return ONLY a JSON array of strings, no other text. Example format:
       if (generateAttachments && createdMatterIds.length > 0) {
         const claudeApiKey = settingsDb.get('claude_api_key');
         const model = settingsDb.get('claude_model');
-        const spiceLevel = parseInt(spiceLevelOverride || settingsDb.get('ai_spice_level') || '1', 10);
+        const { spiceLevel: attachmentsSpice } = getAiSettingsForType('attachments', spiceLevelOverride);
+        const spiceLevel = parseInt(attachmentsSpice, 10);
 
         // Clamp percentage to 0-100
         const pct = Math.max(0, Math.min(100, attachmentsPercentage));
@@ -3846,7 +3997,9 @@ Return ONLY a JSON array of strings, no other text. Example format:
 
         if (claudeApiKey && model) {
           try {
-            const spiceLevel = parseInt(spiceLevelOverride || settingsDb.get('ai_spice_level') || '1', 10);
+            // Use per-type AI settings for audit log
+            const { spiceLevel: auditLogSpice } = getAiSettingsForType('auditLog', spiceLevelOverride);
+            const spiceLevel = parseInt(auditLogSpice, 10);
             const client = new Anthropic({ apiKey: claudeApiKey });
 
             const spiceInstructions = {
@@ -4364,6 +4517,75 @@ Return ONLY a valid JSON array, no other text. Example:
       return reply.code(500).send({
         error: 'SERVER_ERROR',
         message: `Failed to wipe data: ${error.message}`
+      });
+    }
+  });
+
+  // Wipe audit log only - delete all audit log entries
+  fastify.post('/admin/api/data/wipe-audit-log', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { confirmation } = request.body || {};
+
+    // Validate input length
+    try {
+      validateStringLength(confirmation, 'confirmation', INPUT_LIMITS.confirmationString);
+    } catch (error) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: error.message });
+    }
+
+    // Require exact confirmation string
+    if (confirmation !== 'WIPE AUDIT LOG') {
+      return reply.code(400).send({
+        error: 'BAD_REQUEST',
+        message: 'Confirmation string does not match. Please type "WIPE AUDIT LOG" to confirm.'
+      });
+    }
+
+    try {
+      const userId = request.adminUser?.id ?? null;
+      const username = request.adminUser?.username ?? null;
+      const ip = request.ip || 'unknown';
+
+      fastify.log.warn({
+        action: 'WIPE_AUDIT_LOG',
+        user_id: userId,
+        ip_address: ip,
+        timestamp: new Date().toISOString()
+      }, 'Audit log wipe initiated');
+
+      // Count entries before deletion
+      const entryCount = auditLogDb.getCount();
+
+      // Delete all audit log entries
+      auditLogDb.deleteAll();
+
+      fastify.log.info({
+        action: 'WIPE_AUDIT_LOG_COMPLETE',
+        entries_deleted: entryCount
+      }, 'Audit log wipe completed successfully');
+
+      // Log the wipe action (this will be the first new entry)
+      logInfoFromRequest(request, {
+        actionType: ACTION_TYPES.DATA_WIPE,
+        entityType: ENTITY_TYPES.SYSTEM,
+        summary: `Wiped ${entryCount} audit log entries`,
+        details: { entries_deleted: entryCount, scope: 'audit_log_only' }
+      });
+
+      return {
+        success: true,
+        message: `Successfully deleted ${entryCount} audit log entries`,
+        entries_deleted: entryCount
+      };
+    } catch (error) {
+      logErrorFromRequest(request, {
+        error,
+        entityType: ENTITY_TYPES.SYSTEM,
+        summary: 'Failed to wipe audit log'
+      });
+      fastify.log.error({ error: error.message }, 'Failed to wipe audit log');
+      return reply.code(500).send({
+        error: 'SERVER_ERROR',
+        message: `Failed to wipe audit log: ${error.message}`
       });
     }
   });
