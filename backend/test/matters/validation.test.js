@@ -4,17 +4,18 @@
  */
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
-import { createTestServer, createTestAdmin } from '../helpers/setup.js';
+import { setupTestEnvironment, adminPost } from '../helpers/setup.js';
 
 describe('Matters > Validation', () => {
     let server;
     let baseURL;
+    let adminCookie;
 
     before(async () => {
-        const env = await createTestServer();
+        const env = await setupTestEnvironment();
         server = env.server;
         baseURL = env.baseURL;
-        await createTestAdmin(server);
+        adminCookie = env.adminCookie;
     });
 
     after(async () => {
@@ -22,11 +23,11 @@ describe('Matters > Validation', () => {
     });
 
     it('should handle zero cost', async () => {
-        const response = await fetch(`${baseURL}/api/matters`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ note: 'Free matter', cost: 0 })
-        });
+        const response = await adminPost(baseURL, '/matters', {
+            matter_date: new Date().toISOString(),
+            note: 'Free matter',
+            cost: 0
+        }, adminCookie);
 
         assert.strictEqual(response.status, 201);
         const listResponse = await fetch(`${baseURL}/api/matters`);
@@ -37,11 +38,11 @@ describe('Matters > Validation', () => {
 
     it('should handle very large amounts', async () => {
         const largeCost = 999999.99;
-        const response = await fetch(`${baseURL}/api/matters`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ note: 'Large cost', cost: largeCost })
-        });
+        const response = await adminPost(baseURL, '/matters', {
+            matter_date: new Date().toISOString(),
+            note: 'Large cost',
+            cost: largeCost
+        }, adminCookie);
 
         assert.strictEqual(response.status, 201);
         const listResponse = await fetch(`${baseURL}/api/matters`);
@@ -51,11 +52,11 @@ describe('Matters > Validation', () => {
     });
 
     it('should handle fractional cents correctly', async () => {
-        const response = await fetch(`${baseURL}/api/matters`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ note: 'Rounding test', cost: 10.999 })
-        });
+        const response = await adminPost(baseURL, '/matters', {
+            matter_date: new Date().toISOString(),
+            note: 'Rounding test',
+            cost: 10.999
+        }, adminCookie);
 
         assert.strictEqual(response.status, 201);
         const listResponse = await fetch(`${baseURL}/api/matters`);
@@ -65,11 +66,11 @@ describe('Matters > Validation', () => {
     });
 
     it('should reject negative costs', async () => {
-        const response = await fetch(`${baseURL}/api/matters`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ note: 'Negative test', cost: -100 })
-        });
+        const response = await adminPost(baseURL, '/matters', {
+            matter_date: new Date().toISOString(),
+            note: 'Negative test',
+            cost: -100
+        }, adminCookie);
 
         assert.strictEqual(response.status, 201);
         const listResponse = await fetch(`${baseURL}/api/matters`);
@@ -79,11 +80,10 @@ describe('Matters > Validation', () => {
     });
 
     it('should handle missing optional fields', async () => {
-        const response = await fetch(`${baseURL}/api/matters`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ note: 'No cost field' })
-        });
+        const response = await adminPost(baseURL, '/matters', {
+            matter_date: new Date().toISOString(),
+            note: 'No cost field'
+        }, adminCookie);
 
         assert.strictEqual(response.status, 201);
         const listResponse = await fetch(`${baseURL}/api/matters`);

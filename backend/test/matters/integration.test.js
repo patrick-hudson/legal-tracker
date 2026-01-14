@@ -63,18 +63,21 @@ describe('Comprehensive E2E Tests (Isolated)', () => {
         cost: 1234.56
       };
 
-      // Create
-      const createRes = await fetch(`${baseURL}/api/matters`, {
+      // Create via admin API
+      const createRes = await fetch(`${baseURL}/admin/api/matters`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
         body: JSON.stringify(testData)
       });
 
       assert.strictEqual(createRes.status, 201);
       const createData = await createRes.json();
-      assert.ok(createData.id);
+      assert.ok(createData.matter?.id || createData.id);
 
-      // Retrieve
+      // Retrieve via public API (still works)
       const listRes = await fetch(`${baseURL}/api/matters`);
       const matters = await listRes.json();
 
@@ -84,24 +87,35 @@ describe('Comprehensive E2E Tests (Isolated)', () => {
     });
 
     it('should update single matter and verify changes', async () => {
-      // Create initial matter
-      const createRes = await fetch(`${baseURL}/api/matters`, {
+      // Create initial matter via admin API
+      const createRes = await fetch(`${baseURL}/admin/api/matters`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ note: 'Original', cost: 100 })
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
+        body: JSON.stringify({
+          matter_date: new Date().toISOString(),
+          note: 'Original',
+          cost: 100
+        })
       });
-      const { id } = await createRes.json();
+      const createData = await createRes.json();
+      const id = createData.matter?.id || createData.id;
 
-      // Update
-      const updateRes = await fetch(`${baseURL}/api/matters/${id}`, {
+      // Update via admin API
+      const updateRes = await fetch(`${baseURL}/admin/api/matters/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
         body: JSON.stringify({ note: 'Updated', cost: 200.50 })
       });
 
       assert.strictEqual(updateRes.status, 200);
 
-      // Verify
+      // Verify via public API
       const listRes = await fetch(`${baseURL}/api/matters`);
       const matters = await listRes.json();
 
@@ -110,22 +124,31 @@ describe('Comprehensive E2E Tests (Isolated)', () => {
     });
 
     it('should delete single matter', async () => {
-      // Create
-      const createRes = await fetch(`${baseURL}/api/matters`, {
+      // Create via admin API
+      const createRes = await fetch(`${baseURL}/admin/api/matters`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ note: 'To delete', cost: 50 })
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
+        body: JSON.stringify({
+          matter_date: new Date().toISOString(),
+          note: 'To delete',
+          cost: 50
+        })
       });
-      const { id } = await createRes.json();
+      const createData = await createRes.json();
+      const id = createData.matter?.id || createData.id;
 
-      // Delete
-      const deleteRes = await fetch(`${baseURL}/api/matters/${id}`, {
-        method: 'DELETE'
+      // Delete via admin API
+      const deleteRes = await fetch(`${baseURL}/admin/api/matters/${id}`, {
+        method: 'DELETE',
+        headers: { 'Cookie': adminCookie }
       });
 
       assert.strictEqual(deleteRes.status, 200);
 
-      // Verify gone
+      // Verify gone via public API
       const listRes = await fetch(`${baseURL}/api/matters`);
       const matters = await listRes.json();
 
@@ -191,9 +214,12 @@ describe('Comprehensive E2E Tests (Isolated)', () => {
       const allMatters = await listRes.json();
       const idsToDelete = allMatters.slice(0, 5).map(inc => inc.id);
 
-      // Bulk delete (delete one by one for now, since we don't have bulk delete endpoint)
+      // Bulk delete via admin API
       for (const id of idsToDelete) {
-        await fetch(`${baseURL}/api/matters/${id}`, { method: 'DELETE' });
+        await fetch(`${baseURL}/admin/api/matters/${id}`, {
+          method: 'DELETE',
+          headers: { 'Cookie': adminCookie }
+        });
       }
 
       // Verify only 5 remain
@@ -241,10 +267,17 @@ describe('Comprehensive E2E Tests (Isolated)', () => {
 
     testCases.forEach(({ name, input, expected }) => {
       it(`should handle ${name}: $${input} → $${expected}`, async () => {
-        const response = await fetch(`${baseURL}/api/matters`, {
+        const response = await fetch(`${baseURL}/admin/api/matters`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ note: name, cost: input })
+          headers: {
+            'Content-Type': 'application/json',
+            'Cookie': adminCookie
+          },
+          body: JSON.stringify({
+            matter_date: new Date().toISOString(),
+            note: name,
+            cost: input
+          })
         });
 
         assert.strictEqual(response.status, 201);
@@ -266,13 +299,20 @@ describe('Comprehensive E2E Tests (Isolated)', () => {
       const ids = [];
 
       for (const cost of costs) {
-        const res = await fetch(`${baseURL}/api/matters`, {
+        const res = await fetch(`${baseURL}/admin/api/matters`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ note: `Cost ${cost}`, cost })
+          headers: {
+            'Content-Type': 'application/json',
+            'Cookie': adminCookie
+          },
+          body: JSON.stringify({
+            matter_date: new Date().toISOString(),
+            note: `Cost ${cost}`,
+            cost
+          })
         });
         const data = await res.json();
-        ids.push(data.id);
+        ids.push(data.matter?.id || data.id);
       }
 
       // Check total
@@ -285,9 +325,15 @@ describe('Comprehensive E2E Tests (Isolated)', () => {
         `Total should be ${expectedTotal}, got ${status.lifetime_spent}`
       );
 
-      // Delete first 2 matters
-      await fetch(`${baseURL}/api/matters/${ids[0]}`, { method: 'DELETE' });
-      await fetch(`${baseURL}/api/matters/${ids[1]}`, { method: 'DELETE' });
+      // Delete first 2 matters via admin API
+      await fetch(`${baseURL}/admin/api/matters/${ids[0]}`, {
+        method: 'DELETE',
+        headers: { 'Cookie': adminCookie }
+      });
+      await fetch(`${baseURL}/admin/api/matters/${ids[1]}`, {
+        method: 'DELETE',
+        headers: { 'Cookie': adminCookie }
+      });
 
       // Verify count decreased
       const listRes = await fetch(`${baseURL}/api/matters`);
@@ -296,10 +342,13 @@ describe('Comprehensive E2E Tests (Isolated)', () => {
     });
 
     it('should handle days_since calculation correctly', async () => {
-      // Create matter in the past
-      await fetch(`${baseURL}/api/matters`, {
+      // Create matter in the past via admin API
+      await fetch(`${baseURL}/admin/api/matters`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
         body: JSON.stringify({
           matter_date: '2024-01-01T00:00:00.000Z',
           note: 'Old matter',
@@ -307,11 +356,15 @@ describe('Comprehensive E2E Tests (Isolated)', () => {
         })
       });
 
-      // Create recent matter
-      await fetch(`${baseURL}/api/matters`, {
+      // Create recent matter via admin API
+      await fetch(`${baseURL}/admin/api/matters`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': adminCookie
+        },
         body: JSON.stringify({
+          matter_date: new Date().toISOString(),
           note: 'New matter',
           cost: 50
         })
@@ -503,12 +556,15 @@ describe('Comprehensive E2E Tests (Isolated)', () => {
       let allMatters = await listRes.json();
       assert.strictEqual(allMatters.length, 30);
 
-      // Step 3: Update 5 random matters
+      // Step 3: Update 5 random matters via admin API
       for (let i = 0; i < 5; i++) {
         const matter = allMatters[i * 6]; // Every 6th
-        await fetch(`${baseURL}/api/matters/${matter.id}`, {
+        await fetch(`${baseURL}/admin/api/matters/${matter.id}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Cookie': adminCookie
+          },
           body: JSON.stringify({ note: `UPDATED ${matter.note}`, cost: matter.cost + 100 })
         });
       }
@@ -534,9 +590,12 @@ describe('Comprehensive E2E Tests (Isolated)', () => {
       assert.strictEqual(page2.matters.length, 10);
       assert.strictEqual(page3.matters.length, 10);
 
-      // Step 6: Delete 10 matters
+      // Step 6: Delete 10 matters via admin API
       for (let i = 0; i < 10; i++) {
-        await fetch(`${baseURL}/api/matters/${allMatters[i].id}`, { method: 'DELETE' });
+        await fetch(`${baseURL}/admin/api/matters/${allMatters[i].id}`, {
+          method: 'DELETE',
+          headers: { 'Cookie': adminCookie }
+        });
       }
 
       // Step 7: Verify final state

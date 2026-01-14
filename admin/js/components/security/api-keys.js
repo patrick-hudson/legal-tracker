@@ -8,13 +8,19 @@ import { showConfirm } from '../../modal.js';
 import { formatDate, formatRelativeTime, escapeHtml, showToast } from './shared.js';
 
 let apiKeys = [];
+let scopesConfig = null;
 
 export async function renderApiKeys(container) {
     container.innerHTML = '<div class="flex justify-center items-center h-64"><div class="spinner"></div></div>';
 
     try {
-        const keysResponse = await api.getApiKeys();
+        // Fetch keys and scopes config in parallel
+        const [keysResponse, scopesResponse] = await Promise.all([
+            api.getApiKeys(),
+            api.getApiKeyScopes()
+        ]);
         apiKeys = keysResponse.keys || [];
+        scopesConfig = scopesResponse;
 
         container.innerHTML = `
             <div class="mb-4">
@@ -53,7 +59,7 @@ export async function renderApiKeys(container) {
                 <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
                     <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
                     <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
-                    <div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                    <div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full max-h-[90vh] overflow-y-auto">
                         <div class="px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                             <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Create New API Key</h3>
                             <form id="create-api-key-form" class="space-y-4">
@@ -70,6 +76,19 @@ export async function renderApiKeys(container) {
                                         <option value="90">90 days</option>
                                         <option value="365">1 year</option>
                                     </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Permissions</label>
+                                    <select name="preset" id="preset-select" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                        ${renderPresetOptions()}
+                                    </select>
+                                    <p id="preset-description" class="mt-1 text-xs text-gray-500 dark:text-gray-400">${scopesConfig?.presets?.['full-admin']?.description || 'Full admin access (all permissions)'}</p>
+                                </div>
+                                <div id="custom-scopes-container" class="hidden">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Custom Permissions</label>
+                                    <div class="max-h-64 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-lg p-3 space-y-3">
+                                        ${renderScopesCheckboxes()}
+                                    </div>
                                 </div>
                             </form>
                         </div>
@@ -102,6 +121,7 @@ export async function renderApiKeys(container) {
                                     <input type="text" id="new-key-value" readonly class="font-mono bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                                     <button id="copy-new-key" class="px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm dark:bg-gray-600 dark:text-white">Copy</button>
                                 </div>
+                                <p class="text-sm text-gray-600 dark:text-gray-400">Permissions: <span id="new-key-permissions" class="font-medium text-gray-900 dark:text-white">Full Admin</span></p>
                                 <div class="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
                                     <p class="text-sm text-yellow-800 dark:text-yellow-200 font-medium">Copy this key now. You won't be able to see it again.</p>
                                 </div>
@@ -126,6 +146,51 @@ export async function renderApiKeys(container) {
     }
 }
 
+function renderPresetOptions() {
+    if (!scopesConfig?.presets) {
+        return '<option value="full-admin" selected>Full Admin</option>';
+    }
+    return Object.entries(scopesConfig.presets).map(([key, preset]) => {
+        const selected = key === 'full-admin' ? 'selected' : '';
+        return `<option value="${key}" ${selected}>${escapeHtml(preset.name)}</option>`;
+    }).join('') + '<option value="custom">Custom...</option>';
+}
+
+function updatePresetDescription(preset) {
+    const descEl = document.getElementById('preset-description');
+    if (descEl && scopesConfig?.presets?.[preset]) {
+        descEl.textContent = scopesConfig.presets[preset].description;
+    }
+}
+
+function renderScopesCheckboxes() {
+    if (!scopesConfig?.grouped) {
+        return '<p class="text-sm text-gray-500">Loading...</p>';
+    }
+    return Object.entries(scopesConfig.grouped).map(([group, scopes]) => {
+        const scopeCheckboxes = Object.entries(scopes).map(([scope, description]) => {
+            const isAdminFull = scope === 'admin:full';
+            return `
+                <label class="flex items-start gap-2 ${isAdminFull ? 'hidden' : ''}">
+                    <input type="checkbox" name="scopes" value="${scope}" class="mt-0.5 w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded dark:bg-gray-600 dark:border-gray-500">
+                    <span class="text-sm">
+                        <span class="font-medium text-gray-900 dark:text-white">${escapeHtml(scope)}</span>
+                        <span class="text-gray-500 dark:text-gray-400">- ${escapeHtml(description)}</span>
+                    </span>
+                </label>
+            `;
+        }).join('');
+        return `
+            <div>
+                <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">${escapeHtml(group)}</h4>
+                <div class="space-y-1 pl-2">
+                    ${scopeCheckboxes}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
 function renderApiKeysTable(keys) {
     if (!keys || keys.length === 0) {
         return `
@@ -147,12 +212,20 @@ function renderApiKeysTable(keys) {
                            'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
         const statusText = isRevoked ? 'Revoked' : isExpired ? 'Expired' : 'Active';
 
+        // Render scopes display with tooltip
+        const scopesDisplay = key.scopes_display || 'Full Admin';
+        const scopesTooltip = Array.isArray(key.scopes) ? key.scopes.join(', ') : '';
+        const scopesHtml = scopesTooltip && scopesTooltip !== 'admin:full'
+            ? `<span class="cursor-help border-b border-dotted border-gray-400" title="${escapeHtml(scopesTooltip)}">${escapeHtml(scopesDisplay)}</span>`
+            : escapeHtml(scopesDisplay);
+
         return `
             <tr class="border-b dark:border-gray-700 ${isRevoked ? 'opacity-50' : ''}">
                 <td class="px-4 py-3">
                     <div class="font-medium text-gray-900 dark:text-white">${escapeHtml(key.name)}</div>
                     <div class="text-xs text-gray-500 dark:text-gray-400 font-mono">${key.key_prefix}...</div>
                 </td>
+                <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">${scopesHtml}</td>
                 <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">${formatDate(key.created_at)}</td>
                 <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">${key.last_used_at ? formatRelativeTime(key.last_used_at) : 'Never'}</td>
                 <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">${key.expires_at ? formatDate(key.expires_at) : 'Never'}</td>
@@ -172,6 +245,7 @@ function renderApiKeysTable(keys) {
                 <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
                     <tr>
                         <th class="px-4 py-3">Name</th>
+                        <th class="px-4 py-3">Permissions</th>
                         <th class="px-4 py-3">Created</th>
                         <th class="px-4 py-3">Last Used</th>
                         <th class="px-4 py-3">Expires</th>
@@ -197,6 +271,25 @@ function setupEventListeners() {
     document.getElementById('cancel-create-key')?.addEventListener('click', () => {
         document.getElementById('create-api-key-modal').classList.add('hidden');
         document.getElementById('create-api-key-form').reset();
+        document.getElementById('custom-scopes-container')?.classList.add('hidden');
+        document.getElementById('preset-select').value = 'full-admin';
+        updatePresetDescription('full-admin');
+    });
+
+    // Preset selection change
+    document.getElementById('preset-select')?.addEventListener('change', (e) => {
+        const preset = e.target.value;
+        const customContainer = document.getElementById('custom-scopes-container');
+
+        if (preset === 'custom') {
+            customContainer?.classList.remove('hidden');
+            document.getElementById('preset-description').textContent = 'Select individual permissions below';
+        } else {
+            customContainer?.classList.add('hidden');
+            updatePresetDescription(preset);
+            // Uncheck all custom checkboxes
+            document.querySelectorAll('input[name="scopes"]').forEach(cb => cb.checked = false);
+        }
     });
 
     // Create API key form submission
@@ -206,16 +299,37 @@ function setupEventListeners() {
         const name = formData.get('name');
         const expiresValue = formData.get('expires');
         const expiresInDays = expiresValue ? parseInt(expiresValue, 10) : null;
+        const preset = formData.get('preset');
+
+        // Get scopes based on preset or custom selection
+        let scopeOptions = {};
+        if (preset === 'custom') {
+            const selectedScopes = formData.getAll('scopes');
+            if (selectedScopes.length === 0) {
+                showToast('Please select at least one permission', 'error');
+                return;
+            }
+            scopeOptions = { scopes: selectedScopes };
+        } else {
+            scopeOptions = { preset };
+        }
 
         try {
-            const response = await api.createApiKey(name, expiresInDays);
+            const response = await api.createApiKey(name, expiresInDays, scopeOptions);
 
             // Hide create modal
             document.getElementById('create-api-key-modal').classList.add('hidden');
             e.target.reset();
+            document.getElementById('custom-scopes-container')?.classList.add('hidden');
+            document.getElementById('preset-select').value = 'full-admin';
+            updatePresetDescription('full-admin');
 
-            // Show key created modal
+            // Update key created modal to show permissions
             document.getElementById('new-key-value').value = response.key.key;
+            const permissionsDisplay = document.getElementById('new-key-permissions');
+            if (permissionsDisplay) {
+                permissionsDisplay.textContent = response.key.scopes_display || 'Full Admin';
+            }
             document.getElementById('key-created-modal').classList.remove('hidden');
 
             // Refresh the keys list

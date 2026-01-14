@@ -1,5 +1,6 @@
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
+import { hasScope, getRouteScope } from './scopes.js';
 
 /**
  * Admin Authentication Module
@@ -8,6 +9,7 @@ import crypto from 'crypto';
  * - Password hashing with bcrypt (12 rounds)
  * - Token generation and verification
  * - Admin authentication middleware
+ * - Scope-based access control for API keys
  */
 
 const SALT_ROUNDS = 12;
@@ -37,14 +39,6 @@ export async function verifyPassword(password, hash) {
  */
 export function generateTokenId() {
   return crypto.randomBytes(16).toString('hex');
-}
-
-/**
- * Generate API key (legacy - for env API_KEY)
- * @returns {string} Random hex string (32 bytes = 64 chars)
- */
-export function generateApiKey() {
-  return crypto.randomBytes(32).toString('hex');
 }
 
 // API Key constants
@@ -197,6 +191,7 @@ export function createHybridAuthMiddleware(adminSessionsDb, adminUsersDb, apiKey
       request.authMethod = 'api-key';
       request.apiKeyId = result.apiKeyId;
       request.apiKeyName = result.apiKeyName;
+      request.apiKeyScopes = result.scopes;
 
       // Update last_used_at for the API key
       apiKeysDb.updateLastUsed(result.apiKeyId);
@@ -234,6 +229,7 @@ export function createHybridAuthMiddleware(adminSessionsDb, adminUsersDb, apiKey
         email: user.email
       };
       request.authMethod = 'session';
+      request.apiKeyScopes = ['admin:full']; // Session auth = full access
 
     } catch (err) {
       return reply.code(401).send({
@@ -241,6 +237,80 @@ export function createHybridAuthMiddleware(adminSessionsDb, adminUsersDb, apiKey
         message: 'Invalid or missing authentication token'
       });
     }
+  };
+}
+
+/**
+ * Create scope validation middleware for Fastify
+ * Used after authentication to check if the request has the required scope
+ *
+ * @param {string} requiredScope - The scope required for this route
+ * @returns {Function} Fastify middleware function
+ */
+export function requireScope(requiredScope) {
+  return async function scopeMiddleware(request, reply) {
+    // Session auth (browser) = full access
+    if (request.authMethod === 'session') {
+      return; // Allow
+    }
+
+    // API key auth = check scopes
+    if (request.authMethod === 'api-key') {
+      const keyScopes = request.apiKeyScopes || [];
+
+      if (hasScope(keyScopes, requiredScope)) {
+        return; // Allow
+      }
+
+      return reply.code(403).send({
+        error: 'INSUFFICIENT_PERMISSIONS',
+        message: 'Insufficient permissions',
+        required: requiredScope,
+        hint: `This API key needs the '${requiredScope}' scope`
+      });
+    }
+
+    // No auth method - should not happen if auth middleware ran
+    return reply.code(401).send({
+      error: 'UNAUTHORIZED',
+      message: 'Authentication required'
+    });
+  };
+}
+
+/**
+ * Create automatic scope validation middleware
+ * Looks up the required scope based on method and path
+ *
+ * @returns {Function} Fastify middleware function
+ */
+export function autoRequireScope() {
+  return async function autoScopeMiddleware(request, reply) {
+    // Session auth = full access
+    if (request.authMethod === 'session') {
+      return;
+    }
+
+    // Get required scope for this route
+    const requiredScope = getRouteScope(request.method, request.url.split('?')[0]);
+
+    // No scope defined = allow (backwards compatibility)
+    if (!requiredScope) {
+      return;
+    }
+
+    // Check scope
+    const keyScopes = request.apiKeyScopes || [];
+    if (hasScope(keyScopes, requiredScope)) {
+      return;
+    }
+
+    return reply.code(403).send({
+      error: 'INSUFFICIENT_PERMISSIONS',
+      message: 'Insufficient permissions',
+      required: requiredScope,
+      hint: `This API key needs the '${requiredScope}' scope`
+    });
   };
 }
 
@@ -333,11 +403,22 @@ async function validateApiKeyAuth(key, apiKeysDb, adminUsersDb) {
         };
       }
 
+      // Parse scopes from database (stored as JSON string)
+      let scopes = ['admin:full']; // Default to full access for backwards compatibility
+      if (candidate.scopes) {
+        try {
+          scopes = JSON.parse(candidate.scopes);
+        } catch {
+          // If parsing fails, default to full access
+        }
+      }
+
       return {
         valid: true,
         user: user,
         apiKeyId: candidate.id,
-        apiKeyName: candidate.name
+        apiKeyName: candidate.name,
+        scopes: scopes
       };
     }
   }

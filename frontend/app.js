@@ -3,7 +3,10 @@
 
 import { showAlert, showConfirm } from './modal.js';
 
+// Public API for read-only operations (no auth required)
 const API_BASE = window.location.origin + '/api';
+// Admin API for write operations (requires session cookie from admin login)
+const ADMIN_API_BASE = window.location.origin + '/admin/api';
 
 // ============ Display Utilities ============
 // Safe formatting helpers for consistent display
@@ -360,11 +363,22 @@ async function fetchStatus() {
     state.drainRateCents = DISPLAY.safeNumber(data.drain_rate_cents_per_second) ?? 50;
     state.stats = data.stats ?? { total_matters: 0, matters_this_year: 0, max_streak: 0 };
     state.currentIP = data.your_ip;
-    state.isAuthorized = true; // We'll find out on write attempts
 
     return data;
   } catch (err) {
     console.error('Failed to fetch status:', err);
+  }
+}
+
+async function checkAuthStatus() {
+  try {
+    const res = await fetch(`${ADMIN_API_BASE}/auth/validate`, {
+      credentials: 'same-origin'
+    });
+    const data = await res.json();
+    state.isAuthorized = data.valid === true;
+  } catch (err) {
+    state.isAuthorized = false;
   }
 }
 
@@ -395,8 +409,9 @@ async function fetchVersion() {
 
 async function logMatter(matterDate, note, cost) {
   try {
-    const res = await fetch(`${API_BASE}/matters`, {
+    const res = await fetch(`${ADMIN_API_BASE}/matters`, {
       method: 'POST',
+      credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         matter_date: matterDate || new Date().toISOString(),
@@ -405,7 +420,7 @@ async function logMatter(matterDate, note, cost) {
       })
     });
 
-    if (res.status === 403) {
+    if (res.status === 401 || res.status === 403) {
       state.authError = true;
       state.isAuthorized = false;
       render();
@@ -424,10 +439,14 @@ async function logMatter(matterDate, note, cost) {
 
 async function deleteMatter(id) {
   try {
-    const res = await fetch(`${API_BASE}/matters/${id}`, { method: 'DELETE' });
+    const res = await fetch(`${ADMIN_API_BASE}/matters/${id}`, {
+      method: 'DELETE',
+      credentials: 'same-origin'
+    });
 
-    if (res.status === 403) {
+    if (res.status === 401 || res.status === 403) {
       state.authError = true;
+      state.isAuthorized = false;
       render();
       setTimeout(() => { state.authError = false; render(); }, 3000);
       return false;
@@ -444,14 +463,16 @@ async function deleteMatter(id) {
 
 async function updateDrainSettings(enabled, rateCents) {
   try {
-    const res = await fetch(`${API_BASE}/settings/drain`, {
-      method: 'POST',
+    const res = await fetch(`${ADMIN_API_BASE}/settings/drain`, {
+      method: 'PUT',
+      credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ enabled, rate_cents: rateCents })
     });
 
-    if (res.status === 403) {
+    if (res.status === 401 || res.status === 403) {
       state.authError = true;
+      state.isAuthorized = false;
       render();
       setTimeout(() => { state.authError = false; render(); }, 3000);
       return false;
@@ -467,14 +488,16 @@ async function updateDrainSettings(enabled, rateCents) {
 
 async function updateLifetimeSpent(amount, add = false) {
   try {
-    const res = await fetch(`${API_BASE}/settings/lifetime-spent`, {
-      method: 'POST',
+    const res = await fetch(`${ADMIN_API_BASE}/settings/lifetime-spent`, {
+      method: 'PUT',
+      credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ amount, add })
     });
 
-    if (res.status === 403) {
+    if (res.status === 401 || res.status === 403) {
       state.authError = true;
+      state.isAuthorized = false;
       render();
       setTimeout(() => { state.authError = false; render(); }, 3000);
       return false;
@@ -492,14 +515,16 @@ async function updateLifetimeSpent(amount, add = false) {
 
 async function setLastMatterDate(date) {
   try {
-    const res = await fetch(`${API_BASE}/settings/last-matter-date`, {
-      method: 'POST',
+    const res = await fetch(`${ADMIN_API_BASE}/settings/last-matter-date`, {
+      method: 'PUT',
+      credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ date })
     });
 
-    if (res.status === 403) {
+    if (res.status === 401 || res.status === 403) {
       state.authError = true;
+      state.isAuthorized = false;
       render();
       setTimeout(() => { state.authError = false; render(); }, 3000);
       return false;
@@ -1491,7 +1516,7 @@ function applyTheme() {
 
 async function init() {
   applyTheme();
-  await Promise.all([fetchStatus(), fetchMatters(), fetchVersion()]);
+  await Promise.all([fetchStatus(), fetchMatters(), fetchVersion(), checkAuthStatus()]);
   state.pageLoadTime = Math.round(performance.now() - pageLoadStart);
   state.isLoading = false;
   render();

@@ -4,17 +4,18 @@
  */
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
-import { createTestServer, createTestAdmin } from '../helpers/setup.js';
+import { setupTestEnvironment, adminPost } from '../helpers/setup.js';
 
 describe('Matters > Data Consistency', () => {
     let server;
     let baseURL;
+    let adminCookie;
 
     before(async () => {
-        const env = await createTestServer();
+        const env = await setupTestEnvironment();
         server = env.server;
         baseURL = env.baseURL;
-        await createTestAdmin(server);
+        adminCookie = env.adminCookie;
     });
 
     after(async () => {
@@ -27,11 +28,11 @@ describe('Matters > Data Consistency', () => {
         const initialSpent = initialData.lifetime_spent;
 
         const testCost = 123.45;
-        await fetch(`${baseURL}/api/matters`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ note: 'Consistency test', cost: testCost })
-        });
+        await adminPost(baseURL, '/matters', {
+            matter_date: new Date().toISOString(),
+            note: 'Consistency test',
+            cost: testCost
+        }, adminCookie);
 
         const updatedResponse = await fetch(`${baseURL}/api/status`);
         const updatedData = await updatedResponse.json();
@@ -47,11 +48,11 @@ describe('Matters > Data Consistency', () => {
     });
 
     it('should update days_since when matter is created', async () => {
-        const response = await fetch(`${baseURL}/api/matters`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ note: 'Days reset test', cost: 50 })
-        });
+        const response = await adminPost(baseURL, '/matters', {
+            matter_date: new Date().toISOString(),
+            note: 'Days reset test',
+            cost: 50
+        }, adminCookie);
 
         assert.strictEqual(response.status, 201);
 

@@ -6,6 +6,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Scoped permissions for External API Keys**: Granular access control for programmatic API access
+  - Permission presets: Read Only, Limited Write, Write, Full Admin
+  - 25+ individual scopes for fine-grained control (e.g., `matters:read`, `notes:write`, `audit:read`)
+  - Scope selection UI in API key creation modal (preset dropdown or custom checkboxes)
+  - Permissions column in API keys table with tooltip showing individual scopes
+  - `admin:full` scope grants unrestricted access (default for existing keys)
+  - Session-based auth (browser) bypasses scope checks (full access)
+
+- **Automatic scope validation on admin API routes**: Requests checked against key permissions
+  - Returns 403 with helpful error: `"This API key needs the 'matters:delete' scope"`
+  - Route-to-scope mapping for all `/admin/api/*` endpoints
+  - Backwards compatible: existing keys default to `admin:full`
+
+### Changed
+
+- **Public frontend now uses admin API for write operations**: Manual entry from public display requires admin session
+  - Writes now authenticated via same-origin cookie (must be logged into admin panel)
+  - Read operations remain public and unauthenticated
+
+### Removed
+
+- **Legacy API write endpoints removed** (`POST/PUT/DELETE /api/matters`, `POST /api/settings/*`)
+  - Use External API Keys with `/admin/api/*` endpoints instead
+  - New admin endpoints added: `PUT /admin/api/settings/drain`, `PUT /admin/api/settings/lifetime-spent`, `PUT /admin/api/settings/last-matter-date`
+
+- **Legacy authentication system removed**: Environment-based API key and IP whitelist no longer supported
+  - Removed environment variables: `REQUIRE_AUTH`, `ALLOWED_IPS`, `API_KEY`
+  - Removed `authMiddleware` function from server
+  - Use External API Keys for programmatic access instead
+
+- **Legacy API key generation endpoint** (`POST /admin/api/settings/api-key/generate`): Use External API Keys instead
+
 ---
 
 ## [0.15.0] - 2026-01-14

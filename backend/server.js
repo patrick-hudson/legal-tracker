@@ -8,7 +8,7 @@ import fastifyMultipart from '@fastify/multipart';
 import Anthropic from '@anthropic-ai/sdk';
 import { createDatabase } from './db.js';
 import { initAudit, logInfo, logError, logWarning, logSecurity, logInfoFromRequest, logErrorFromRequest, logSecurityFromRequest, logWarningFromRequest, logDebugFromRequest, getUserContext, callClaudeWithLogging, ACTION_TYPES, ENTITY_TYPES } from './audit.js';
-import { hashPassword, verifyPassword, generateTokenId, generateApiKey, createAdminAuthMiddleware, createHybridAuthMiddleware, getTokenExpiration, generateBootstrapToken, hashBootstrapToken, getBootstrapTokenExpiration, validatePasswordStrength, generateUserApiKey, getApiKeyPrefix, hashApiKey } from './auth.js';
+import { hashPassword, verifyPassword, generateTokenId, createHybridAuthMiddleware, getTokenExpiration, generateBootstrapToken, hashBootstrapToken, getBootstrapTokenExpiration, generateUserApiKey, getApiKeyPrefix, hashApiKey, autoRequireScope } from './auth.js';
 import { createStorage, createStorageFromConfig, createStorageForBackend, validateFileType, sanitizeFilename, MAX_FILE_SIZE } from './storage.js';
 import { generateLegalDocument, generatePlaceholderDocument } from './legal-docs.js';
 import * as sampleTemplates from './sample-templates.js';
@@ -43,10 +43,6 @@ const DEFAULT_APP_SETTINGS = {
   lifetime_spent: '0',
   drain_rate_cents_per_second: '0',
   auto_drain_enabled: 'false',
-  // Security settings
-  api_key: '',
-  require_auth: 'false',
-  ip_whitelist: '',
   // AI/Claude settings
   claude_api_key: '',
   claude_key_validated: 'false',
@@ -73,9 +69,6 @@ dotenv.config({ path: join(__dirname, '.env') });
  * @param {Object} options - Configuration options
  * @param {boolean} options.logger - Enable logging (default: true)
  * @param {string} options.dbPath - Database file path (default: data/tracker.db)
- * @param {boolean} options.requireAuth - Require authentication (default: from env)
- * @param {string[]} options.allowedIPs - Allowed IP addresses (default: from env)
- * @param {string} options.apiKey - API key for authentication (default: from env)
  * @param {boolean} options.disableRateLimit - Disable rate limiting (default: false, useful for tests)
  * @returns {Object} Fastify server instance
  */
@@ -83,9 +76,6 @@ export async function createServer(options = {}) {
   const {
     logger = true,
     dbPath,
-    requireAuth = process.env.REQUIRE_AUTH === 'true',
-    allowedIPs = process.env.ALLOWED_IPS?.split(',').map(ip => ip.trim()) || [],
-    apiKey = process.env.API_KEY || null,
     corsOrigin = process.env.CORS_ORIGIN || true,
     disableRateLimit = false
   } = options;
@@ -102,9 +92,6 @@ export async function createServer(options = {}) {
   });
 
   // Configuration
-  const ALLOWED_IPS = allowedIPs;
-  const API_KEY = apiKey;
-  const REQUIRE_AUTH = requireAuth;
   const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret-in-production-' + Math.random();
   const PASSWORD_SALT = process.env.PASSWORD_SALT || 'legal-tracker-default-CHANGE-THIS';
   const COOKIE_SECURE = process.env.NODE_ENV === 'production' && process.env.COOKIE_SECURE !== 'false';
@@ -229,39 +216,7 @@ export async function createServer(options = {}) {
     return request.ip;
   }
 
-  // Auth middleware for write operations
-  function authMiddleware(request, reply, done) {
-    if (!REQUIRE_AUTH) {
-      return done();
-    }
-
-    const clientIP = getClientIP(request);
-    const providedKey = request.headers['x-api-key'];
-
-    // Check API key first
-    if (API_KEY && providedKey === API_KEY) {
-      return done();
-    }
-
-    // Check IP whitelist
-    if (ALLOWED_IPS.length > 0 && ALLOWED_IPS.includes(clientIP)) {
-      return done();
-    }
-
-    // If no auth methods configured but REQUIRE_AUTH is true, deny
-    if (REQUIRE_AUTH) {
-      reply.code(403).send({
-        error: 'ACCESS_DENIED',
-        message: 'Unauthorized IP address',
-        your_ip: clientIP
-      });
-      return;
-    }
-
-    done();
-  }
-
-  // ============ PUBLIC ROUTES (Read-only) ============
+  // ============ PUBLIC ROUTES (Read-only, no auth required) ============
 
   // Health check
   fastify.get('/api/health', async () => {
@@ -397,8 +352,7 @@ export async function createServer(options = {}) {
         matters_this_year: stats.thisYear,
         max_streak: Math.max(stats.maxStreak, daysSince)
       },
-      your_ip: getClientIP(request),
-      auth_required: REQUIRE_AUTH
+      your_ip: getClientIP(request)
     };
   });
 
@@ -410,176 +364,6 @@ export async function createServer(options = {}) {
       ...inc,
       cost: inc.cost / 100 // Convert cents to dollars
     }));
-  });
-
-  // ============ PROTECTED ROUTES (Write operations) ============
-
-  // Log new matter (reset counter)
-  fastify.post('/api/matters', { preHandler: authMiddleware }, async (request, reply) => {
-    const { matter_date, note, cost } = request.body || {};
-
-    // Calculate days since last matter
-    const settings = settingsDb.getAll();
-    const lastMatterDate = new Date(settings.last_matter_date || Date.now());
-    const matterDateObj = new Date(matter_date || Date.now());
-    const daysSince = Math.floor((matterDateObj - lastMatterDate) / (1000 * 60 * 60 * 24));
-
-    // Cost comes in as dollars - convert to cents for storage
-    const costDollars = parseFloat(cost) || 0;
-    const costCents = Math.round(costDollars * 100);
-
-    // Add matter to log
-    const result = mattersDb.add(
-      matterDateObj.toISOString(),
-      note || 'No details provided',
-      Math.max(0, daysSince),
-      costCents
-    );
-
-    // Update last matter date
-    settingsDb.set('last_matter_date', matterDateObj.toISOString());
-
-    // Add cost to lifetime spent if provided (stored in cents)
-    if (costCents) {
-      const currentSpentCents = parseFloat(settings.lifetime_spent || '0');
-      settingsDb.set('lifetime_spent', currentSpentCents + costCents);
-    }
-
-    reply.code(201);
-    return {
-      success: true,
-      id: result.id,
-      message: 'Matter logged. The counter has been reset. We believe in you.'
-    };
-  });
-
-  // Update a matter
-  fastify.put('/api/matters/:id', { preHandler: authMiddleware }, async (request, reply) => {
-    const { id } = request.params;
-    const { matter_date, note, cost } = request.body || {};
-
-    const existing = mattersDb.getById(id);
-    if (!existing) {
-      reply.code(404);
-      return { error: 'NOT_FOUND', message: 'Matter not found' };
-    }
-
-    // Cost comes in as dollars - convert to cents for storage
-    let costCents = existing.cost;
-    if (cost !== undefined) {
-      const costDollars = parseFloat(cost);
-      costCents = Math.round(costDollars * 100);
-    }
-
-    mattersDb.update(
-      id,
-      matter_date || existing.matter_date,
-      note || existing.note,
-      costCents
-    );
-
-    return { success: true, message: 'Matter updated' };
-  });
-
-  // Delete a matter
-  fastify.delete('/api/matters/:id', { preHandler: authMiddleware }, async (request, reply) => {
-    const { id } = request.params;
-
-    const existing = mattersDb.getById(id);
-    if (!existing) {
-      reply.code(404);
-      return { error: 'NOT_FOUND', message: 'Matter not found' };
-    }
-
-    // Delete attachments from storage before deleting matter
-    const attachments = attachmentsDb.getByMatterId(parseInt(id));
-    if (attachments.length > 0) {
-      for (const attachment of attachments) {
-        try {
-          const storage = createStorageForBackend(attachment.storage_backend, settingsDb);
-          if (storage) {
-            await storage.deleteObject(attachment.storage_key);
-          }
-        } catch (err) {
-          fastify.log.warn({ attachmentId: attachment.id, error: err.message }, 'Failed to delete attachment from storage');
-        }
-      }
-      // DB records are deleted via ON DELETE CASCADE
-    }
-
-    mattersDb.delete(id);
-
-    // Recalculate last matter date from remaining matters
-    const matters = mattersDb.getAll();
-    if (matters.length > 0) {
-      settingsDb.set('last_matter_date', matters[0].matter_date);
-    }
-
-    return { success: true, message: 'Matter deleted' };
-  });
-
-  // Update lifetime spent
-  fastify.post('/api/settings/lifetime-spent', { preHandler: authMiddleware }, async (request) => {
-    const { amount, add } = request.body || {};
-
-    if (add) {
-      const current = parseFloat(settingsDb.get('lifetime_spent') || '0');
-      settingsDb.set('lifetime_spent', current + parseFloat(amount));
-    } else {
-      settingsDb.set('lifetime_spent', parseFloat(amount) || 0);
-    }
-
-    // Reset drain start time when manually updating the amount
-    settingsDb.set('drain_start_time', new Date().toISOString());
-
-    return {
-      success: true,
-      lifetime_spent: parseFloat(settingsDb.get('lifetime_spent'))
-    };
-  });
-
-  // Set last matter date manually
-  fastify.post('/api/settings/last-matter-date', { preHandler: authMiddleware }, async (request) => {
-    const { date } = request.body || {};
-
-    if (!date) {
-      return { error: 'BAD_REQUEST', message: 'Date is required' };
-    }
-
-    settingsDb.set('last_matter_date', new Date(date).toISOString());
-
-    return { success: true, last_matter_date: settingsDb.get('last_matter_date') };
-  });
-
-  // Update drain configuration
-  // Rate is in cents per second (explicit unit)
-  // Max rate: 1000 cents/sec = $10/sec = $600/min = $36,000/hr = $864,000/day
-  fastify.post('/api/settings/drain', { preHandler: authMiddleware }, async (request, reply) => {
-    const { enabled, rate_cents } = request.body || {};
-
-    if (enabled !== undefined) {
-      settingsDb.set('auto_drain_enabled', enabled ? 'true' : 'false');
-    }
-
-    if (rate_cents !== undefined) {
-      const cents = parseFloat(rate_cents);
-      if (isNaN(cents) || cents < 0 || cents > 1000) {
-        return reply.code(400).send({
-          error: 'BAD_REQUEST',
-          message: 'Invalid drain rate. Must be between 0 and 1000 cents per second.'
-        });
-      }
-      settingsDb.set('drain_rate_cents_per_second', String(cents));
-    }
-
-    // Reset drain start time when changing drain settings
-    settingsDb.set('drain_start_time', new Date().toISOString());
-
-    return {
-      success: true,
-      drain_enabled: settingsDb.get('auto_drain_enabled') === 'true',
-      drain_rate_cents_per_second: parseFloat(settingsDb.get('drain_rate_cents_per_second'))
-    };
   });
 
   // ============ ADMIN PORTAL ROUTES ============
@@ -688,6 +472,19 @@ export async function createServer(options = {}) {
 
   // Create admin auth middleware (hybrid: supports both API keys and JWT sessions)
   const adminAuthMiddleware = createHybridAuthMiddleware(adminSessionsDb, adminUsersDb, apiKeysDb);
+
+  // Create scope validation middleware (auto-detects required scope from route)
+  const scopeMiddleware = autoRequireScope();
+
+  // Add scope validation hook for all admin API routes (runs after auth middleware)
+  fastify.addHook('preHandler', async (request, reply) => {
+    // Only check scopes for authenticated admin API requests
+    if (!request.url.startsWith('/admin/api/')) return;
+    if (!request.adminUser) return; // Not authenticated yet or public route
+
+    // Run scope validation
+    await scopeMiddleware(request, reply);
+  });
 
   // API request logging hooks (only logs when setting is enabled and level is DEBUG)
   // Capture request body before processing
@@ -2856,19 +2653,96 @@ export async function createServer(options = {}) {
     return { success: true, key, value };
   });
 
-  // Generate new API key
-  fastify.post('/admin/api/settings/api-key/generate', { preHandler: adminAuthMiddleware }, async (request) => {
-    const newApiKey = generateApiKey();
-    settingsDb.set('api_key', newApiKey);
+  // Update drain configuration
+  // Rate is in cents per second (explicit unit)
+  // Max rate: 1000 cents/sec = $10/sec = $600/min = $36,000/hr = $864,000/day
+  fastify.put('/admin/api/settings/drain', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { enabled, rate_cents } = request.body || {};
 
-    // Log API key generation
+    if (enabled !== undefined) {
+      settingsDb.set('auto_drain_enabled', enabled ? 'true' : 'false');
+    }
+
+    if (rate_cents !== undefined) {
+      const cents = parseFloat(rate_cents);
+      if (isNaN(cents) || cents < 0 || cents > 1000) {
+        return reply.code(400).send({
+          error: 'BAD_REQUEST',
+          message: 'Invalid drain rate. Must be between 0 and 1000 cents per second.'
+        });
+      }
+      settingsDb.set('drain_rate_cents_per_second', String(cents));
+    }
+
+    // Reset drain start time when changing drain settings
+    settingsDb.set('drain_start_time', new Date().toISOString());
+
+    // Log settings change
     logInfoFromRequest(request, {
       actionType: ACTION_TYPES.SETTINGS_CHANGE,
       entityType: ENTITY_TYPES.SETTINGS,
-      summary: 'Generated new API key'
+      summary: 'Updated drain settings',
+      details: { enabled, rate_cents }
     });
 
-    return { success: true, api_key: newApiKey };
+    return {
+      success: true,
+      drain_enabled: settingsDb.get('auto_drain_enabled') === 'true',
+      drain_rate_cents_per_second: parseFloat(settingsDb.get('drain_rate_cents_per_second'))
+    };
+  });
+
+  // Update lifetime spent
+  fastify.put('/admin/api/settings/lifetime-spent', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { amount, add } = request.body || {};
+
+    if (amount === undefined) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: 'Amount required' });
+    }
+
+    if (add) {
+      const current = parseFloat(settingsDb.get('lifetime_spent') || '0');
+      settingsDb.set('lifetime_spent', current + parseFloat(amount));
+    } else {
+      settingsDb.set('lifetime_spent', parseFloat(amount) || 0);
+    }
+
+    // Reset drain start time when manually updating the amount
+    settingsDb.set('drain_start_time', new Date().toISOString());
+
+    // Log settings change
+    logInfoFromRequest(request, {
+      actionType: ACTION_TYPES.SETTINGS_CHANGE,
+      entityType: ENTITY_TYPES.SETTINGS,
+      summary: add ? 'Added to lifetime spent' : 'Set lifetime spent',
+      details: { amount, add }
+    });
+
+    return {
+      success: true,
+      lifetime_spent: parseFloat(settingsDb.get('lifetime_spent'))
+    };
+  });
+
+  // Set last matter date manually
+  fastify.put('/admin/api/settings/last-matter-date', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { date } = request.body || {};
+
+    if (!date) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: 'Date is required' });
+    }
+
+    settingsDb.set('last_matter_date', new Date(date).toISOString());
+
+    // Log settings change
+    logInfoFromRequest(request, {
+      actionType: ACTION_TYPES.SETTINGS_CHANGE,
+      entityType: ENTITY_TYPES.SETTINGS,
+      summary: 'Set last matter date',
+      details: { date }
+    });
+
+    return { success: true, last_matter_date: settingsDb.get('last_matter_date') };
   });
 
   // Validate and save Claude API key (validation required before save)
@@ -3345,12 +3219,39 @@ Return ONLY a JSON array of strings, no other text. Example format:
   // List all API keys (for admin view - never returns full key or hash)
   fastify.get('/admin/api/api-keys', { preHandler: adminAuthMiddleware }, async () => {
     const keys = apiKeysDb.getAll();
-    return { keys };
+    // Parse scopes for each key and add display name
+    const { getScopesDisplayName } = await import('./scopes.js');
+    const keysWithDisplay = keys.map(key => {
+      let scopes = ['admin:full'];
+      try {
+        if (key.scopes) {
+          scopes = JSON.parse(key.scopes);
+        }
+      } catch {
+        // Default to admin:full if parsing fails
+      }
+      return {
+        ...key,
+        scopes,
+        scopes_display: getScopesDisplayName(scopes)
+      };
+    });
+    return { keys: keysWithDisplay };
+  });
+
+  // Get available scopes and presets for API key creation
+  fastify.get('/admin/api/api-keys/scopes', { preHandler: adminAuthMiddleware }, async () => {
+    const { SCOPES, SCOPE_PRESETS, getScopesGrouped } = await import('./scopes.js');
+    return {
+      scopes: SCOPES,
+      presets: SCOPE_PRESETS,
+      grouped: getScopesGrouped()
+    };
   });
 
   // Create a new API key
   fastify.post('/admin/api/api-keys', { preHandler: adminAuthMiddleware }, async (request, reply) => {
-    const { name, expires_in_days } = request.body || {};
+    const { name, expires_in_days, scopes, preset } = request.body || {};
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return reply.code(400).send({
@@ -3364,6 +3265,33 @@ Return ONLY a JSON array of strings, no other text. Example format:
         error: 'BAD_REQUEST',
         message: 'Name must be 100 characters or less'
       });
+    }
+
+    // Determine scopes to use
+    let finalScopes = ['admin:full']; // Default to full access
+
+    if (preset) {
+      // Use preset scopes
+      const { expandPreset, SCOPE_PRESETS } = await import('./scopes.js');
+      const presetScopes = expandPreset(preset);
+      if (!presetScopes) {
+        return reply.code(400).send({
+          error: 'BAD_REQUEST',
+          message: `Invalid preset: ${preset}. Valid presets: ${Object.keys(SCOPE_PRESETS).join(', ')}`
+        });
+      }
+      finalScopes = presetScopes;
+    } else if (scopes && Array.isArray(scopes) && scopes.length > 0) {
+      // Use custom scopes
+      const { validateScopes } = await import('./scopes.js');
+      const validation = validateScopes(scopes);
+      if (!validation.valid) {
+        return reply.code(400).send({
+          error: 'BAD_REQUEST',
+          message: `Invalid scopes: ${validation.invalid.join(', ')}`
+        });
+      }
+      finalScopes = scopes;
     }
 
     // Calculate expiration if provided
@@ -3385,19 +3313,26 @@ Return ONLY a JSON array of strings, no other text. Example format:
       name.trim(),
       keyPrefix,
       keyHash,
-      expiresAt
+      expiresAt,
+      finalScopes
     );
+
+    // Get display name for scopes
+    const { getScopesDisplayName } = await import('./scopes.js');
+    const scopesDisplay = getScopesDisplayName(finalScopes);
 
     // Log the creation
     logInfoFromRequest(request, {
       actionType: ACTION_TYPES.CREATE,
       entityType: 'api_key',
       entityId: id,
-      summary: `Created API key "${name.trim()}"`,
+      summary: `Created API key "${name.trim()}" with ${scopesDisplay}`,
       details: {
         key_name: name.trim(),
         key_prefix: keyPrefix,
-        expires_at: expiresAt
+        expires_at: expiresAt,
+        scopes: finalScopes,
+        scopes_display: scopesDisplay
       }
     });
 
@@ -3410,7 +3345,9 @@ Return ONLY a JSON array of strings, no other text. Example format:
         key: fullKey, // Full key shown only on creation
         key_prefix: keyPrefix,
         created_at: new Date().toISOString(),
-        expires_at: expiresAt
+        expires_at: expiresAt,
+        scopes: finalScopes,
+        scopes_display: scopesDisplay
       }
     });
   });

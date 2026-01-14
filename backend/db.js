@@ -168,7 +168,16 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
 
     CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix);
     CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id);
+  `);
 
+  // Migration: Add scopes column to api_keys if it doesn't exist
+  const apiKeysColumns = db.exec("PRAGMA table_info(api_keys)");
+  const hasScopes = apiKeysColumns.length > 0 && apiKeysColumns[0].values.some(col => col[1] === 'scopes');
+  if (!hasScopes) {
+    db.run(`ALTER TABLE api_keys ADD COLUMN scopes TEXT DEFAULT '["admin:full"]'`);
+  }
+
+  db.run(`
     -- Initialize default settings if they don't exist
     INSERT OR IGNORE INTO settings (key, value) VALUES ('lifetime_spent', '0');
     INSERT OR IGNORE INTO settings (key, value) VALUES ('last_matter_date', datetime('now'));
@@ -691,11 +700,12 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
   };
 
   const apiKeysDb = {
-    create(userId, name, keyPrefix, keyHash, expiresAt = null) {
+    create(userId, name, keyPrefix, keyHash, expiresAt = null, scopes = ['admin:full']) {
+      const scopesJson = JSON.stringify(scopes);
       db.run(`
-        INSERT INTO api_keys (user_id, name, key_prefix, key_hash, created_at, expires_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `, [userId, name, keyPrefix, keyHash, new Date().toISOString(), expiresAt]);
+        INSERT INTO api_keys (user_id, name, key_prefix, key_hash, created_at, expires_at, scopes)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `, [userId, name, keyPrefix, keyHash, new Date().toISOString(), expiresAt, scopesJson]);
 
       const result = db.exec('SELECT last_insert_rowid() as id');
       const id = result[0].values[0][0];
@@ -761,7 +771,7 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
     getAll() {
       // Returns all keys (for admin view) - never returns key_hash
       const result = db.exec(`
-        SELECT ak.id, ak.user_id, ak.name, ak.key_prefix, ak.created_at, ak.last_used_at, ak.expires_at, ak.revoked_at, u.username as created_by_username
+        SELECT ak.id, ak.user_id, ak.name, ak.key_prefix, ak.created_at, ak.last_used_at, ak.expires_at, ak.revoked_at, ak.scopes, u.username as created_by_username
         FROM api_keys ak
         LEFT JOIN admin_users u ON ak.user_id = u.id
         ORDER BY ak.created_at DESC
@@ -782,7 +792,7 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
     getByUserId(userId) {
       // Returns keys for a specific user - never returns key_hash
       const result = db.exec(`
-        SELECT id, user_id, name, key_prefix, created_at, last_used_at, expires_at, revoked_at
+        SELECT id, user_id, name, key_prefix, created_at, last_used_at, expires_at, revoked_at, scopes
         FROM api_keys
         WHERE user_id = ?
         ORDER BY created_at DESC

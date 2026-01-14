@@ -24,9 +24,12 @@ describe('Data Management > Settings', () => {
 
     it('should update last matter date manually', async () => {
         const testDate = '2020-01-01T00:00:00.000Z';
-        const response = await fetch(`${baseURL}/api/settings/last-matter-date`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+        const response = await fetch(`${baseURL}/admin/api/settings/last-matter-date`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Cookie': `admin_token=${adminCookie}`
+            },
             body: JSON.stringify({ date: testDate })
         });
 
@@ -40,9 +43,12 @@ describe('Data Management > Settings', () => {
     });
 
     it('should reset lifetime spent', async () => {
-        const response = await fetch(`${baseURL}/api/settings/lifetime-spent`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+        const response = await fetch(`${baseURL}/admin/api/settings/lifetime-spent`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Cookie': `admin_token=${adminCookie}`
+            },
             body: JSON.stringify({ amount: 0 })
         });
 

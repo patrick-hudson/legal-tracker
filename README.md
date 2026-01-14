@@ -92,8 +92,7 @@ When configured with a Claude API key, LEGAL MATTER can generate realistic PDF l
 ### Security
 
 - JWT authentication with bcrypt password hashing
-- IP whitelist for public API write operations
-- API key authentication for programmatic access
+- Scoped API keys for programmatic access
 - One-time bootstrap tokens for initial setup
 - Rate limiting on auth endpoints
 - Security headers (CSP, X-Frame-Options, etc.)
@@ -142,7 +141,6 @@ Theme preference is saved to localStorage and persists across sessions.
   - [Authentication](#authentication)
   - [Error Responses](#error-responses)
   - [Public Endpoints](#public-endpoints)
-  - [Protected Endpoints](#protected-endpoints)
   - [Bootstrap Endpoints](#bootstrap-endpoints)
   - [Admin Authentication](#admin-authentication)
   - [Admin Matters](#admin-matters)
@@ -189,12 +187,7 @@ Edit `.env`:
 ```env
 PORT=3000
 HOST=0.0.0.0
-REQUIRE_AUTH=true
-ALLOWED_IPS=YOUR.IP.ADDRESS.HERE
-API_KEY=your-secret-api-key
 ```
-
-> **Tip:** Generate a secure API key with `openssl rand -hex 32`
 
 ```bash
 # Start the server
@@ -334,10 +327,8 @@ sudo certbot --nginx -d your-domain.com
 |----------|---------|-------------|
 | `PORT` | `3000` | Server port |
 | `HOST` | `0.0.0.0` | Bind address |
-| `REQUIRE_AUTH` | `true` | Require authentication for public API writes |
-| `ALLOWED_IPS` | — | Comma-separated IP whitelist for public API |
-| `API_KEY` | — | API key for programmatic access |
-| `ANTHROPIC_API_KEY` | — | Claude API key for AI features |
+| `JWT_SECRET` | (random) | Secret for JWT signing (set in production) |
+| `PASSWORD_SALT` | (default) | Salt for client-side password hashing (set in production) |
 | `STORAGE_BACKEND` | `filesystem` | `filesystem` or `s3` |
 | `ENABLE_DB_RESET` | `false` | Enable "Wipe Everything" in admin (safety flag) |
 | `ENABLE_WIPE_MATTERS_AND_SETTINGS` | `false` | Enable "Wipe + Reset" in admin |
@@ -455,7 +446,7 @@ The Security section is organized into sub-pages:
 
 | Page | What it contains |
 |------|------------------|
-| **Overview** | Legacy server API key, public API access settings, quick links |
+| **Overview** | Security status, quick links to API keys and account settings |
 | **API Keys** | Create and manage External API Keys for programmatic access |
 | **Account** | Change password, view session info, security tips |
 
@@ -469,21 +460,21 @@ LEGAL MATTER uses multiple authentication methods:
 
 | Method | Used For | How to Authenticate |
 |--------|----------|---------------------|
-| **None** | Public read endpoints | No authentication required |
-| **Legacy API Key / IP** | Protected write endpoints (public API) | `X-API-Key` header or source IP in whitelist |
-| **External API Keys** | Admin panel endpoints (programmatic) | `X-API-Key` or `Authorization: Bearer` header |
-| **JWT Session** | Admin panel endpoints (browser) | Cookie `admin_token` (set on login) |
+| **None** | Public read endpoints (`/api/*`) | No authentication required |
+| **External API Keys** | Admin API endpoints (programmatic) | `X-API-Key` or `Authorization: Bearer` header |
+| **JWT Session** | Admin API endpoints (browser) | Cookie `admin_token` (set on login) |
 
 #### External API Keys
 
-External API Keys provide programmatic access to the admin panel API with full audit logging.
+External API Keys provide programmatic access to the admin panel API with full audit logging and granular permission scopes.
 
 **Creating a Key:**
 1. Go to Admin Panel > Security > API Keys
 2. Click "Create New Key"
 3. Enter a descriptive name (e.g., "CI Pipeline", "Zapier Integration")
-4. Optionally set an expiration (30 days, 90 days, 1 year, or never)
-5. **Copy the key immediately** - it's only shown once
+4. Select a permission preset or customize individual scopes
+5. Optionally set an expiration (30 days, 90 days, 1 year, or never)
+6. **Copy the key immediately** - it's only shown once
 
 **Using the Key:**
 
@@ -499,8 +490,60 @@ curl -H "Authorization: Bearer lt_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6" \
 
 **Key Format:** `lt_live_` prefix + 32 hex characters (40 chars total)
 
+**Permission Presets:**
+
+| Preset | Description |
+|--------|-------------|
+| Read Only | Read all data, no modifications |
+| Limited Write | Read all, create/update matters, notes, attachments (no deletions) |
+| Write | Full CRUD on all data and settings (no admin operations) |
+| Full Admin | All permissions including user and API key management |
+
+**Individual Scopes:**
+
+| Scope | Description |
+|-------|-------------|
+| `matters:read` | Read matters list and details |
+| `matters:write` | Create and update matters |
+| `matters:delete` | Delete matters |
+| `notes:read` | Read private notes |
+| `notes:write` | Create and update private notes |
+| `notes:delete` | Delete private notes |
+| `attachments:read` | Read and download attachments |
+| `attachments:write` | Upload attachments |
+| `attachments:delete` | Delete attachments |
+| `audit:read` | Read audit log |
+| `analytics:read` | Read analytics and dashboard data |
+| `settings:read` | Read settings |
+| `settings:write` | Modify settings |
+| `backup:read` | Read backup statistics |
+| `backup:write` | Create backups and restore |
+| `data:generate` | Generate sample data |
+| `data:wipe` | Wipe data (dangerous) |
+| `users:read` | Read user list (admin) |
+| `users:write` | Create and update users (admin) |
+| `users:delete` | Delete users (admin) |
+| `sessions:read` | Read sessions list (admin) |
+| `sessions:delete` | Invalidate sessions (admin) |
+| `api-keys:read` | Read API keys list (admin) |
+| `api-keys:write` | Create API keys (admin) |
+| `api-keys:delete` | Revoke API keys (admin) |
+| `admin:full` | Full admin access (all permissions) |
+
+**Scope Error Response:**
+
+```json
+{
+  "error": "INSUFFICIENT_PERMISSIONS",
+  "message": "Insufficient permissions",
+  "required": "matters:delete",
+  "hint": "This API key needs the 'matters:delete' scope"
+}
+```
+
 **Key Properties:**
 - Tied to the user who created it
+- Scoped permissions (preset or custom)
 - Can be revoked at any time (immediately stops working)
 - Optional expiration date
 - `last_used_at` tracking
@@ -510,6 +553,7 @@ curl -H "Authorization: Bearer lt_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6" \
 - Keys are stored as bcrypt hashes (not recoverable)
 - Invalid API keys return 401 immediately (no fallthrough to session auth)
 - Revoked or expired keys are rejected instantly
+- Insufficient scope returns 403 with helpful hint
 - All API key requests are logged at INFO level in the audit log
 
 #### Password Hashing
@@ -684,206 +728,6 @@ curl https://your-domain.com/api/matters
 ```
 
 > **Note:** Costs are returned in dollars (stored internally in cents).
-
----
-
-### Protected Endpoints
-
-Requires `X-API-Key` header OR source IP in `ALLOWED_IPS`.
-
----
-
-#### POST /api/matters
-
-Create a new matter.
-
-```bash
-curl -X POST https://your-domain.com/api/matters \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: your-api-key" \
-  -d '{
-    "note": "Contract dispute with vendor",
-    "cost": 2500,
-    "matter_date": "2025-11-28T10:30:00Z"
-  }'
-```
-
-**Request Body:**
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `matter_date` | ISO8601 | No | Date of matter (default: now) |
-| `note` | string | No | Description (max 10,000 chars) |
-| `cost` | number | No | Cost in dollars |
-
-**Response `201 Created`:**
-```json
-{
-  "success": true,
-  "id": 42,
-  "message": "Matter logged. The counter has been reset. We believe in you."
-}
-```
-
-**Error `400 Bad Request`:**
-```json
-{
-  "error": "BAD_REQUEST",
-  "message": "Note exceeds maximum length of 10000 characters"
-}
-```
-
----
-
-#### PUT /api/matters/:id
-
-Update an existing matter.
-
-```bash
-curl -X PUT https://your-domain.com/api/matters/42 \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: your-api-key" \
-  -d '{
-    "note": "Updated description",
-    "cost": 3000
-  }'
-```
-
-**Response `200 OK`:**
-```json
-{
-  "success": true,
-  "message": "Matter updated"
-}
-```
-
-**Error `404 Not Found`:**
-```json
-{
-  "error": "NOT_FOUND",
-  "message": "Matter not found"
-}
-```
-
----
-
-#### DELETE /api/matters/:id
-
-Delete a matter.
-
-```bash
-curl -X DELETE https://your-domain.com/api/matters/42 \
-  -H "X-API-Key: your-api-key"
-```
-
-**Response `200 OK`:**
-```json
-{
-  "success": true,
-  "message": "Matter deleted"
-}
-```
-
----
-
-#### POST /api/settings/lifetime-spent
-
-Update lifetime legal expenses.
-
-```bash
-# Set absolute value
-curl -X POST https://your-domain.com/api/settings/lifetime-spent \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: your-api-key" \
-  -d '{"amount": 50000}'
-
-# Add to existing value
-curl -X POST https://your-domain.com/api/settings/lifetime-spent \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: your-api-key" \
-  -d '{"amount": 1500, "add": true}'
-```
-
-**Request Body:**
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `amount` | number | Yes | Amount in dollars |
-| `add` | boolean | No | If true, adds to existing; if false/omitted, sets absolute |
-
-**Response `200 OK`:**
-```json
-{
-  "success": true,
-  "lifetime_spent": 51500
-}
-```
-
----
-
-#### POST /api/settings/last-matter-date
-
-Manually set the last matter date (resets the counter).
-
-```bash
-curl -X POST https://your-domain.com/api/settings/last-matter-date \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: your-api-key" \
-  -d '{"date": "2025-12-01T00:00:00Z"}'
-```
-
-**Response `200 OK`:**
-```json
-{
-  "success": true,
-  "last_matter_date": "2025-12-01T00:00:00.000Z"
-}
-```
-
-**Error `400 Bad Request`:**
-```json
-{
-  "error": "BAD_REQUEST",
-  "message": "Date is required"
-}
-```
-
----
-
-#### POST /api/settings/drain
-
-Configure the drain rate (the "emotional damage" counter).
-
-```bash
-curl -X POST https://your-domain.com/api/settings/drain \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: your-api-key" \
-  -d '{"enabled": true, "rate_cents": 50}'
-```
-
-**Request Body:**
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `enabled` | boolean | No | Enable/disable drain |
-| `rate_cents` | number | No | Cents per second (0-1000) |
-
-**Response `200 OK`:**
-```json
-{
-  "success": true,
-  "drain_enabled": true,
-  "drain_rate_cents_per_second": 50
-}
-```
-
-**Error `400 Bad Request`:**
-```json
-{
-  "error": "BAD_REQUEST",
-  "message": "Invalid drain rate. Must be between 0 and 1000 cents per second."
-}
-```
 
 ---
 
@@ -1793,25 +1637,6 @@ curl -X PUT https://your-domain.com/admin/api/settings/auto_drain_enabled \
 
 ---
 
-#### POST /admin/api/settings/api-key/generate
-
-Generate a new API key.
-
-```bash
-curl -X POST https://your-domain.com/admin/api/settings/api-key/generate \
-  -b cookies.txt
-```
-
-**Response `200 OK`:**
-```json
-{
-  "success": true,
-  "api_key": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6a7b8c9d0e1f2"
-}
-```
-
----
-
 ### Storage Configuration
 
 ---
@@ -2657,11 +2482,12 @@ cp backend/data/tracker.db ~/backups/tracker-$(date +%Y%m%d).db
 ## Troubleshooting
 
 <details>
-<summary><strong>"ACCESS DENIED" on public API</strong></summary>
+<summary><strong>"401 Unauthorized" on write operations</strong></summary>
 
-- Verify your IP is in `ALLOWED_IPS` in `.env`
-- Your IP may have changed — check at [whatismyipaddress.com](https://whatismyipaddress.com)
-- If behind a proxy, ensure `X-Forwarded-For` headers are passed through
+- Public API read endpoints (`/api/status`, `/api/matters`) don't require auth
+- Write operations require admin authentication (session or API key)
+- Log in to the admin panel first if using the public display's manual entry form
+- For programmatic access, use an external API key with appropriate scopes
 
 </details>
 

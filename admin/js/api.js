@@ -647,10 +647,20 @@ class AdminAPI {
         return this.request('/api-keys');
     }
 
-    async createApiKey(name, expiresInDays = null) {
+    async getApiKeyScopes() {
+        return this.request('/api-keys/scopes');
+    }
+
+    async createApiKey(name, expiresInDays = null, { preset = null, scopes = null } = {}) {
+        const body = { name, expires_in_days: expiresInDays };
+        if (preset) {
+            body.preset = preset;
+        } else if (scopes && scopes.length > 0) {
+            body.scopes = scopes;
+        }
         return this.request('/api-keys', {
             method: 'POST',
-            body: JSON.stringify({ name, expires_in_days: expiresInDays })
+            body: JSON.stringify(body)
         });
     }
 
