@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+---
+
+## [0.16.2] - 2026-01-14
+
 ### Changed
 
 - **Database layer modularized**: Extracted 8 query objects from db.js into separate files
