@@ -1597,44 +1597,138 @@ async function handleSaveBucketUpdate() {
     }
 }
 
+/**
+ * Show dialog for clearing S3 settings when files exist
+ * @param {number} fileCount - Number of files in S3
+ * @returns {Promise<string>} - 'delete', 'keep', or 'cancel'
+ */
+async function showClearS3SettingsDialog(fileCount) {
+    return new Promise((resolve) => {
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center';
+        modal.innerHTML = `
+            <div class="relative mx-auto p-6 border w-full max-w-md shadow-lg rounded-lg bg-white dark:bg-gray-800">
+                <div class="flex items-center gap-2 mb-4">
+                    <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Clear S3 Settings</h3>
+                </div>
+                <div class="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                    <p class="text-sm text-red-800 dark:text-red-300">
+                        <strong>Warning:</strong> You have <strong>${fileCount}</strong> attachment(s) stored in S3.
+                        These files must be migrated to local storage before clearing S3 settings.
+                    </p>
+                </div>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Choose what to do with your S3 files:
+                </p>
+                <div class="space-y-3 mb-6">
+                    <label class="flex items-start cursor-pointer p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-600 border-blue-500 bg-blue-50 dark:bg-blue-900/20">
+                        <input type="radio" name="clear-s3-choice" value="delete" checked class="mt-0.5 w-4 h-4 text-blue-600">
+                        <div class="ml-3">
+                            <span class="text-sm font-medium text-gray-900 dark:text-white">Migrate & Delete from S3</span>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Download files to local storage, then delete from S3. Recommended.</p>
+                        </div>
+                    </label>
+                    <label class="flex items-start cursor-pointer p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-600">
+                        <input type="radio" name="clear-s3-choice" value="keep" class="mt-0.5 w-4 h-4 text-blue-600">
+                        <div class="ml-3">
+                            <span class="text-sm font-medium text-gray-900 dark:text-white">Migrate & Keep in S3</span>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Download files to local storage, keep copies in S3 for manual cleanup later.</p>
+                        </div>
+                    </label>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                    After migration, your S3 credentials will be removed and storage will switch to local filesystem.
+                </p>
+                <div class="flex gap-3">
+                    <button id="clear-s3-dialog-cancel" class="flex-1 px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm dark:bg-gray-600 dark:text-white">
+                        Cancel
+                    </button>
+                    <button id="clear-s3-dialog-confirm" class="flex-1 px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg text-sm font-medium">
+                        Migrate & Clear S3
+                    </button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        // Highlight selected option
+        const updateSelection = () => {
+            modal.querySelectorAll('label').forEach(label => {
+                const radio = label.querySelector('input[type="radio"]');
+                if (radio.checked) {
+                    label.classList.add('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/20');
+                } else {
+                    label.classList.remove('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/20');
+                }
+            });
+        };
+
+        modal.querySelectorAll('input[name="clear-s3-choice"]').forEach(radio => {
+            radio.addEventListener('change', updateSelection);
+        });
+
+        modal.querySelector('#clear-s3-dialog-cancel').addEventListener('click', () => {
+            document.body.removeChild(modal);
+            resolve('cancel');
+        });
+
+        modal.querySelector('#clear-s3-dialog-confirm').addEventListener('click', () => {
+            const choice = modal.querySelector('input[name="clear-s3-choice"]:checked')?.value || 'delete';
+            document.body.removeChild(modal);
+            resolve(choice);
+        });
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                document.body.removeChild(modal);
+                resolve('cancel');
+            }
+        });
+    });
+}
+
 async function handleClearS3Settings() {
     // Check if there are files in S3
     const s3FileCount = migrationStatus?.s3_count || 0;
 
-    let confirmMessage = 'This will clear your S3 configuration and switch to local filesystem storage.';
+    let deleteSource = true;
 
     if (s3FileCount > 0) {
-        confirmMessage = `You have ${s3FileCount} attachment(s) stored in S3.\n\n` +
-            `Clearing S3 settings will:\n` +
-            `1. Migrate all ${s3FileCount} file(s) to local storage\n` +
-            `2. Delete the files from S3\n` +
-            `3. Remove your S3 credentials\n` +
-            `4. Switch to local filesystem storage\n\n` +
-            `This cannot be undone.`;
+        // Show migration options dialog
+        const choice = await showClearS3SettingsDialog(s3FileCount);
+
+        if (choice === 'cancel') return;
+
+        deleteSource = choice === 'delete';
     } else {
-        confirmMessage += '\n\nThis will remove your S3 credentials and switch to local filesystem storage.';
+        // No files - simple confirmation
+        const confirmed = await showConfirm(
+            'This will clear your S3 configuration and switch to local filesystem storage.\n\nYour S3 credentials will be removed.',
+            {
+                title: 'Clear S3 Settings',
+                confirmText: 'Clear S3 Settings',
+                cancelText: 'Cancel',
+                type: 'warning'
+            }
+        );
+
+        if (!confirmed) return;
     }
-
-    const confirmed = await showConfirm(
-        'Clear S3 Settings',
-        confirmMessage,
-        'Clear S3 Settings',
-        'Cancel',
-        'destructive'
-    );
-
-    if (!confirmed) return;
 
     const btn = document.getElementById('clear-s3-settings-btn');
     btn.disabled = true;
     btn.textContent = 'Clearing...';
 
     try {
-        // If there are files in S3, migrate them first with deletion
+        // If there are files in S3, migrate them first
         if (s3FileCount > 0) {
             showToast(`Migrating ${s3FileCount} file(s) from S3 to local storage...`, 'info');
 
-            const result = await api.migrateStorage('s3-to-local', true, false); // deleteSource = true
+            const result = await api.migrateStorage('s3-to-local', deleteSource, false);
 
             if (result.failed > 0) {
                 showToast(`Migration completed with ${result.failed} failure(s). Cannot clear S3 settings until all files are migrated.`, 'error');
@@ -1643,7 +1737,7 @@ async function handleClearS3Settings() {
                 return;
             }
 
-            showToast(`Migrated ${result.migrated} file(s) to local storage`, 'success');
+            showToast(`Migrated ${result.migrated} file(s) to local storage${deleteSource ? ' and deleted from S3' : ''}`, 'success');
         }
 
         // Now clear the S3 settings

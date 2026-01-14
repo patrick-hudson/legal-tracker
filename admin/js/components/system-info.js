@@ -398,7 +398,7 @@ async function handleRestart() {
         let countdown = REDIRECT_DELAY;
 
         btn.textContent = `Redirecting in ${countdown}s...`;
-        showToast('Server restart initiated. You will be redirected to login.', 'success');
+        showToast('Server restart initiated. You will be redirected to login.', 'success', REDIRECT_DELAY * 1000);
 
         const countdownInterval = setInterval(() => {
             countdown--;
@@ -419,7 +419,7 @@ async function handleRestart() {
     }
 }
 
-function showToast(message, type = 'info') {
+function showToast(message, type = 'info', duration = 3000) {
     const toast = document.createElement('div');
     toast.className = `toast p-4 rounded-lg shadow-lg ${
         type === 'success' ? 'bg-green-500' :
@@ -432,5 +432,5 @@ function showToast(message, type = 'info') {
     setTimeout(() => {
         toast.style.opacity = '0';
         setTimeout(() => toast.remove(), 300);
-    }, 3000);
+    }, duration);
 }

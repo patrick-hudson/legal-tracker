@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Audit log status indicators**: Shows current log level and API logging status at top of audit log page
+  - Log Level badge shows current minimum level (DEBUG/INFO/WARNING/SECURITY/ERROR) with color-coded styling
+  - API Logging badge shows ON/OFF status for admin API request logging
+  - Settings refresh on each page visit to reflect changes made in System Info
+
+### Changed
+
+- **Clear S3 Settings dialog**: When files exist in S3, shows migration options dialog instead of simple confirmation
+  - Choose between "Migrate & Delete from S3" or "Migrate & Keep in S3"
+  - Warning banner highlights the number of files that need to be migrated
+  - No "skip" option since credentials will be removed and files would become inaccessible
+
+### Fixed
+
+- **Server restart toast duration**: Toast now stays visible for full redirect countdown (8 seconds) instead of disappearing after 3 seconds
+
+- **Audit log settings not refreshing**: Log level and API logging indicators now correctly read from API response and update when navigating to audit log page
+
 ---
 
 ## [0.13.2] - 2026-01-14

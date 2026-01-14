@@ -31,6 +31,7 @@ backend/samples/*.json
 # Uploads (file attachments)
 backend/data/uploads/
 
+backend/data/uploads-archive/
 # Test output
 coverage/
 .nyc_output/

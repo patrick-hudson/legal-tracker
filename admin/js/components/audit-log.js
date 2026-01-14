@@ -18,7 +18,8 @@ let currentEntityType = '';
 let expandedRows = new Set();
 let tbodyClickHandler = null;
 let settingsLoaded = false;
-let isDebugModeActive = false;
+let currentLogLevel = 'INFO';
+let isApiLoggingActive = false;
 let searchDebounceTimer = null;
 let autoRefreshEnabled = false;
 let autoRefreshInterval = null;
@@ -66,43 +67,48 @@ export async function renderAuditLog(container) {
     container.innerHTML = '<div class="flex justify-center items-center h-64"><div class="spinner"></div></div>';
 
     try {
-        // Load saved page size preference and debug mode status on first render
-        if (!settingsLoaded) {
-            try {
-                const [settings, filtersResponse, statsResponse] = await Promise.all([
-                    api.getSettings(),
-                    api.getAuditLogFilters(),
-                    api.getAuditLogStats()
-                ]);
+        // Load settings, filters, and stats
+        try {
+            const [settingsResponse, filtersResponse, statsResponse] = await Promise.all([
+                api.getSettings(),
+                api.getAuditLogFilters(),
+                api.getAuditLogStats()
+            ]);
 
-                if (settings[PAGE_SIZE_SETTING_KEY]) {
-                    const savedLimit = parseInt(settings[PAGE_SIZE_SETTING_KEY]);
-                    if (PAGE_SIZE_OPTIONS.includes(savedLimit)) {
-                        currentLimit = savedLimit;
-                    }
+            // Settings are nested under 'settings' property in API response
+            const settings = settingsResponse.settings || {};
+
+            // Only load page size preference on first render (user preference)
+            if (!settingsLoaded && settings[PAGE_SIZE_SETTING_KEY]) {
+                const savedLimit = parseInt(settings[PAGE_SIZE_SETTING_KEY]);
+                if (PAGE_SIZE_OPTIONS.includes(savedLimit)) {
+                    currentLimit = savedLimit;
                 }
-                // Check if debug mode is active
-                isDebugModeActive = settings.audit_log_level === 'DEBUG';
-
-                // Store filter options
-                filterOptions = {
-                    users: filtersResponse.users || [],
-                    actionTypes: filtersResponse.actionTypes || [],
-                    entityTypes: filtersResponse.entityTypes || []
-                };
-
-                // Store stats
-                stats = {
-                    errorsLast24h: statsResponse.errorsLast24h || 0,
-                    warningsLast24h: statsResponse.warningsLast24h || 0,
-                    securityLast24h: statsResponse.securityLast24h || 0,
-                    infoLast24h: statsResponse.infoLast24h || 0
-                };
-            } catch (e) {
-                // Settings not available, use defaults
-                console.warn('Failed to load audit log settings:', e);
             }
+
+            // Always refresh log level and API logging settings (can change in system info)
+            currentLogLevel = settings.audit_log_level || 'INFO';
+            isApiLoggingActive = settings.log_api_requests === 'true';
+
+            // Store filter options
+            filterOptions = {
+                users: filtersResponse.users || [],
+                actionTypes: filtersResponse.actionTypes || [],
+                entityTypes: filtersResponse.entityTypes || []
+            };
+
+            // Store stats
+            stats = {
+                errorsLast24h: statsResponse.errorsLast24h || 0,
+                warningsLast24h: statsResponse.warningsLast24h || 0,
+                securityLast24h: statsResponse.securityLast24h || 0,
+                infoLast24h: statsResponse.infoLast24h || 0
+            };
+
             settingsLoaded = true;
+        } catch (e) {
+            // Settings not available, use defaults
+            console.warn('Failed to load audit log settings:', e);
         }
         await loadAuditLog(container);
     } catch (error) {
@@ -140,9 +146,25 @@ async function loadAuditLog(container) {
                 <p class="text-gray-600 dark:text-gray-400">System activity and security events</p>
             </div>
             <div class="flex items-center gap-2">
-                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium cursor-help ${isDebugModeActive ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}" title="Debug mode can be enabled in the System Information settings">
-                    <span class="w-2 h-2 ${isDebugModeActive ? 'bg-purple-500' : 'bg-gray-400'} rounded-full mr-1.5"></span>
-                    Debug ${isDebugModeActive ? 'ON' : 'OFF'}
+                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium cursor-help ${
+                    currentLogLevel === 'DEBUG' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300' :
+                    currentLogLevel === 'INFO' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' :
+                    currentLogLevel === 'WARNING' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' :
+                    currentLogLevel === 'SECURITY' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300' :
+                    'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
+                }" title="Minimum log level. Events at this level and above (more severe) are logged. DEBUG=most verbose, ERROR=least verbose.">
+                    <span class="w-2 h-2 ${
+                        currentLogLevel === 'DEBUG' ? 'bg-purple-500' :
+                        currentLogLevel === 'INFO' ? 'bg-blue-500' :
+                        currentLogLevel === 'WARNING' ? 'bg-yellow-500' :
+                        currentLogLevel === 'SECURITY' ? 'bg-orange-500' :
+                        'bg-red-500'
+                    } rounded-full mr-1.5"></span>
+                    Log Level: ${currentLogLevel}
+                </span>
+                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium cursor-help ${isApiLoggingActive ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'}" title="When enabled, logs all admin API requests with method, path, and response time.">
+                    <span class="w-2 h-2 ${isApiLoggingActive ? 'bg-green-500' : 'bg-gray-400'} rounded-full mr-1.5"></span>
+                    API Logging: ${isApiLoggingActive ? 'ON' : 'OFF'}
                 </span>
                 <a href="#/system-info" class="text-xs text-blue-600 dark:text-blue-400 hover:underline">Settings</a>
             </div>
@@ -198,14 +220,18 @@ async function loadAuditLog(container) {
             </button>
         </div>
 
-        ${isDebugModeActive ? `
+        ${currentLogLevel === 'DEBUG' || isApiLoggingActive ? `
             <div class="mb-4 p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg">
                 <div class="flex items-center text-purple-800 dark:text-purple-300">
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-4 h-4 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
-                    <span class="font-medium">Debug mode active</span>
-                    <span class="ml-2 text-sm font-normal">- verbose logging enabled (Claude API calls, storage operations)</span>
+                    <span class="font-medium">Verbose logging active:</span>
+                    <span class="ml-2 text-sm font-normal">
+                        ${currentLogLevel === 'DEBUG' ? 'DEBUG level (Claude API calls, storage operations, presigned URLs)' : ''}
+                        ${currentLogLevel === 'DEBUG' && isApiLoggingActive ? ' + ' : ''}
+                        ${isApiLoggingActive ? 'API request logging (all admin API calls with timing)' : ''}
+                    </span>
                 </div>
             </div>
         ` : ''}
