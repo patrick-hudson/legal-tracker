@@ -6,26 +6,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
----
-
-## [0.11.11] - 2026-01-14
-
-### Changed
-
-- **Sample preset regeneration now uses centralized word banks**: The "Regenerate Sample Files" feature now uses the same templates as dynamic generation
-  - Presets (small, medium, large, extra-large) now include lawyer/counsel info and case numbers
-  - Uses `sample-templates.js` module instead of hardcoded matter types
-  - 40% of matters get lawyer info, 30% get opposing counsel, 50% get case numbers
-  - More varied matter descriptions from the 140+ template pool
-
-### Fixed
-
-- **Template amount handling**: Fixed TypeError when document template receives amount as string vs number
-
----
-
-## [0.11.10] - 2026-01-14
-
 ### Added
 
 - **Unified sample data generation with AI as optional enhancement**: Harmonized generation system that works fully without AI
@@ -54,13 +34,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - New API endpoints: `PUT /admin/api/settings/ai/type` and `POST /admin/api/settings/ai/apply-default-to-all`
   - Per-type settings excluded from backups (like other AI settings)
 
----
+### Changed
 
-## [0.11.9] - 2026-01-14
+- **Sample preset regeneration now uses centralized word banks**: The "Regenerate Sample Files" feature now uses the same templates as dynamic generation
+  - Presets (small, medium, large, extra-large) now include lawyer/counsel info and case numbers
+  - Uses `sample-templates.js` module instead of hardcoded matter types
+  - 40% of matters get lawyer info, 30% get opposing counsel, 50% get case numbers
+  - More varied matter descriptions from the 140+ template pool
 
----
+### Fixed
 
-## [0.11.8] - 2026-01-10
+- **Template amount handling**: Fixed TypeError when document template receives amount as string vs number
 
 ---
 
@@ -1065,11 +1049,7 @@ Initial development phase establishing core functionality.
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| Unreleased | - | |
-| 0.11.11 | 2026-01-14 | Sample presets use word banks, template amount fix |
-| 0.11.10 | 2026-01-14 | Unified sample generation with AI optional, per-type spice settings |
-| 0.11.9 | 2026-01-14 | - |
-| 0.11.8 | 2026-01-10 | - |
+| Unreleased | - | Unified sample generation with AI optional, per-type spice settings, word bank presets |
 | 0.11.7 | 2026-01-09 | Full backup and restore functionality |
 | 0.11.6 | 2026-01-09 | Attachments column, context-aware notes generation |
 | 0.11.5 | 2026-01-09 | Claude API logging, storage logging, debug UI enhancements |
