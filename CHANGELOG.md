@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+---
+
+## [0.15.0] - 2026-01-14
+
 ### Changed
 
 - **Security page restructured into sub-pages**: Improved organization with collapsible sidebar menu
