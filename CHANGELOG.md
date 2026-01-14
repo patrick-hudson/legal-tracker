@@ -10,6 +10,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [0.13.1] - 2026-01-14
 
+### Added
+
+- **S3 presigned URLs for downloads**: Offloads bandwidth to S3 for attachment downloads
+  - Download button redirects to S3 presigned URL (1 hour expiry) instead of streaming through server
+  - Preview still streams through server to avoid CORS issues with fetch API
+  - New `?stream=true` query parameter forces server-side streaming when needed
+  - Debug endpoint `GET /admin/api/attachments/:id/presigned-url` for testing presigned URL generation
+
+- **Attachment storage debug info**: Shows storage details in edit attachment modal when debug mode enabled
+  - Displays storage backend (filesystem/s3), storage key, and full URL for S3 attachments
+  - "Generate" button to create and display a presigned URL for testing private S3 buckets
+
+- **Comprehensive audit logging for storage operations**: All attachment and migration operations now logged
+  - Migration start, progress, success, and failure events logged with granular details
+  - Per-attachment migration success/failure logged individually
+  - Presigned URL generation logged at DEBUG level
+  - Download operations logged with storage backend and streaming method
+
+### Fixed
+
+- **Fastify 5 redirect API**: Fixed `reply.redirect()` call to use correct Fastify 5 syntax (`reply.code(302).redirect(url)` instead of `reply.redirect(302, url)`)
+
+- **S3 attachment download CORS issue**: Download now uses direct browser navigation instead of fetch to avoid CORS issues when redirecting to S3 presigned URLs
+
 ---
 
 ## [0.13.0] - 2026-01-14
@@ -36,22 +60,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - When switching from S3 to Local: offers to migrate & delete from S3, migrate & keep in S3, or switch without migrating
   - When switching from Local to S3: offers to migrate & delete local, migrate & archive local, migrate & keep local, or switch without migrating
   - Files that aren't migrated become inaccessible until migrated via the Storage Migration section
-
-- **S3 presigned URLs for downloads**: Offloads bandwidth to S3 for attachment downloads
-  - Download button redirects to S3 presigned URL (1 hour expiry) instead of streaming through server
-  - Preview still streams through server to avoid CORS issues with fetch API
-  - New `?stream=true` query parameter forces server-side streaming when needed
-  - Debug endpoint `GET /admin/api/attachments/:id/presigned-url` for testing presigned URL generation
-
-- **Attachment storage debug info**: Shows storage details in edit attachment modal when debug mode enabled
-  - Displays storage backend (filesystem/s3), storage key, and full URL for S3 attachments
-  - "Generate" button to create and display a presigned URL for testing private S3 buckets
-
-- **Comprehensive audit logging for storage operations**: All attachment and migration operations now logged
-  - Migration start, progress, success, and failure events logged with granular details
-  - Per-attachment migration success/failure logged individually
-  - Presigned URL generation logged at DEBUG level
-  - Download operations logged with storage backend and streaming method
 
 ### Fixed
 
