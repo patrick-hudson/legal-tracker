@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+---
+
+## [0.12.0] - 2026-01-14
+
 ### Added
 
 - **Unified sample data generation with AI as optional enhancement**: Harmonized generation system that works fully without AI
@@ -1049,7 +1053,8 @@ Initial development phase establishing core functionality.
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| Unreleased | - | Unified sample generation with AI optional, per-type spice settings, word bank presets |
+| Unreleased | - | |
+| 0.12.0 | 2026-01-14 | Unified sample generation with AI optional, per-type spice settings, word bank presets |
 | 0.11.7 | 2026-01-09 | Full backup and restore functionality |
 | 0.11.6 | 2026-01-09 | Attachments column, context-aware notes generation |
 | 0.11.5 | 2026-01-09 | Claude API logging, storage logging, debug UI enhancements |
