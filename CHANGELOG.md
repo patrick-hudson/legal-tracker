@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+---
+
+## [0.16.3] - 2026-01-14
+
 ### Changed
 
 - **Routes extracted from server.js**: Modularized 5392-line server.js into domain-specific route files
@@ -1326,7 +1330,8 @@ Initial development phase establishing core functionality.
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| Unreleased | - | Routes extraction from server.js (90% reduction) |
+| Unreleased | - | |
+| 0.16.3 | 2026-01-14 | Routes extraction from server.js (90% reduction) |
 | 0.16.2 | 2026-01-14 | Database layer modularized into query objects |
 | 0.16.1 | 2026-01-14 | Version sync release |
 | 0.16.0 | 2026-01-14 | Scoped API key permissions, legacy auth system removed |
