@@ -47,6 +47,7 @@ export async function renderBackupStorage(container) {
                             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">File Storage</h2>
                             <p class="text-sm text-gray-500 dark:text-gray-400">Configure storage for matter attachments</p>
                         </div>
+                        <span id="storage-status-badge" class="ml-3 hidden"></span>
                     </div>
                     <button id="storage-help-btn" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -88,52 +89,102 @@ export async function renderBackupStorage(container) {
 
                     <!-- S3 Settings -->
                     <div id="s3-settings" class="mb-6 hidden">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Access Key ID</label>
-                                <div class="flex gap-2">
-                                    <input type="password" id="s3-access-key" class="flex-1 bg-white border border-gray-300 text-gray-900 text-sm rounded-lg p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:text-white">
-                                    <button type="button" class="toggle-password px-3 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm dark:bg-gray-600 dark:text-white" data-target="s3-access-key">Show</button>
+                        <!-- S3 Configured Summary View -->
+                        <div id="s3-configured-view" class="hidden">
+                            <div class="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div class="flex items-center">
+                                        <svg class="w-5 h-5 text-green-600 dark:text-green-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                        </svg>
+                                        <span class="font-medium text-green-800 dark:text-green-300">S3 Storage Configured</span>
+                                    </div>
+                                    <button id="s3-reconfigure-btn" type="button" class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
+                                        Reconfigure
+                                    </button>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2 text-sm">
+                                    <div>
+                                        <span class="text-gray-600 dark:text-gray-400">Bucket:</span>
+                                        <span id="s3-summary-bucket" class="ml-1 font-medium text-gray-900 dark:text-white"></span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-600 dark:text-gray-400">Region:</span>
+                                        <span id="s3-summary-region" class="ml-1 font-medium text-gray-900 dark:text-white"></span>
+                                    </div>
+                                    <div id="s3-summary-endpoint-row" class="col-span-2 hidden">
+                                        <span class="text-gray-600 dark:text-gray-400">Endpoint:</span>
+                                        <span id="s3-summary-endpoint" class="ml-1 font-medium text-gray-900 dark:text-white"></span>
+                                    </div>
+                                </div>
+                                <div class="mt-3 pt-3 border-t border-green-200 dark:border-green-700">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Bucket Name</label>
+                                    <input type="text" id="s3-bucket-update" class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:text-white">
+                                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Update bucket without re-entering credentials</p>
+                                </div>
+                                <div id="s3-bucket-changed-actions" class="mt-3 hidden">
+                                    <button id="save-bucket-update-btn" class="w-full text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-4 py-2 text-sm font-medium">
+                                        Save Bucket Change
+                                    </button>
+                                </div>
+                                <div class="mt-3 pt-3 border-t border-green-200 dark:border-green-700">
+                                    <button id="clear-s3-settings-btn" type="button" class="w-full text-red-700 bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50 rounded-lg px-4 py-2 text-sm font-medium">
+                                        Clear S3 Settings
+                                    </button>
+                                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400 text-center">Switch to local storage and remove S3 configuration</p>
                                 </div>
                             </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Secret Access Key</label>
-                                <div class="flex gap-2">
-                                    <input type="password" id="s3-secret-key" class="flex-1 bg-white border border-gray-300 text-gray-900 text-sm rounded-lg p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:text-white">
-                                    <button type="button" class="toggle-password px-3 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm dark:bg-gray-600 dark:text-white" data-target="s3-secret-key">Show</button>
+                        </div>
+
+                        <!-- S3 Edit Form View -->
+                        <div id="s3-edit-view">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Access Key ID</label>
+                                    <div class="flex gap-2">
+                                        <input type="password" id="s3-access-key" class="flex-1 bg-white border border-gray-300 text-gray-900 text-sm rounded-lg p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:text-white">
+                                        <button type="button" class="toggle-password px-3 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm dark:bg-gray-600 dark:text-white" data-target="s3-access-key">Show</button>
+                                    </div>
                                 </div>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Bucket Name</label>
-                                <input type="text" id="s3-bucket" class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:text-white">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Region</label>
-                                <select id="s3-region" class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:text-white">
-                                    <option value="us-east-1">US East (N. Virginia)</option>
-                                    <option value="us-east-2">US East (Ohio)</option>
-                                    <option value="us-west-1">US West (N. California)</option>
-                                    <option value="us-west-2">US West (Oregon)</option>
-                                    <option value="eu-west-1">EU (Ireland)</option>
-                                    <option value="eu-west-2">EU (London)</option>
-                                    <option value="eu-central-1">EU (Frankfurt)</option>
-                                    <option value="ap-northeast-1">Asia Pacific (Tokyo)</option>
-                                    <option value="ap-southeast-1">Asia Pacific (Singapore)</option>
-                                    <option value="ap-southeast-2">Asia Pacific (Sydney)</option>
-                                    <option value="custom">Custom</option>
-                                </select>
-                            </div>
-                            <div class="md:col-span-2">
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Custom Endpoint (for MinIO, Backblaze, Wasabi)</label>
-                                <input type="text" id="s3-endpoint" placeholder="https://s3.us-west-001.backblazeb2.com" class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:text-white">
-                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Leave empty for AWS S3. Required for MinIO, Backblaze B2, Wasabi, etc.</p>
-                            </div>
-                            <div class="md:col-span-2">
-                                <label class="flex items-center cursor-pointer">
-                                    <input type="checkbox" id="s3-path-style" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
-                                    <span class="ml-2 text-sm font-medium text-gray-900 dark:text-white">Use Path-Style Addressing</span>
-                                </label>
-                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Enable for MinIO and some S3-compatible services that require path-style URLs.</p>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Secret Access Key</label>
+                                    <div class="flex gap-2">
+                                        <input type="password" id="s3-secret-key" class="flex-1 bg-white border border-gray-300 text-gray-900 text-sm rounded-lg p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:text-white">
+                                        <button type="button" class="toggle-password px-3 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm dark:bg-gray-600 dark:text-white" data-target="s3-secret-key">Show</button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Bucket Name</label>
+                                    <input type="text" id="s3-bucket" class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:text-white">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Region</label>
+                                    <select id="s3-region" class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:text-white">
+                                        <option value="us-east-1">US East (N. Virginia)</option>
+                                        <option value="us-east-2">US East (Ohio)</option>
+                                        <option value="us-west-1">US West (N. California)</option>
+                                        <option value="us-west-2">US West (Oregon)</option>
+                                        <option value="eu-west-1">EU (Ireland)</option>
+                                        <option value="eu-west-2">EU (London)</option>
+                                        <option value="eu-central-1">EU (Frankfurt)</option>
+                                        <option value="ap-northeast-1">Asia Pacific (Tokyo)</option>
+                                        <option value="ap-southeast-1">Asia Pacific (Singapore)</option>
+                                        <option value="ap-southeast-2">Asia Pacific (Sydney)</option>
+                                        <option value="custom">Custom</option>
+                                    </select>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Custom Endpoint (for MinIO, Backblaze, Wasabi)</label>
+                                    <input type="text" id="s3-endpoint" placeholder="https://s3.us-west-001.backblazeb2.com" class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:text-white">
+                                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Leave empty for AWS S3. Required for MinIO, Backblaze B2, Wasabi, etc.</p>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="flex items-center cursor-pointer">
+                                        <input type="checkbox" id="s3-path-style" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
+                                        <span class="ml-2 text-sm font-medium text-gray-900 dark:text-white">Use Path-Style Addressing</span>
+                                    </label>
+                                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Enable for MinIO and some S3-compatible services that require path-style URLs.</p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -189,26 +240,57 @@ export async function renderBackupStorage(container) {
 
                 <div id="migration-actions" class="space-y-3">
                     <div id="migrate-to-s3-section" class="hidden">
-                        <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                        <p class="text-sm text-gray-700 dark:text-gray-300 mb-3">
                             Migrate <span id="migrate-to-s3-count">0</span> attachment(s) from local to S3:
                         </p>
-                        <label class="flex items-center cursor-pointer mb-2">
-                            <input type="checkbox" id="migrate-delete-source-s3" class="w-4 h-4 text-amber-600 bg-gray-100 border-gray-300 rounded focus:ring-amber-500">
-                            <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Delete local files after migration</span>
-                        </label>
+                        <div class="space-y-2 mb-3">
+                            <label class="flex items-start cursor-pointer">
+                                <input type="radio" name="migrate-s3-action" value="delete" class="mt-0.5 w-4 h-4 text-amber-600 bg-gray-100 border-gray-300 focus:ring-amber-500">
+                                <div class="ml-2">
+                                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Delete local files after migration</span>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">Recommended. Frees up local disk space.</p>
+                                </div>
+                            </label>
+                            <label class="flex items-start cursor-pointer">
+                                <input type="radio" name="migrate-s3-action" value="archive" class="mt-0.5 w-4 h-4 text-amber-600 bg-gray-100 border-gray-300 focus:ring-amber-500">
+                                <div class="ml-2">
+                                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Archive local files after migration</span>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">Move to ./data/uploads-archive/ folder for safekeeping.</p>
+                                </div>
+                            </label>
+                            <label class="flex items-start cursor-pointer">
+                                <input type="radio" name="migrate-s3-action" value="keep" checked class="mt-0.5 w-4 h-4 text-amber-600 bg-gray-100 border-gray-300 focus:ring-amber-500">
+                                <div class="ml-2">
+                                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Keep local files (creates duplicates)</span>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">Files remain on disk but are no longer tracked. Manual cleanup needed later.</p>
+                                </div>
+                            </label>
+                        </div>
                         <button id="migrate-to-s3-btn" class="w-full text-white bg-amber-600 hover:bg-amber-700 rounded-lg px-4 py-2 text-sm font-semibold">
                             Migrate to S3
                         </button>
                     </div>
 
                     <div id="migrate-to-local-section" class="hidden">
-                        <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                        <p class="text-sm text-gray-700 dark:text-gray-300 mb-3">
                             Migrate <span id="migrate-to-local-count">0</span> attachment(s) from S3 to local:
                         </p>
-                        <label class="flex items-center cursor-pointer mb-2">
-                            <input type="checkbox" id="migrate-delete-source-local" class="w-4 h-4 text-amber-600 bg-gray-100 border-gray-300 rounded focus:ring-amber-500">
-                            <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Delete S3 objects after migration</span>
-                        </label>
+                        <div class="space-y-2 mb-3">
+                            <label class="flex items-start cursor-pointer">
+                                <input type="radio" name="migrate-local-action" value="delete" class="mt-0.5 w-4 h-4 text-amber-600 bg-gray-100 border-gray-300 focus:ring-amber-500">
+                                <div class="ml-2">
+                                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Delete S3 objects after migration</span>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">Recommended. Reduces S3 storage costs.</p>
+                                </div>
+                            </label>
+                            <label class="flex items-start cursor-pointer">
+                                <input type="radio" name="migrate-local-action" value="keep" checked class="mt-0.5 w-4 h-4 text-amber-600 bg-gray-100 border-gray-300 focus:ring-amber-500">
+                                <div class="ml-2">
+                                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Keep S3 objects (creates duplicates)</span>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">Objects remain in S3 but are no longer tracked. Manual cleanup needed later.</p>
+                                </div>
+                            </label>
+                        </div>
                         <button id="migrate-to-local-btn" class="w-full text-white bg-amber-600 hover:bg-amber-700 rounded-lg px-4 py-2 text-sm font-semibold">
                             Migrate to Local
                         </button>
@@ -522,8 +604,10 @@ function updateMigrationUI() {
 }
 
 async function handleMigration(direction) {
-    const deleteSourceId = direction === 'local-to-s3' ? 'migrate-delete-source-s3' : 'migrate-delete-source-local';
-    const deleteSource = document.getElementById(deleteSourceId)?.checked || false;
+    const radioName = direction === 'local-to-s3' ? 'migrate-s3-action' : 'migrate-local-action';
+    const selectedAction = document.querySelector(`input[name="${radioName}"]:checked`)?.value || 'keep';
+    const deleteSource = selectedAction === 'delete';
+    const archiveSource = selectedAction === 'archive';
 
     const btnId = direction === 'local-to-s3' ? 'migrate-to-s3-btn' : 'migrate-to-local-btn';
     const btn = document.getElementById(btnId);
@@ -534,10 +618,19 @@ async function handleMigration(direction) {
 
     const count = direction === 'local-to-s3' ? migrationStatus.filesystem_count : migrationStatus.s3_count;
 
+    let actionDescription = '';
+    if (deleteSource) {
+        actionDescription = 'Source files will be DELETED after successful migration.';
+    } else if (archiveSource) {
+        actionDescription = 'Source files will be ARCHIVED (moved to ./data/uploads-archive/) after successful migration.';
+    } else {
+        actionDescription = 'Source files will be KEPT (creating duplicates). You will need to clean them up manually later.';
+    }
+
     const confirmed = await showConfirm(
         'Migrate Storage',
         `This will migrate ${count} attachment(s) from ${direction === 'local-to-s3' ? 'local storage to S3' : 'S3 to local storage'}.\n\n` +
-        (deleteSource ? 'Source files will be deleted after successful migration.\n\n' : '') +
+        `${actionDescription}\n\n` +
         'This operation may take a while depending on the number and size of files.',
         'Migrate',
         'Cancel',
@@ -560,7 +653,7 @@ async function handleMigration(direction) {
     }, 500);
 
     try {
-        const result = await api.migrateStorage(direction, deleteSource);
+        const result = await api.migrateStorage(direction, deleteSource, archiveSource);
 
         clearInterval(progressInterval);
         progressBar.style.width = '100%';
@@ -651,6 +744,9 @@ async function initStorageSettings() {
             document.getElementById('save-storage-btn').disabled = false;
         }
 
+        // Update status badge
+        updateStorageConfiguredState();
+
         // Load backup stats
         await loadBackupStatsUI();
 
@@ -692,6 +788,218 @@ async function loadBackupStatsUI() {
     }
 }
 
+/**
+ * Show dialog for S3 to Local migration options when switching backends
+ * @param {number} fileCount - Number of files in S3
+ * @returns {Promise<string>} - 'delete', 'keep', 'skip', or 'cancel'
+ */
+async function showS3ToLocalMigrationDialog(fileCount) {
+    return new Promise((resolve) => {
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center';
+        modal.innerHTML = `
+            <div class="relative mx-auto p-6 border w-full max-w-md shadow-lg rounded-lg bg-white dark:bg-gray-800">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Migrate S3 Files to Local?</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    You have <strong>${fileCount}</strong> attachment(s) stored in S3. What would you like to do with them?
+                </p>
+                <div class="space-y-3 mb-6">
+                    <label class="flex items-start cursor-pointer p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-600">
+                        <input type="radio" name="s3-migration-choice" value="delete" class="mt-0.5 w-4 h-4 text-blue-600">
+                        <div class="ml-3">
+                            <span class="text-sm font-medium text-gray-900 dark:text-white">Migrate & Delete from S3</span>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Download files to local, then delete from S3. Recommended.</p>
+                        </div>
+                    </label>
+                    <label class="flex items-start cursor-pointer p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-600">
+                        <input type="radio" name="s3-migration-choice" value="keep" class="mt-0.5 w-4 h-4 text-blue-600">
+                        <div class="ml-3">
+                            <span class="text-sm font-medium text-gray-900 dark:text-white">Migrate & Keep in S3</span>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Download files to local, keep copies in S3 (manual cleanup later).</p>
+                        </div>
+                    </label>
+                    <label class="flex items-start cursor-pointer p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-600">
+                        <input type="radio" name="s3-migration-choice" value="skip" checked class="mt-0.5 w-4 h-4 text-blue-600">
+                        <div class="ml-3">
+                            <span class="text-sm font-medium text-gray-900 dark:text-white">Switch without migrating</span>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Files stay in S3 but become inaccessible. Migrate later from Storage Migration section.</p>
+                        </div>
+                    </label>
+                </div>
+                <div class="flex gap-3">
+                    <button id="migration-dialog-cancel" class="flex-1 px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm dark:bg-gray-600 dark:text-white">
+                        Cancel
+                    </button>
+                    <button id="migration-dialog-confirm" class="flex-1 px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium">
+                        Continue
+                    </button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        modal.querySelector('#migration-dialog-cancel').addEventListener('click', () => {
+            document.body.removeChild(modal);
+            resolve('cancel');
+        });
+
+        modal.querySelector('#migration-dialog-confirm').addEventListener('click', () => {
+            const choice = modal.querySelector('input[name="s3-migration-choice"]:checked')?.value || 'skip';
+            document.body.removeChild(modal);
+            resolve(choice);
+        });
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                document.body.removeChild(modal);
+                resolve('cancel');
+            }
+        });
+    });
+}
+
+/**
+ * Show dialog for Local to S3 migration options when switching backends
+ * @param {number} fileCount - Number of files in local storage
+ * @returns {Promise<string>} - 'delete', 'archive', 'keep', 'skip', or 'cancel'
+ */
+async function showLocalToS3MigrationDialog(fileCount) {
+    return new Promise((resolve) => {
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center';
+        modal.innerHTML = `
+            <div class="relative mx-auto p-6 border w-full max-w-md shadow-lg rounded-lg bg-white dark:bg-gray-800">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Migrate Local Files to S3?</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    You have <strong>${fileCount}</strong> attachment(s) stored locally. What would you like to do with them?
+                </p>
+                <div class="space-y-3 mb-6">
+                    <label class="flex items-start cursor-pointer p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-600">
+                        <input type="radio" name="local-migration-choice" value="delete" class="mt-0.5 w-4 h-4 text-blue-600">
+                        <div class="ml-3">
+                            <span class="text-sm font-medium text-gray-900 dark:text-white">Migrate & Delete local files</span>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Upload to S3, then delete local files. Frees disk space.</p>
+                        </div>
+                    </label>
+                    <label class="flex items-start cursor-pointer p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-600">
+                        <input type="radio" name="local-migration-choice" value="archive" class="mt-0.5 w-4 h-4 text-blue-600">
+                        <div class="ml-3">
+                            <span class="text-sm font-medium text-gray-900 dark:text-white">Migrate & Archive local files</span>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Upload to S3, move local files to archive folder.</p>
+                        </div>
+                    </label>
+                    <label class="flex items-start cursor-pointer p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-600">
+                        <input type="radio" name="local-migration-choice" value="keep" class="mt-0.5 w-4 h-4 text-blue-600">
+                        <div class="ml-3">
+                            <span class="text-sm font-medium text-gray-900 dark:text-white">Migrate & Keep local files</span>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Upload to S3, keep local copies (manual cleanup later).</p>
+                        </div>
+                    </label>
+                    <label class="flex items-start cursor-pointer p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-600">
+                        <input type="radio" name="local-migration-choice" value="skip" checked class="mt-0.5 w-4 h-4 text-blue-600">
+                        <div class="ml-3">
+                            <span class="text-sm font-medium text-gray-900 dark:text-white">Switch without migrating</span>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">Files stay local but become inaccessible. Migrate later from Storage Migration section.</p>
+                        </div>
+                    </label>
+                </div>
+                <div class="flex gap-3">
+                    <button id="migration-dialog-cancel" class="flex-1 px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm dark:bg-gray-600 dark:text-white">
+                        Cancel
+                    </button>
+                    <button id="migration-dialog-confirm" class="flex-1 px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium">
+                        Continue
+                    </button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        modal.querySelector('#migration-dialog-cancel').addEventListener('click', () => {
+            document.body.removeChild(modal);
+            resolve('cancel');
+        });
+
+        modal.querySelector('#migration-dialog-confirm').addEventListener('click', () => {
+            const choice = modal.querySelector('input[name="local-migration-choice"]:checked')?.value || 'skip';
+            document.body.removeChild(modal);
+            resolve(choice);
+        });
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                document.body.removeChild(modal);
+                resolve('cancel');
+            }
+        });
+    });
+}
+
+/**
+ * Perform S3 to Local migration
+ * @param {string} action - 'delete' or 'keep'
+ * @returns {Promise<boolean>} - true if successful
+ */
+async function performS3ToLocalMigration(action) {
+    const deleteSource = action === 'delete';
+
+    showToast('Starting migration from S3 to Local...', 'info');
+
+    try {
+        const result = await api.migrateStorage('s3-to-local', deleteSource, false);
+
+        if (result.migrated > 0) {
+            showToast(`Migration complete: ${result.migrated} file(s) migrated`, 'success');
+        }
+
+        if (result.failed > 0) {
+            showToast(`Migration had ${result.failed} failure(s)`, 'warning');
+        }
+
+        // Reload migration status
+        await loadMigrationStatus();
+
+        return result.migrated > 0 || result.failed === 0;
+    } catch (error) {
+        showToast(`Migration failed: ${error.message}`, 'error');
+        return false;
+    }
+}
+
+/**
+ * Perform Local to S3 migration
+ * @param {string} action - 'delete', 'archive', or 'keep'
+ * @returns {Promise<boolean>} - true if successful
+ */
+async function performLocalToS3Migration(action) {
+    const deleteSource = action === 'delete';
+    const archiveSource = action === 'archive';
+
+    showToast('Starting migration from Local to S3...', 'info');
+
+    try {
+        const result = await api.migrateStorage('local-to-s3', deleteSource, archiveSource);
+
+        if (result.migrated > 0) {
+            showToast(`Migration complete: ${result.migrated} file(s) migrated`, 'success');
+        }
+
+        if (result.failed > 0) {
+            showToast(`Migration had ${result.failed} failure(s)`, 'warning');
+        }
+
+        // Reload migration status
+        await loadMigrationStatus();
+
+        return result.migrated > 0 || result.failed === 0;
+    } catch (error) {
+        showToast(`Migration failed: ${error.message}`, 'error');
+        return false;
+    }
+}
+
 function updateStorageBackendVisibility(backend) {
     const filesystemSettings = document.getElementById('filesystem-settings');
     const s3Settings = document.getElementById('s3-settings');
@@ -705,15 +1013,177 @@ function updateStorageBackendVisibility(backend) {
     }
 }
 
+function updateStorageConfiguredState() {
+    const settings = state.storageSettings;
+    const badge = document.getElementById('storage-status-badge');
+    const selectedBackend = document.querySelector('input[name="storage_backend"]:checked')?.value || 'filesystem';
+
+    if (!badge) return;
+
+    // Check if current backend is configured and active
+    const isFilesystemActive = selectedBackend === 'filesystem' && settings?.storage_backend === 'filesystem';
+    const isS3Active = selectedBackend === 's3' && settings?.storage_backend === 's3' && settings?.has_s3_config;
+
+    if (isFilesystemActive || isS3Active) {
+        const backendLabel = isS3Active ? 'S3' : 'Local';
+        badge.innerHTML = `
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                </svg>
+                ${backendLabel} Active
+            </span>
+        `;
+        badge.classList.remove('hidden');
+    } else if (selectedBackend === 's3' && !settings?.has_s3_config) {
+        badge.innerHTML = `
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300">
+                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                </svg>
+                Not Configured
+            </span>
+        `;
+        badge.classList.remove('hidden');
+    } else {
+        badge.classList.add('hidden');
+    }
+
+    // Update S3 view (configured summary vs edit form)
+    updateS3View();
+}
+
+// Track if user is in reconfigure mode
+let s3ReconfigureMode = false;
+// Track the original bucket name for change detection
+let originalS3Bucket = '';
+
+function updateS3View() {
+    const settings = state.storageSettings;
+    const configuredView = document.getElementById('s3-configured-view');
+    const editView = document.getElementById('s3-edit-view');
+    const testSaveButtons = document.querySelector('#storage-settings-content > .flex.gap-3');
+
+    if (!configuredView || !editView) return;
+
+    const isS3Configured = settings?.has_s3_config && settings?.storage_backend === 's3';
+    const selectedBackend = document.querySelector('input[name="storage_backend"]:checked')?.value;
+
+    if (isS3Configured && selectedBackend === 's3' && !s3ReconfigureMode) {
+        // Show configured summary view
+        configuredView.classList.remove('hidden');
+        editView.classList.add('hidden');
+
+        // Hide the main Test Connection and Save buttons when S3 is configured
+        testSaveButtons?.classList.add('hidden');
+
+        // Populate summary
+        document.getElementById('s3-summary-bucket').textContent = settings.s3_bucket || '';
+        document.getElementById('s3-summary-region').textContent = settings.s3_region || '';
+        document.getElementById('s3-bucket-update').value = settings.s3_bucket || '';
+        originalS3Bucket = settings.s3_bucket || '';
+
+        const endpointRow = document.getElementById('s3-summary-endpoint-row');
+        if (settings.s3_endpoint) {
+            document.getElementById('s3-summary-endpoint').textContent = settings.s3_endpoint;
+            endpointRow?.classList.remove('hidden');
+        } else {
+            endpointRow?.classList.add('hidden');
+        }
+
+        // Hide bucket changed actions initially
+        document.getElementById('s3-bucket-changed-actions')?.classList.add('hidden');
+    } else {
+        // Show edit form view
+        configuredView.classList.add('hidden');
+        editView.classList.remove('hidden');
+
+        // Show the main Test Connection and Save buttons when in edit mode
+        testSaveButtons?.classList.remove('hidden');
+    }
+}
+
 function setupEventListeners() {
     // Storage backend toggle
     document.querySelectorAll('input[name="storage_backend"]').forEach(radio => {
-        radio.addEventListener('change', (e) => {
-            updateStorageBackendVisibility(e.target.value);
+        radio.addEventListener('change', async (e) => {
+            const newBackend = e.target.value;
+            const currentBackend = state.storageSettings?.storage_backend;
+
+            // Check if switching away from S3 when there are S3 files
+            if (currentBackend === 's3' && newBackend === 'filesystem' && migrationStatus?.s3_count > 0) {
+                // Show migration options dialog
+                const result = await showS3ToLocalMigrationDialog(migrationStatus.s3_count);
+
+                if (result === 'cancel') {
+                    // Revert the radio selection
+                    document.querySelector('input[name="storage_backend"][value="s3"]').checked = true;
+                    return;
+                }
+
+                if (result !== 'skip') {
+                    // User chose to migrate - trigger migration before switching
+                    const migrationSuccess = await performS3ToLocalMigration(result);
+                    if (!migrationSuccess) {
+                        // Migration failed, revert
+                        document.querySelector('input[name="storage_backend"][value="s3"]').checked = true;
+                        return;
+                    }
+                }
+                // result === 'skip' means user chose to switch without migrating
+            }
+
+            // Check if switching away from filesystem when there are local files (switching TO S3)
+            if (currentBackend === 'filesystem' && newBackend === 's3' && migrationStatus?.filesystem_count > 0 && migrationStatus?.s3_configured) {
+                // Show migration options dialog for local to S3
+                const result = await showLocalToS3MigrationDialog(migrationStatus.filesystem_count);
+
+                if (result === 'cancel') {
+                    // Revert the radio selection
+                    document.querySelector('input[name="storage_backend"][value="filesystem"]').checked = true;
+                    return;
+                }
+
+                if (result !== 'skip') {
+                    // User chose to migrate - trigger migration before switching
+                    const migrationSuccess = await performLocalToS3Migration(result);
+                    if (!migrationSuccess) {
+                        // Migration failed, revert
+                        document.querySelector('input[name="storage_backend"][value="filesystem"]').checked = true;
+                        return;
+                    }
+                }
+            }
+
+            updateStorageBackendVisibility(newBackend);
+            s3ReconfigureMode = false; // Reset reconfigure mode when switching backends
             storageTestPassed = false;
             document.getElementById('save-storage-btn').disabled = true;
             document.getElementById('storage-test-result')?.classList.add('hidden');
+            updateStorageConfiguredState();
         });
+    });
+
+    // S3 Reconfigure button
+    document.getElementById('s3-reconfigure-btn')?.addEventListener('click', () => {
+        s3ReconfigureMode = true;
+        storageTestPassed = false;
+        document.getElementById('save-storage-btn').disabled = true;
+        document.getElementById('storage-test-result')?.classList.add('hidden');
+        updateS3View();
+    });
+
+    // S3 bucket update field - sync with main bucket field and show save button if changed
+    document.getElementById('s3-bucket-update')?.addEventListener('input', (e) => {
+        document.getElementById('s3-bucket').value = e.target.value;
+        const bucketChangedActions = document.getElementById('s3-bucket-changed-actions');
+
+        // Show/hide save button based on whether bucket name changed
+        if (e.target.value !== originalS3Bucket && e.target.value.trim() !== '') {
+            bucketChangedActions?.classList.remove('hidden');
+        } else {
+            bucketChangedActions?.classList.add('hidden');
+        }
     });
 
     // Password toggle buttons
@@ -828,24 +1298,43 @@ function setupEventListeners() {
 
         try {
             const selectedBackend = document.querySelector('input[name="storage_backend"]:checked')?.value || 'filesystem';
+            const existingSettings = state.storageSettings;
+            const isS3Configured = existingSettings?.has_s3_config && existingSettings?.storage_backend === 's3';
+            const isBucketOnlyUpdate = isS3Configured && !s3ReconfigureMode && selectedBackend === 's3';
 
             const settings = {
                 storage_backend: selectedBackend
             };
 
             if (selectedBackend === 's3') {
-                settings.s3_access_key_id = document.getElementById('s3-access-key').value;
-                settings.s3_secret_access_key = document.getElementById('s3-secret-key').value;
-                settings.s3_bucket = document.getElementById('s3-bucket').value;
-                settings.s3_region = document.getElementById('s3-region').value;
-                settings.s3_endpoint = document.getElementById('s3-endpoint').value || '';
-                settings.s3_path_style = document.getElementById('s3-path-style').checked;
+                if (isBucketOnlyUpdate) {
+                    // Only update the bucket, keep existing credentials
+                    settings.s3_bucket = document.getElementById('s3-bucket-update').value || document.getElementById('s3-bucket').value;
+                } else {
+                    // Full S3 config update
+                    settings.s3_access_key_id = document.getElementById('s3-access-key').value;
+                    settings.s3_secret_access_key = document.getElementById('s3-secret-key').value;
+                    settings.s3_bucket = document.getElementById('s3-bucket').value;
+                    settings.s3_region = document.getElementById('s3-region').value;
+                    settings.s3_endpoint = document.getElementById('s3-endpoint').value || '';
+                    settings.s3_path_style = document.getElementById('s3-path-style').checked;
+                }
             } else {
                 settings.filesystem_path = document.getElementById('storage-filesystem-path').value || '';
             }
 
             await api.updateStorageSettings(settings);
             showToast('Storage settings saved successfully', 'success');
+
+            // Reset reconfigure mode after successful save
+            s3ReconfigureMode = false;
+
+            // Reload migration status to update the migration section
+            await loadMigrationStatus();
+
+            // Update the storage settings state and UI
+            await loadStorageSettings();
+            updateStorageConfiguredState();
         } catch (error) {
             showToast(`Error: ${error.message}`, 'error');
         } finally {
@@ -908,6 +1397,12 @@ function setupEventListeners() {
     // Migration buttons
     document.getElementById('migrate-to-s3-btn')?.addEventListener('click', () => handleMigration('local-to-s3'));
     document.getElementById('migrate-to-local-btn')?.addEventListener('click', () => handleMigration('s3-to-local'));
+
+    // Save Bucket Update button (in configured view)
+    document.getElementById('save-bucket-update-btn')?.addEventListener('click', handleSaveBucketUpdate);
+
+    // Clear S3 Settings button
+    document.getElementById('clear-s3-settings-btn')?.addEventListener('click', handleClearS3Settings);
 }
 
 async function handleCreateBackup() {
@@ -1068,5 +1563,122 @@ async function handleRestoreBackup() {
         btn.disabled = false;
         document.getElementById('restore-cancel-btn').disabled = false;
         progressDiv?.classList.add('hidden');
+    }
+}
+
+async function handleSaveBucketUpdate() {
+    const btn = document.getElementById('save-bucket-update-btn');
+    const newBucket = document.getElementById('s3-bucket-update')?.value?.trim();
+
+    if (!newBucket) {
+        showToast('Bucket name cannot be empty', 'error');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    try {
+        await api.updateStorageSettings({
+            storage_backend: 's3',
+            s3_bucket: newBucket
+        });
+
+        showToast('Bucket name updated successfully', 'success');
+
+        // Reload settings and update UI
+        await loadStorageSettings();
+        updateStorageConfiguredState();
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save Bucket Change';
+    }
+}
+
+async function handleClearS3Settings() {
+    // Check if there are files in S3
+    const s3FileCount = migrationStatus?.s3_count || 0;
+
+    let confirmMessage = 'This will clear your S3 configuration and switch to local filesystem storage.';
+
+    if (s3FileCount > 0) {
+        confirmMessage = `You have ${s3FileCount} attachment(s) stored in S3.\n\n` +
+            `Clearing S3 settings will:\n` +
+            `1. Migrate all ${s3FileCount} file(s) to local storage\n` +
+            `2. Delete the files from S3\n` +
+            `3. Remove your S3 credentials\n` +
+            `4. Switch to local filesystem storage\n\n` +
+            `This cannot be undone.`;
+    } else {
+        confirmMessage += '\n\nThis will remove your S3 credentials and switch to local filesystem storage.';
+    }
+
+    const confirmed = await showConfirm(
+        'Clear S3 Settings',
+        confirmMessage,
+        'Clear S3 Settings',
+        'Cancel',
+        'destructive'
+    );
+
+    if (!confirmed) return;
+
+    const btn = document.getElementById('clear-s3-settings-btn');
+    btn.disabled = true;
+    btn.textContent = 'Clearing...';
+
+    try {
+        // If there are files in S3, migrate them first with deletion
+        if (s3FileCount > 0) {
+            showToast(`Migrating ${s3FileCount} file(s) from S3 to local storage...`, 'info');
+
+            const result = await api.migrateStorage('s3-to-local', true, false); // deleteSource = true
+
+            if (result.failed > 0) {
+                showToast(`Migration completed with ${result.failed} failure(s). Cannot clear S3 settings until all files are migrated.`, 'error');
+                btn.disabled = false;
+                btn.textContent = 'Clear S3 Settings';
+                return;
+            }
+
+            showToast(`Migrated ${result.migrated} file(s) to local storage`, 'success');
+        }
+
+        // Now clear the S3 settings
+        await api.updateStorageSettings({
+            storage_backend: 'filesystem',
+            s3_access_key_id: '',
+            s3_secret_access_key: '',
+            s3_bucket: '',
+            s3_region: 'us-east-1',
+            s3_endpoint: '',
+            s3_path_style: false
+        });
+
+        showToast('S3 settings cleared. Now using local filesystem storage.', 'success');
+
+        // Reload everything
+        await Promise.all([
+            loadStorageSettings(),
+            loadMigrationStatus()
+        ]);
+
+        // Switch the radio button to filesystem
+        const filesystemRadio = document.querySelector('input[name="storage_backend"][value="filesystem"]');
+        if (filesystemRadio) {
+            filesystemRadio.checked = true;
+        }
+
+        s3ReconfigureMode = false;
+        updateStorageBackendVisibility('filesystem');
+        updateStorageConfiguredState();
+
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Clear S3 Settings';
     }
 }

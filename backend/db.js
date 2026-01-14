@@ -232,6 +232,13 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
   if (!attachmentColumnNames.includes('direction')) {
     db.run("ALTER TABLE matter_attachments ADD COLUMN direction TEXT DEFAULT 'internal'");
   }
+  if (!attachmentColumnNames.includes('storage_backend')) {
+    // Default to 'filesystem' for existing attachments since that was the only backend before this feature
+    db.run("ALTER TABLE matter_attachments ADD COLUMN storage_backend TEXT DEFAULT 'filesystem'");
+  }
+  if (!attachmentColumnNames.includes('storage_key')) {
+    db.run("ALTER TABLE matter_attachments ADD COLUMN storage_key TEXT DEFAULT ''");
+  }
 
   // Helper to save database to disk
   function saveDatabase() {

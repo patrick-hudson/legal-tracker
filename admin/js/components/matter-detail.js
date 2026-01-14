@@ -1112,7 +1112,7 @@ function renderAttachmentsList(attachments) {
                             <div class="tooltip-arrow" data-popper-arrow></div>
                         </div>
                         ` : ''}
-                        <button class="edit-attachment-btn p-2 text-gray-600 hover:text-gray-800 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600 rounded" data-id="${attachment.id}" data-document-date="${attachment.document_date || ''}" data-direction="${attachment.direction || 'internal'}" data-tooltip-target="tooltip-edit-${attachment.id}">
+                        <button class="edit-attachment-btn p-2 text-gray-600 hover:text-gray-800 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600 rounded" data-id="${attachment.id}" data-document-date="${attachment.document_date || ''}" data-direction="${attachment.direction || 'internal'}" data-storage-backend="${attachment.storage_backend || 'filesystem'}" data-storage-key="${escapeHtml(attachment.storage_key || '')}" data-tooltip-target="tooltip-edit-${attachment.id}">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                             </svg>
@@ -1169,7 +1169,9 @@ function attachAttachmentEventListeners(matterId, container) {
             const attachmentId = editBtn.dataset.id;
             const documentDate = editBtn.dataset.documentDate || '';
             const direction = editBtn.dataset.direction || 'internal';
-            await handleAttachmentEdit(attachmentId, documentDate, direction, matterId, container);
+            const storageBackend = editBtn.dataset.storageBackend || 'filesystem';
+            const storageKey = editBtn.dataset.storageKey || '';
+            await handleAttachmentEdit(attachmentId, documentDate, direction, matterId, container, { storageBackend, storageKey });
         } else if (downloadBtn) {
             e.preventDefault();
             e.stopPropagation();
@@ -1288,7 +1290,8 @@ async function handleAttachmentDownload(attachmentId, filename) {
 async function handleAttachmentPreview(attachmentId, filename, contentType) {
     try {
         // Fetch the file content using the API's fetch method with proper auth
-        const response = await fetch(`/admin/api/attachments/${attachmentId}/download`, {
+        // Use stream=true to bypass S3 redirect (CORS prevents fetch from reading redirected S3 responses)
+        const response = await fetch(`/admin/api/attachments/${attachmentId}/download?stream=true`, {
             credentials: 'same-origin'
         });
 
@@ -1396,8 +1399,120 @@ async function handleAttachmentDelete(attachmentId, matterId, container) {
     }
 }
 
-async function handleAttachmentEdit(attachmentId, currentDocumentDate, currentDirection, matterId, container) {
+async function handleAttachmentEdit(attachmentId, currentDocumentDate, currentDirection, matterId, container, storageInfo = {}) {
     let capturedValues = { document_date: currentDocumentDate, direction: currentDirection };
+
+    // Check if debug mode is enabled
+    let isDebugMode = false;
+    let debugSection = '';
+    try {
+        const { settings } = await api.getSettings();
+        isDebugMode = settings?.audit_log_level === 'DEBUG';
+
+        if (isDebugMode && storageInfo.storageKey) {
+            const isS3 = storageInfo.storageBackend === 's3';
+            let storagePath = '';
+            let fullUrl = '';
+
+            if (isS3) {
+                // For S3, build the full HTTP URL
+                const bucket = settings?.s3_bucket || '[bucket]';
+                const region = settings?.s3_region || 'us-east-1';
+                const endpoint = settings?.s3_endpoint;
+                const pathStyle = settings?.s3_path_style;
+                storagePath = `s3://${bucket}/${storageInfo.storageKey}`;
+
+                // Build full HTTP URL based on endpoint and path style
+                if (endpoint) {
+                    // Custom endpoint (MinIO, etc.)
+                    const cleanEndpoint = endpoint.replace(/\/$/, '');
+                    if (pathStyle) {
+                        fullUrl = `${cleanEndpoint}/${bucket}/${storageInfo.storageKey}`;
+                    } else {
+                        // Virtual-hosted style with custom endpoint
+                        const urlParts = new URL(cleanEndpoint);
+                        fullUrl = `${urlParts.protocol}//${bucket}.${urlParts.host}/${storageInfo.storageKey}`;
+                    }
+                } else {
+                    // AWS S3
+                    fullUrl = `https://${bucket}.s3.${region}.amazonaws.com/${storageInfo.storageKey}`;
+                }
+            } else {
+                // For filesystem, show relative path
+                storagePath = `./data/uploads/${storageInfo.storageKey}`;
+            }
+
+            debugSection = `
+                <div class="mt-4 pt-4 border-t border-purple-200 dark:border-purple-800">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300">
+                            DEBUG
+                        </span>
+                        <span class="text-xs text-gray-500 dark:text-gray-400">Storage Information</span>
+                    </div>
+                    <div class="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 text-xs font-mono space-y-2">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600 dark:text-gray-400">Backend:</span>
+                            <span class="text-purple-700 dark:text-purple-300">${isS3 ? 'S3' : 'Filesystem'}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600 dark:text-gray-400">Key:</span>
+                            <span class="text-purple-700 dark:text-purple-300 break-all text-right max-w-[70%]">${escapeHtml(storageInfo.storageKey)}</span>
+                        </div>
+                        ${isS3 && fullUrl ? `
+                        <div class="pt-2 border-t border-purple-200 dark:border-purple-700">
+                            <div class="text-gray-600 dark:text-gray-400 mb-1">Direct URL (requires public bucket):</div>
+                            <div class="flex items-center gap-2">
+                                <input type="text" readonly value="${escapeHtml(fullUrl)}"
+                                    class="direct-url-input flex-1 bg-white dark:bg-gray-800 border border-purple-300 dark:border-purple-600 rounded px-2 py-1 text-xs text-purple-700 dark:text-purple-300 select-all"
+                                    onclick="this.select()">
+                                <button type="button" class="copy-url-btn px-2 py-1 text-xs bg-purple-100 hover:bg-purple-200 dark:bg-purple-800 dark:hover:bg-purple-700 text-purple-700 dark:text-purple-300 rounded" title="Copy URL">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="pt-2 border-t border-purple-200 dark:border-purple-700">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-gray-600 dark:text-gray-400">Presigned URL (1 hour):</span>
+                                <button type="button" class="get-presigned-url-btn px-2 py-1 text-xs bg-green-100 hover:bg-green-200 dark:bg-green-800 dark:hover:bg-green-700 text-green-700 dark:text-green-300 rounded flex items-center gap-1" data-attachment-id="${attachmentId}">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+                                    </svg>
+                                    Generate
+                                </button>
+                            </div>
+                            <div class="presigned-url-container hidden">
+                                <div class="flex items-center gap-2">
+                                    <input type="text" readonly class="presigned-url-input flex-1 bg-white dark:bg-gray-800 border border-green-300 dark:border-green-600 rounded px-2 py-1 text-xs text-green-700 dark:text-green-300 select-all" onclick="this.select()">
+                                    <button type="button" class="copy-presigned-btn px-2 py-1 text-xs bg-green-100 hover:bg-green-200 dark:bg-green-800 dark:hover:bg-green-700 text-green-700 dark:text-green-300 rounded" title="Copy URL">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                                        </svg>
+                                    </button>
+                                    <a href="#" target="_blank" rel="noopener noreferrer" class="open-presigned-btn px-2 py-1 text-xs bg-green-100 hover:bg-green-200 dark:bg-green-800 dark:hover:bg-green-700 text-green-700 dark:text-green-300 rounded" title="Open in new tab">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                                        </svg>
+                                    </a>
+                                </div>
+                                <p class="mt-1 text-[10px] text-green-600 dark:text-green-400 presigned-expiry"></p>
+                            </div>
+                        </div>
+                        ` : `
+                        <div class="pt-2 border-t border-purple-200 dark:border-purple-700">
+                            <div class="text-gray-600 dark:text-gray-400 mb-1">Path:</div>
+                            <code class="block bg-white dark:bg-gray-800 border border-purple-300 dark:border-purple-600 rounded px-2 py-1 text-purple-700 dark:text-purple-300 break-all">${escapeHtml(storagePath)}</code>
+                        </div>
+                        `}
+                    </div>
+                </div>
+            `;
+        }
+    } catch (e) {
+        // Silently ignore settings fetch error
+    }
 
     const content = `
         <form id="edit-attachment-form">
@@ -1417,6 +1532,7 @@ async function handleAttachmentEdit(attachmentId, currentDocumentDate, currentDi
                     </select>
                 </div>
             </div>
+            ${debugSection}
         </form>
     `;
 
@@ -1435,6 +1551,113 @@ async function handleAttachmentEdit(attachmentId, currentDocumentDate, currentDi
                     capturedValues.direction = modal.querySelector('[name="direction"]')?.value || 'internal';
                 }, { capture: true });
             });
+
+            // Copy URL button handler for S3 debug info
+            const copyBtn = modal.querySelector('.copy-url-btn');
+            if (copyBtn) {
+                copyBtn.addEventListener('click', async () => {
+                    const urlInput = modal.querySelector('input[readonly]');
+                    if (urlInput) {
+                        try {
+                            await navigator.clipboard.writeText(urlInput.value);
+                            // Brief visual feedback
+                            copyBtn.innerHTML = `
+                                <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                            `;
+                            setTimeout(() => {
+                                copyBtn.innerHTML = `
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                                    </svg>
+                                `;
+                            }, 1500);
+                        } catch (e) {
+                            // Fallback: select the text
+                            urlInput.select();
+                        }
+                    }
+                });
+            }
+
+            // Get Presigned URL button handler
+            const presignedBtn = modal.querySelector('.get-presigned-url-btn');
+            if (presignedBtn) {
+                presignedBtn.addEventListener('click', async () => {
+                    const attId = presignedBtn.dataset.attachmentId;
+                    const container = modal.querySelector('.presigned-url-container');
+                    const input = modal.querySelector('.presigned-url-input');
+                    const expiryText = modal.querySelector('.presigned-expiry');
+                    const openLink = modal.querySelector('.open-presigned-btn');
+
+                    presignedBtn.disabled = true;
+                    presignedBtn.innerHTML = `
+                        <svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Loading...
+                    `;
+
+                    try {
+                        const result = await api.getPresignedUrl(attId, 3600);
+                        input.value = result.url;
+                        openLink.href = result.url;
+                        expiryText.textContent = `Expires in ${Math.floor(result.expiresIn / 60)} minutes`;
+                        container.classList.remove('hidden');
+
+                        presignedBtn.innerHTML = `
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            Generated
+                        `;
+                        presignedBtn.classList.remove('bg-green-100', 'hover:bg-green-200', 'dark:bg-green-800', 'dark:hover:bg-green-700');
+                        presignedBtn.classList.add('bg-gray-100', 'dark:bg-gray-700', 'text-gray-500', 'dark:text-gray-400');
+                    } catch (e) {
+                        presignedBtn.innerHTML = `
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                            Failed
+                        `;
+                        presignedBtn.classList.remove('bg-green-100', 'hover:bg-green-200', 'dark:bg-green-800', 'dark:hover:bg-green-700');
+                        presignedBtn.classList.add('bg-red-100', 'dark:bg-red-800', 'text-red-700', 'dark:text-red-300');
+                        expiryText.textContent = `Error: ${e.message}`;
+                        expiryText.classList.remove('text-green-600', 'dark:text-green-400');
+                        expiryText.classList.add('text-red-600', 'dark:text-red-400');
+                        container.classList.remove('hidden');
+                    }
+                });
+            }
+
+            // Copy presigned URL button handler
+            const copyPresignedBtn = modal.querySelector('.copy-presigned-btn');
+            if (copyPresignedBtn) {
+                copyPresignedBtn.addEventListener('click', async () => {
+                    const input = modal.querySelector('.presigned-url-input');
+                    if (input && input.value) {
+                        try {
+                            await navigator.clipboard.writeText(input.value);
+                            copyPresignedBtn.innerHTML = `
+                                <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                            `;
+                            setTimeout(() => {
+                                copyPresignedBtn.innerHTML = `
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                                    </svg>
+                                `;
+                            }, 1500);
+                        } catch (e) {
+                            input.select();
+                        }
+                    }
+                });
+            }
         }
     });
 

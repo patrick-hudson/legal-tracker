@@ -28,7 +28,7 @@ class AdminAPI {
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || data.message || `HTTP ${response.status}`);
+                throw new Error(data.message || data.error || `HTTP ${response.status}`);
             }
 
             return data;
@@ -190,26 +190,20 @@ class AdminAPI {
     }
 
     async downloadAttachment(attachmentId, filename) {
+        // Use direct browser navigation for downloads
+        // This allows the server to redirect to S3 presigned URLs without CORS issues
+        // The browser handles the redirect natively and triggers the download
         const url = `${this.baseURL}/attachments/${attachmentId}/download`;
-        const response = await fetch(url, {
-            credentials: 'same-origin'
-        });
 
-        if (!response.ok) {
-            throw new Error(`Download failed: HTTP ${response.status}`);
-        }
-
-        const blob = await response.blob();
-
-        // Trigger download
-        const downloadUrl = window.URL.createObjectURL(blob);
+        // Create a hidden link and click it to trigger download
+        // Using window.open or location.href would navigate away from the page
         const a = document.createElement('a');
-        a.href = downloadUrl;
+        a.href = url;
         a.download = filename;
+        a.style.display = 'none';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        window.URL.revokeObjectURL(downloadUrl);
     }
 
     async deleteAttachment(attachmentId) {
@@ -223,6 +217,10 @@ class AdminAPI {
             method: 'PUT',
             body: JSON.stringify(data)
         });
+    }
+
+    async getPresignedUrl(attachmentId, expiresIn = 3600) {
+        return this.request(`/attachments/${attachmentId}/presigned-url?expiresIn=${expiresIn}`);
     }
 
     // Timeline
@@ -253,10 +251,10 @@ class AdminAPI {
         return this.request('/settings/storage/migration');
     }
 
-    async migrateStorage(direction, deleteSource = false) {
+    async migrateStorage(direction, deleteSource = false, archiveSource = false) {
         return this.request('/settings/storage/migrate', {
             method: 'POST',
-            body: JSON.stringify({ direction, deleteSource })
+            body: JSON.stringify({ direction, deleteSource, archiveSource })
         });
     }
 

@@ -2142,8 +2142,10 @@ export async function createServer(options = {}) {
   });
 
   // Download attachment
+  // Use ?stream=true to force streaming through server (needed for fetch-based preview due to CORS)
   fastify.get('/admin/api/attachments/:attachmentId/download', { preHandler: adminAuthMiddleware }, async (request, reply) => {
     const { attachmentId } = request.params;
+    const forceStream = request.query.stream === 'true';
 
     const attachment = attachmentsDb.getById(parseInt(attachmentId));
     if (!attachment) {
@@ -2161,8 +2163,49 @@ export async function createServer(options = {}) {
       }
       const userContext = getUserContext(request);
 
-      // Get file stream
+      // For S3 storage, redirect to presigned URL to offload bandwidth to S3
+      // Unless forceStream is true (needed for fetch-based previews due to CORS)
+      if (storage.type === 's3' && typeof storage.getSignedUrl === 'function' && !forceStream) {
+        const presignedUrl = await storage.getSignedUrl(
+          attachment.storage_key,
+          attachment.original_filename,
+          attachment.content_type,
+          3600, // 1 hour expiry
+          userContext
+        );
+
+        // Log the download via redirect
+        logInfoFromRequest(request, {
+          actionType: ACTION_TYPES.READ,
+          entityType: ENTITY_TYPES.ATTACHMENT,
+          entityId: attachment.id,
+          summary: `Attachment download (S3 redirect): ${attachment.original_filename}`,
+          details: {
+            filename: attachment.original_filename,
+            sizeBytes: attachment.size_bytes,
+            storageBackend: 's3'
+          }
+        });
+
+        return reply.code(302).redirect(presignedUrl);
+      }
+
+      // Stream the file through the server (filesystem always, S3 when forceStream=true for preview)
       const { stream, size } = await storage.getObjectStream(attachment.storage_key, userContext);
+
+      // Log the download
+      logInfoFromRequest(request, {
+        actionType: ACTION_TYPES.READ,
+        entityType: ENTITY_TYPES.ATTACHMENT,
+        entityId: attachment.id,
+        summary: `Attachment ${forceStream ? 'preview' : 'download'} (streamed): ${attachment.original_filename}`,
+        details: {
+          filename: attachment.original_filename,
+          sizeBytes: attachment.size_bytes,
+          storageBackend: attachment.storage_backend,
+          streamedThroughServer: true
+        }
+      });
 
       // Set response headers for file download
       reply.header('Content-Type', attachment.content_type);
@@ -2171,8 +2214,95 @@ export async function createServer(options = {}) {
 
       return reply.send(stream);
     } catch (error) {
-      fastify.log.error({ error: error.message, attachmentId }, 'File download failed');
+      logErrorFromRequest(request, {
+        error,
+        entityType: ENTITY_TYPES.ATTACHMENT,
+        entityId: attachment.id,
+        summary: `Attachment download failed: ${attachment.original_filename}`,
+        details: { attachmentId, errorMessage: error.message }
+      });
       return reply.code(500).send({ error: 'DOWNLOAD_FAILED', message: error.message });
+    }
+  });
+
+  // Get presigned URL for S3 attachment (debug/testing)
+  fastify.get('/admin/api/attachments/:attachmentId/presigned-url', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { attachmentId } = request.params;
+    const { expiresIn = 3600 } = request.query;
+
+    const attachment = attachmentsDb.getById(parseInt(attachmentId));
+    if (!attachment) {
+      logWarningFromRequest(request, {
+        entityType: ENTITY_TYPES.ATTACHMENT,
+        summary: `Presigned URL requested for non-existent attachment`,
+        details: { attachmentId }
+      });
+      return reply.code(404).send({ error: 'NOT_FOUND', message: 'Attachment not found' });
+    }
+
+    // Only works for S3 storage
+    if (attachment.storage_backend !== 's3') {
+      logWarningFromRequest(request, {
+        entityType: ENTITY_TYPES.ATTACHMENT,
+        entityId: attachment.id,
+        summary: `Presigned URL requested for non-S3 attachment: ${attachment.original_filename}`,
+        details: { attachmentId: attachment.id, storageBackend: attachment.storage_backend }
+      });
+      return reply.code(400).send({
+        error: 'NOT_S3',
+        message: `Presigned URLs are only available for S3-stored attachments (this attachment uses ${attachment.storage_backend})`
+      });
+    }
+
+    try {
+      const storage = createStorageForBackend('s3', settingsDb);
+      if (!storage) {
+        logErrorFromRequest(request, {
+          error: new Error('S3 storage not configured'),
+          entityType: ENTITY_TYPES.ATTACHMENT,
+          entityId: attachment.id,
+          summary: `Presigned URL failed - S3 not configured: ${attachment.original_filename}`,
+          details: { attachmentId: attachment.id }
+        });
+        return reply.code(500).send({
+          error: 'STORAGE_NOT_CONFIGURED',
+          message: 'S3 storage is not configured'
+        });
+      }
+
+      const userContext = getUserContext(request);
+      const expiry = Math.min(Math.max(parseInt(expiresIn) || 3600, 60), 43200); // 1 min to 12 hours
+
+      const presignedUrl = await storage.getSignedUrl(
+        attachment.storage_key,
+        attachment.original_filename,
+        attachment.content_type,
+        expiry,
+        userContext
+      );
+
+      logDebugFromRequest(request, {
+        actionType: ACTION_TYPES.READ,
+        entityType: ENTITY_TYPES.ATTACHMENT,
+        entityId: attachment.id,
+        summary: `Generated presigned URL for attachment: ${attachment.original_filename}`,
+        details: { attachmentId: attachment.id, expiresIn: expiry }
+      });
+
+      return {
+        url: presignedUrl,
+        expiresIn: expiry,
+        filename: attachment.original_filename
+      };
+    } catch (error) {
+      logErrorFromRequest(request, {
+        error,
+        entityType: ENTITY_TYPES.ATTACHMENT,
+        entityId: attachment.id,
+        summary: `Failed to generate presigned URL: ${attachment.original_filename}`,
+        details: { attachmentId: attachment.id, storageKey: attachment.storage_key, errorMessage: error.message }
+      });
+      return reply.code(500).send({ error: 'PRESIGN_FAILED', message: error.message });
     }
   });
 
@@ -2397,7 +2527,7 @@ export async function createServer(options = {}) {
 
   // Execute storage migration
   fastify.post('/admin/api/settings/storage/migrate', { preHandler: adminAuthMiddleware }, async (request, reply) => {
-    const { direction, deleteSource = false } = request.body || {};
+    const { direction, deleteSource = false, archiveSource = false } = request.body || {};
     const userContext = getUserContext(request);
 
     if (!direction || !['local-to-s3', 's3-to-local'].includes(direction)) {
@@ -2467,6 +2597,16 @@ export async function createServer(options = {}) {
     // Process each attachment
     for (const attachment of attachments) {
       try {
+        // Log migration attempt for this attachment
+        logDebugFromRequest(request, {
+          actionType: ACTION_TYPES.SYSTEM,
+          entityType: ENTITY_TYPES.ATTACHMENT,
+          entityId: attachment.id,
+          summary: `Migrating attachment: ${attachment.original_filename}`,
+          request: { direction, sourceBackend, targetBackend },
+          response: { storageKey: attachment.storage_key, sizeBytes: attachment.size_bytes }
+        });
+
         // Read from source
         const { stream, size } = await sourceStorage.getObjectStream(attachment.storage_key, userContext);
 
@@ -2478,7 +2618,7 @@ export async function createServer(options = {}) {
         const buffer = Buffer.concat(chunks);
 
         // Upload to target with same storage key
-        await targetStorage.putObject(
+        await targetStorage.putObjectWithKey(
           attachment.storage_key,
           buffer,
           attachment.content_type,
@@ -2488,16 +2628,80 @@ export async function createServer(options = {}) {
         // Update database record
         attachmentsDb.updateStorageBackend(attachment.id, targetBackend, attachment.storage_key);
 
-        // Optionally delete source
+        // Log successful migration
+        logInfoFromRequest(request, {
+          actionType: ACTION_TYPES.UPDATE,
+          entityType: ENTITY_TYPES.ATTACHMENT,
+          entityId: attachment.id,
+          summary: `Attachment migrated: ${attachment.original_filename} (${sourceBackend} → ${targetBackend})`,
+          details: {
+            direction,
+            filename: attachment.original_filename,
+            storageKey: attachment.storage_key,
+            sizeBytes: buffer.length,
+            sourceBackend,
+            targetBackend
+          }
+        });
+
+        // Handle source file based on user choice
         if (deleteSource) {
           try {
             await sourceStorage.deleteObject(attachment.storage_key, userContext);
+            // Log successful source deletion
+            logInfoFromRequest(request, {
+              actionType: ACTION_TYPES.DELETE,
+              entityType: ENTITY_TYPES.ATTACHMENT,
+              entityId: attachment.id,
+              summary: `Source file deleted after migration: ${attachment.original_filename}`,
+              details: {
+                storageKey: attachment.storage_key,
+                sourceBackend
+              }
+            });
           } catch (deleteErr) {
             // Log but don't fail migration if source delete fails
-            fastify.log.warn({
-              attachmentId: attachment.id,
-              error: deleteErr.message
-            }, 'Failed to delete source file after migration');
+            logWarningFromRequest(request, {
+              entityType: ENTITY_TYPES.ATTACHMENT,
+              entityId: attachment.id,
+              summary: `Failed to delete source file after migration: ${attachment.original_filename}`,
+              details: {
+                direction,
+                attachmentId: attachment.id,
+                storageKey: attachment.storage_key,
+                errorMessage: deleteErr.message
+              }
+            });
+          }
+        } else if (archiveSource && sourceBackend === 'filesystem') {
+          // Archive local files by moving to archive directory
+          try {
+            await sourceStorage.archiveObject(attachment.storage_key, userContext);
+            // Log successful archive
+            logInfoFromRequest(request, {
+              actionType: ACTION_TYPES.UPDATE,
+              entityType: ENTITY_TYPES.ATTACHMENT,
+              entityId: attachment.id,
+              summary: `Source file archived after migration: ${attachment.original_filename}`,
+              details: {
+                storageKey: attachment.storage_key,
+                sourceBackend,
+                archivePath: 'uploads-archive'
+              }
+            });
+          } catch (archiveErr) {
+            // Log but don't fail migration if archive fails
+            logWarningFromRequest(request, {
+              entityType: ENTITY_TYPES.ATTACHMENT,
+              entityId: attachment.id,
+              summary: `Failed to archive source file after migration: ${attachment.original_filename}`,
+              details: {
+                direction,
+                attachmentId: attachment.id,
+                storageKey: attachment.storage_key,
+                errorMessage: archiveErr.message
+              }
+            });
           }
         }
 
@@ -2509,10 +2713,19 @@ export async function createServer(options = {}) {
           filename: attachment.original_filename,
           error: error.message
         });
-        fastify.log.error({
-          attachmentId: attachment.id,
-          error: error.message
-        }, 'Migration failed for attachment');
+        logErrorFromRequest(request, {
+          error,
+          entityType: ENTITY_TYPES.ATTACHMENT,
+          entityId: attachment.id,
+          summary: `Migration failed for attachment: ${attachment.original_filename}`,
+          details: {
+            direction,
+            attachmentId: attachment.id,
+            filename: attachment.original_filename,
+            storageKey: attachment.storage_key,
+            errorMessage: error.message
+          }
+        });
       }
     }
 

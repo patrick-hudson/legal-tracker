@@ -16,11 +16,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - New "Storage Migration" section in Backup & Storage settings page
   - Displays counts and sizes for attachments in each storage backend
   - One-click migration buttons to move files from local to S3 or S3 to local
-  - Option to delete source files after successful migration
+  - Three options for source files after migration: Delete, Archive (move to ./data/uploads-archive/), or Keep
   - Progress indicator during migration with real-time status updates
   - Error handling with detailed feedback for partial failures
   - New API endpoints: `GET /admin/api/settings/storage/migration` (status) and `POST /admin/api/settings/storage/migrate` (execute)
   - Test coverage for migration API endpoints
+
+- **Improved S3 settings UI**: Better UX when S3 is already configured
+  - Shows "S3 Storage Configured" summary with bucket and region info
+  - Hides sensitive credentials (access key, secret key) when already configured
+  - Allows bucket name updates without re-entering credentials
+  - "Reconfigure" button to edit full S3 settings when needed
+
+- **Integrated migration when switching storage backends**: Prompts to migrate files when switching between Local and S3
+  - When switching from S3 to Local: offers to migrate & delete from S3, migrate & keep in S3, or switch without migrating
+  - When switching from Local to S3: offers to migrate & delete local, migrate & archive local, migrate & keep local, or switch without migrating
+  - Files that aren't migrated become inaccessible until migrated via the Storage Migration section
+
+- **S3 presigned URLs for downloads**: Offloads bandwidth to S3 for attachment downloads
+  - Download button redirects to S3 presigned URL (1 hour expiry) instead of streaming through server
+  - Preview still streams through server to avoid CORS issues with fetch API
+  - New `?stream=true` query parameter forces server-side streaming when needed
+  - Debug endpoint `GET /admin/api/attachments/:id/presigned-url` for testing presigned URL generation
+
+- **Attachment storage debug info**: Shows storage details in edit attachment modal when debug mode enabled
+  - Displays storage backend (filesystem/s3), storage key, and full URL for S3 attachments
+  - "Generate" button to create and display a presigned URL for testing private S3 buckets
+
+- **Comprehensive audit logging for storage operations**: All attachment and migration operations now logged
+  - Migration start, progress, success, and failure events logged with granular details
+  - Per-attachment migration success/failure logged individually
+  - Presigned URL generation logged at DEBUG level
+  - Download operations logged with storage backend and streaming method
 
 ### Fixed
 
@@ -28,6 +55,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Each attachment record tracks its own `storage_backend` field
   - Download, delete, bulk delete, matter delete, and wipe operations now read from the correct storage backend per attachment
   - Attachments uploaded to S3 remain accessible even if the global setting is later changed to filesystem (and vice versa)
+
+- **Storage migration section not appearing for existing databases**: Added database migration to add `storage_backend` and `storage_key` columns to existing `matter_attachments` tables
+  - Existing attachments are assumed to be on filesystem storage (the original default)
+  - Fixes migration status API returning zero counts for databases created before the storage feature was added
+
+- **Storage settings UI not updating after save**: After saving storage settings, the migration section and status badge now update immediately
+  - Added status badge showing "S3 Active", "Local Active", or "Not Configured" next to File Storage header
+  - Migration section reloads after saving to reflect current backend state
+  - Status badge updates when switching between storage backend options
 
 ---
 

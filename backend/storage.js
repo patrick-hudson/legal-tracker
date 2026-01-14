@@ -5,12 +5,12 @@
 
 import { fileURLToPath } from 'url';
 import { dirname, join, extname } from 'path';
-import { createReadStream, createWriteStream, existsSync, mkdirSync, unlinkSync, statSync } from 'fs';
+import { createReadStream, createWriteStream, existsSync, mkdirSync, unlinkSync, statSync, renameSync } from 'fs';
 import { mkdir, stat, unlink, readdir } from 'fs/promises';
 import { randomUUID } from 'crypto';
 import { pipeline } from 'stream/promises';
 import { Readable } from 'stream';
-import { logWarning, logStoragePut, logStorageGet, logStorageDelete, logStorageError, ENTITY_TYPES } from './audit.js';
+import { logWarning, logDebug, logStoragePut, logStorageGet, logStorageDelete, logStorageError, ENTITY_TYPES } from './audit.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -167,6 +167,36 @@ class FilesystemStorage {
     }
 
     /**
+     * Store an object with a specific storage key (for migration)
+     * @param {string} storageKey - Storage key to use
+     * @param {Buffer} data - File data buffer
+     * @param {string} contentType - Content type
+     * @param {Object} [context] - User context for logging
+     * @returns {Promise<void>}
+     */
+    async putObjectWithKey(storageKey, data, contentType, context = {}) {
+        const startTime = Date.now();
+        const fullPath = join(this.basePath, storageKey);
+
+        try {
+            // Ensure directory exists
+            const dir = dirname(fullPath);
+            await mkdir(dir, { recursive: true });
+
+            // Write buffer to file
+            const writeStream = createWriteStream(fullPath);
+            await pipeline(Readable.from(data), writeStream);
+
+            const durationMs = Date.now() - startTime;
+            logStoragePut({ storageKey, sizeBytes: data.length, contentType, durationMs, context });
+        } catch (error) {
+            const durationMs = Date.now() - startTime;
+            logStorageError({ operation: 'putObjectWithKey', storageKey, error, durationMs, context });
+            throw error;
+        }
+    }
+
+    /**
      * Get an object as a readable stream
      * @param {string} storageKey - Storage key
      * @returns {Promise<{ stream: Readable, size: number, contentType: string }>}
@@ -228,6 +258,57 @@ class FilesystemStorage {
         } catch (error) {
             const durationMs = Date.now() - startTime;
             logStorageError({ operation: 'deleteObject', storageKey, error, durationMs, context });
+            throw error;
+        }
+    }
+
+    /**
+     * Archive an object by moving it to an archive directory
+     * @param {string} storageKey - Storage key
+     * @param {Object} [context] - User context for logging
+     */
+    async archiveObject(storageKey, context = {}) {
+        const startTime = Date.now();
+        const fullPath = join(this.basePath, storageKey);
+        const archiveBasePath = join(dirname(this.basePath), 'uploads-archive');
+        const archivePath = join(archiveBasePath, storageKey);
+
+        try {
+            if (!existsSync(fullPath)) {
+                throw new Error(`File not found: ${storageKey}`);
+            }
+
+            // Create archive directory structure
+            const archiveDir = dirname(archivePath);
+            if (!existsSync(archiveDir)) {
+                mkdirSync(archiveDir, { recursive: true });
+            }
+
+            // Move file to archive
+            renameSync(fullPath, archivePath);
+
+            // Try to clean up empty source directory
+            const sourceDir = dirname(fullPath);
+            try {
+                const files = await readdir(sourceDir);
+                if (files.length === 0) {
+                    await unlink(sourceDir).catch(() => {});
+                }
+            } catch {
+                // Ignore directory cleanup errors
+            }
+
+            const durationMs = Date.now() - startTime;
+            logDebug({
+                operation: 'archiveObject',
+                storageKey,
+                archivePath,
+                durationMs,
+                context
+            });
+        } catch (error) {
+            const durationMs = Date.now() - startTime;
+            logStorageError({ operation: 'archiveObject', storageKey, error, durationMs, context });
             throw error;
         }
     }
@@ -383,6 +464,52 @@ class S3Storage {
     }
 
     /**
+     * Store an object with a specific storage key (for migration)
+     * @param {string} storageKey - Storage key to use
+     * @param {Buffer} data - File data buffer
+     * @param {string} contentType - Content type
+     * @param {Object} [context] - User context for logging
+     * @returns {Promise<void>}
+     */
+    async putObjectWithKey(storageKey, data, contentType, context = {}) {
+        const startTime = Date.now();
+        const { PutObjectCommand } = await import('@aws-sdk/client-s3');
+        const { Upload } = await import('@aws-sdk/lib-storage');
+
+        const client = await this.getClient();
+
+        try {
+            // Use multipart upload for larger files
+            if (data.length > 5 * 1024 * 1024) {
+                const upload = new Upload({
+                    client,
+                    params: {
+                        Bucket: this.config.bucket,
+                        Key: storageKey,
+                        Body: data,
+                        ContentType: contentType
+                    }
+                });
+                await upload.done();
+            } else {
+                await client.send(new PutObjectCommand({
+                    Bucket: this.config.bucket,
+                    Key: storageKey,
+                    Body: data,
+                    ContentType: contentType
+                }));
+            }
+
+            const durationMs = Date.now() - startTime;
+            logStoragePut({ storageKey, sizeBytes: data.length, contentType, durationMs, context });
+        } catch (error) {
+            const durationMs = Date.now() - startTime;
+            logStorageError({ operation: 'putObjectWithKey', storageKey, error, durationMs, context });
+            throw error;
+        }
+    }
+
+    /**
      * Get an object as a readable stream
      * @param {string} storageKey - Storage key
      * @param {Object} [context] - User context for logging
@@ -435,6 +562,49 @@ class S3Storage {
         } catch (error) {
             const durationMs = Date.now() - startTime;
             logStorageError({ operation: 'deleteObject', storageKey, error, durationMs, context });
+            throw error;
+        }
+    }
+
+    /**
+     * Get a presigned URL for direct download from S3
+     * @param {string} storageKey - Storage key
+     * @param {string} filename - Original filename for Content-Disposition
+     * @param {string} contentType - Content type
+     * @param {number} [expiresIn=3600] - URL expiry time in seconds (default 1 hour)
+     * @param {Object} [context] - User context for logging
+     * @returns {Promise<string>} Presigned URL
+     */
+    async getSignedUrl(storageKey, filename, contentType, expiresIn = 3600, context = {}) {
+        const startTime = Date.now();
+        const { GetObjectCommand } = await import('@aws-sdk/client-s3');
+        const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
+
+        try {
+            const client = await this.getClient();
+
+            const command = new GetObjectCommand({
+                Bucket: this.config.bucket,
+                Key: storageKey,
+                ResponseContentType: contentType,
+                ResponseContentDisposition: `attachment; filename="${encodeURIComponent(filename)}"`
+            });
+
+            const url = await getSignedUrl(client, command, { expiresIn });
+
+            const durationMs = Date.now() - startTime;
+            logDebug({
+                actionType: 'read',
+                entityType: ENTITY_TYPES.ATTACHMENT,
+                summary: `Generated presigned URL for: ${storageKey}`,
+                details: { storageKey, expiresIn, durationMs },
+                ...context
+            });
+
+            return url;
+        } catch (error) {
+            const durationMs = Date.now() - startTime;
+            logStorageError({ operation: 'getSignedUrl', storageKey, error, durationMs, context });
             throw error;
         }
     }

@@ -150,11 +150,10 @@ class Router {
 
         navLinks.forEach(link => {
             const linkHash = link.getAttribute('href').slice(1);
-            // Check for exact match or parent match (e.g., /data-management is parent of /data-management/ai)
+            // Only highlight exact matches - each sub-page link should only highlight when on that exact page
             const isExactMatch = linkHash === hash;
-            const isParentMatch = linkHash && hash.startsWith(linkHash + '/');
 
-            if (isExactMatch || isParentMatch) {
+            if (isExactMatch) {
                 link.classList.add('active', 'bg-gray-100', 'dark:bg-gray-700');
             } else {
                 link.classList.remove('active', 'bg-gray-100', 'dark:bg-gray-700');
