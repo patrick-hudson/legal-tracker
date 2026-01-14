@@ -3709,7 +3709,7 @@ Return ONLY a JSON array of strings, no other text. Example format:
     }
   });
 
-  // Regenerate all sample JSON files
+  // Regenerate all sample JSON files using centralized word banks
   fastify.post('/admin/api/data/regenerate-samples', { preHandler: adminAuthMiddleware }, async (_, reply) => {
     try {
       const samplesDir = join(__dirname, 'samples');
@@ -3727,24 +3727,6 @@ Return ONLY a JSON array of strings, no other text. Example format:
         { filename: 'extra-large.json', name: 'Extra-Large Dataset', description: '500 sample matters spanning 10 years - stress test', count: 500, yearsBack: 10 }
       ];
 
-      const matterTypes = [
-        { note: 'Contract review', cost: 150000 },
-        { note: 'Incorporation paperwork', cost: 250000 },
-        { note: 'Employment dispute consultation', cost: 350000 },
-        { note: 'Trademark filing', cost: 175000 },
-        { note: 'Lease agreement review', cost: 125000 },
-        { note: 'NDA drafting', cost: 75000 },
-        { note: 'Partnership agreement', cost: 450000 },
-        { note: 'IP protection consultation', cost: 300000 },
-        { note: 'Tax compliance advice', cost: 200000 },
-        { note: 'Shareholder agreement', cost: 500000 },
-        { note: 'Real estate transaction', cost: 375000 },
-        { note: 'Litigation consultation', cost: 650000 },
-        { note: 'Patent application', cost: 425000 },
-        { note: 'Merger consultation', cost: 750000 },
-        { note: 'Estate planning', cost: 275000 }
-      ];
-
       let filesGenerated = 0;
 
       for (const config of sampleConfigs) {
@@ -3753,17 +3735,42 @@ Return ONLY a JSON array of strings, no other text. Example format:
         const startDate = new Date(now);
         startDate.setFullYear(now.getFullYear() - config.yearsBack);
 
+        // Get descriptions from centralized word banks
+        const descriptions = sampleTemplates.getMatterDescriptions(config.count);
+
         for (let i = 0; i < config.count; i++) {
           const randomDate = new Date(
             startDate.getTime() + Math.random() * (now.getTime() - startDate.getTime())
           );
-          const randomMatter = matterTypes[Math.floor(Math.random() * matterTypes.length)];
+          // Random cost between $500 and $50,000 (in cents)
+          const cost = sampleTemplates.randomInt(50000, 5000000);
 
-          matters.push({
+          const matter = {
             matter_date: randomDate.toISOString(),
-            note: randomMatter.note,
-            cost: randomMatter.cost
-          });
+            note: descriptions[i],
+            cost: cost
+          };
+
+          // 40% chance of lawyer info
+          if (Math.random() < 0.4) {
+            const lawyer = sampleTemplates.getRandomLawyer();
+            matter.lawyer_name = lawyer.name;
+            matter.lawyer_firm = lawyer.firm;
+          }
+
+          // 30% chance of opposing counsel
+          if (Math.random() < 0.3) {
+            const opposing = sampleTemplates.getRandomOpposingCounsel();
+            matter.opposing_counsel_name = opposing.name;
+            matter.opposing_counsel_firm = opposing.firm;
+          }
+
+          // 50% chance of case number
+          if (Math.random() < 0.5) {
+            matter.case_number = sampleTemplates.generateCaseNumber(randomDate.getFullYear());
+          }
+
+          matters.push(matter);
         }
 
         // Sort by date (oldest first)

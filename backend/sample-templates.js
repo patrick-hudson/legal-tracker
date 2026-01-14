@@ -304,13 +304,22 @@ export function generateDocumentFromTemplate(docType, context = {}) {
 
     // Fill in template placeholders
     let content = template.template;
+
+    // Handle amount - could be string, number, or undefined
+    let amountStr;
+    if (context.amount !== undefined) {
+        amountStr = typeof context.amount === 'string' ? context.amount : Number(context.amount).toFixed(2);
+    } else {
+        amountStr = (Math.random() * 50000 + 1000).toFixed(2);
+    }
+
     const defaults = {
         caseNumber: `${new Date().getFullYear()}-CV-${String(Math.floor(Math.random() * 90000) + 10000)}`,
         opposingParty: getRandomClient().name,
         ourClient: getRandomClient().name,
         date: new Date().toLocaleDateString(),
         matterDescription: context.matterDescription || 'Legal matter requiring attention',
-        amount: (context.amount || (Math.random() * 50000 + 1000)).toFixed(2),
+        amount: amountStr,
         lawyerName: getRandomLawyer().name,
         firmName: getRandomLawyer().firm,
         witnessName: getRandomIndividualClient().name,
