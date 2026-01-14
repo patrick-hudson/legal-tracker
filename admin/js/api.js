@@ -249,6 +249,17 @@ class AdminAPI {
         });
     }
 
+    async getStorageMigrationStatus() {
+        return this.request('/settings/storage/migration');
+    }
+
+    async migrateStorage(direction, deleteSource = false) {
+        return this.request('/settings/storage/migrate', {
+            method: 'POST',
+            body: JSON.stringify({ direction, deleteSource })
+        });
+    }
+
     async exportMatters(options = {}) {
         const { ids, includePrivateNotes, format = 'csv' } = options;
         const params = new URLSearchParams();

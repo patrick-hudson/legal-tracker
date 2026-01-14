@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Storage migration functionality**: Transfer attachments between local filesystem and S3 storage backends
+  - New "Storage Migration" section in Backup & Storage settings page
+  - Displays counts and sizes for attachments in each storage backend
+  - One-click migration buttons to move files from local to S3 or S3 to local
+  - Option to delete source files after successful migration
+  - Progress indicator during migration with real-time status updates
+  - Error handling with detailed feedback for partial failures
+  - New API endpoints: `GET /admin/api/settings/storage/migration` (status) and `POST /admin/api/settings/storage/migrate` (execute)
+  - Test coverage for migration API endpoints
+
+### Fixed
+
+- **Attachment download/delete now uses per-attachment storage backend**: Previously, download and delete operations used the global storage setting, causing attachments to become inaccessible when the storage backend was changed
+  - Each attachment record tracks its own `storage_backend` field
+  - Download, delete, bulk delete, matter delete, and wipe operations now read from the correct storage backend per attachment
+  - Attachments uploaded to S3 remain accessible even if the global setting is later changed to filesystem (and vice versa)
+
 ---
 
 ## [0.12.3] - 2026-01-14

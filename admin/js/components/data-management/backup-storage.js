@@ -153,6 +153,93 @@ export async function renderBackupStorage(container) {
                 </div>
             </div>
 
+            <!-- Storage Migration Section -->
+            <div id="migration-section" class="mb-6 bg-white dark:bg-gray-800 rounded-lg shadow p-6 hidden">
+                <div class="flex items-center mb-4">
+                    <svg class="w-6 h-6 mr-3 text-amber-600 dark:text-amber-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"></path>
+                    </svg>
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Storage Migration</h2>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Transfer attachments between storage backends</p>
+                    </div>
+                </div>
+
+                <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-4">
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <p class="font-medium text-amber-800 dark:text-amber-400">Local Storage</p>
+                            <p class="text-amber-700 dark:text-amber-300">
+                                <span id="migration-filesystem-count">0</span> attachments
+                                (<span id="migration-filesystem-size">0 B</span>)
+                            </p>
+                        </div>
+                        <div>
+                            <p class="font-medium text-amber-800 dark:text-amber-400">S3 Storage</p>
+                            <p class="text-amber-700 dark:text-amber-300">
+                                <span id="migration-s3-count">0</span> attachments
+                                (<span id="migration-s3-size">0 B</span>)
+                            </p>
+                        </div>
+                    </div>
+                    <p class="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                        Current backend: <strong id="migration-current-backend">--</strong>
+                    </p>
+                </div>
+
+                <div id="migration-actions" class="space-y-3">
+                    <div id="migrate-to-s3-section" class="hidden">
+                        <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                            Migrate <span id="migrate-to-s3-count">0</span> attachment(s) from local to S3:
+                        </p>
+                        <label class="flex items-center cursor-pointer mb-2">
+                            <input type="checkbox" id="migrate-delete-source-s3" class="w-4 h-4 text-amber-600 bg-gray-100 border-gray-300 rounded focus:ring-amber-500">
+                            <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Delete local files after migration</span>
+                        </label>
+                        <button id="migrate-to-s3-btn" class="w-full text-white bg-amber-600 hover:bg-amber-700 rounded-lg px-4 py-2 text-sm font-semibold">
+                            Migrate to S3
+                        </button>
+                    </div>
+
+                    <div id="migrate-to-local-section" class="hidden">
+                        <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                            Migrate <span id="migrate-to-local-count">0</span> attachment(s) from S3 to local:
+                        </p>
+                        <label class="flex items-center cursor-pointer mb-2">
+                            <input type="checkbox" id="migrate-delete-source-local" class="w-4 h-4 text-amber-600 bg-gray-100 border-gray-300 rounded focus:ring-amber-500">
+                            <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Delete S3 objects after migration</span>
+                        </label>
+                        <button id="migrate-to-local-btn" class="w-full text-white bg-amber-600 hover:bg-amber-700 rounded-lg px-4 py-2 text-sm font-semibold">
+                            Migrate to Local
+                        </button>
+                    </div>
+
+                    <div id="migration-not-needed" class="hidden">
+                        <p class="text-sm text-green-700 dark:text-green-400 flex items-center">
+                            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                            </svg>
+                            All attachments are in the current storage backend
+                        </p>
+                    </div>
+
+                    <div id="migration-s3-not-configured" class="hidden">
+                        <p class="text-sm text-red-700 dark:text-red-400">
+                            S3 storage is not configured. Configure S3 settings above to migrate.
+                        </p>
+                    </div>
+                </div>
+
+                <div id="migration-progress" class="mt-4 hidden">
+                    <div class="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
+                        <div id="migration-progress-bar" class="bg-amber-600 h-2 rounded-full transition-all" style="width: 0%"></div>
+                    </div>
+                    <p id="migration-progress-text" class="text-xs text-gray-500 dark:text-gray-400 mt-1">Migrating...</p>
+                </div>
+
+                <div id="migration-result" class="mt-4 hidden"></div>
+            </div>
+
             <!-- Backup & Restore Section -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- Create Backup -->
@@ -356,6 +443,7 @@ export async function renderBackupStorage(container) {
 
         setupEventListeners();
         await initStorageSettings();
+        await loadMigrationStatus();
 
         // Initialize Flowbite components
         if (typeof window.initFlowbite === 'function') {
@@ -371,6 +459,150 @@ export async function renderBackupStorage(container) {
 let storageTestPassed = false;
 let selectedRestoreFile = null;
 let restorePreview = null;
+let migrationStatus = null;
+
+async function loadMigrationStatus() {
+    try {
+        migrationStatus = await api.getStorageMigrationStatus();
+        updateMigrationUI();
+    } catch (error) {
+        console.error('Failed to load migration status:', error);
+    }
+}
+
+function updateMigrationUI() {
+    if (!migrationStatus) return;
+
+    const section = document.getElementById('migration-section');
+    const filesystemCount = document.getElementById('migration-filesystem-count');
+    const filesystemSize = document.getElementById('migration-filesystem-size');
+    const s3Count = document.getElementById('migration-s3-count');
+    const s3Size = document.getElementById('migration-s3-size');
+    const currentBackend = document.getElementById('migration-current-backend');
+
+    const migrateToS3Section = document.getElementById('migrate-to-s3-section');
+    const migrateToLocalSection = document.getElementById('migrate-to-local-section');
+    const notNeeded = document.getElementById('migration-not-needed');
+    const s3NotConfigured = document.getElementById('migration-s3-not-configured');
+
+    // Update counts
+    filesystemCount.textContent = migrationStatus.filesystem_count;
+    filesystemSize.textContent = formatBytes(migrationStatus.filesystem_size);
+    s3Count.textContent = migrationStatus.s3_count;
+    s3Size.textContent = formatBytes(migrationStatus.s3_size);
+    currentBackend.textContent = migrationStatus.current_backend === 's3' ? 'S3' : 'Local Filesystem';
+
+    // Show section only if there are attachments
+    const totalAttachments = migrationStatus.filesystem_count + migrationStatus.s3_count;
+    if (totalAttachments === 0) {
+        section?.classList.add('hidden');
+        return;
+    }
+
+    section?.classList.remove('hidden');
+
+    // Hide all action sections first
+    migrateToS3Section?.classList.add('hidden');
+    migrateToLocalSection?.classList.add('hidden');
+    notNeeded?.classList.add('hidden');
+    s3NotConfigured?.classList.add('hidden');
+
+    // Show appropriate action based on current state
+    if (migrationStatus.can_migrate_to_s3) {
+        document.getElementById('migrate-to-s3-count').textContent = migrationStatus.filesystem_count;
+        migrateToS3Section?.classList.remove('hidden');
+    } else if (migrationStatus.can_migrate_to_filesystem) {
+        document.getElementById('migrate-to-local-count').textContent = migrationStatus.s3_count;
+        migrateToLocalSection?.classList.remove('hidden');
+    } else if (migrationStatus.current_backend === 's3' && migrationStatus.filesystem_count > 0 && !migrationStatus.s3_configured) {
+        s3NotConfigured?.classList.remove('hidden');
+    } else {
+        notNeeded?.classList.remove('hidden');
+    }
+}
+
+async function handleMigration(direction) {
+    const deleteSourceId = direction === 'local-to-s3' ? 'migrate-delete-source-s3' : 'migrate-delete-source-local';
+    const deleteSource = document.getElementById(deleteSourceId)?.checked || false;
+
+    const btnId = direction === 'local-to-s3' ? 'migrate-to-s3-btn' : 'migrate-to-local-btn';
+    const btn = document.getElementById(btnId);
+    const progressDiv = document.getElementById('migration-progress');
+    const progressBar = document.getElementById('migration-progress-bar');
+    const progressText = document.getElementById('migration-progress-text');
+    const resultDiv = document.getElementById('migration-result');
+
+    const count = direction === 'local-to-s3' ? migrationStatus.filesystem_count : migrationStatus.s3_count;
+
+    const confirmed = await showConfirm(
+        'Migrate Storage',
+        `This will migrate ${count} attachment(s) from ${direction === 'local-to-s3' ? 'local storage to S3' : 'S3 to local storage'}.\n\n` +
+        (deleteSource ? 'Source files will be deleted after successful migration.\n\n' : '') +
+        'This operation may take a while depending on the number and size of files.',
+        'Migrate',
+        'Cancel',
+        'warning'
+    );
+
+    if (!confirmed) return;
+
+    btn.disabled = true;
+    progressDiv?.classList.remove('hidden');
+    resultDiv?.classList.add('hidden');
+    progressBar.style.width = '0%';
+    progressText.textContent = 'Starting migration...';
+
+    let progress = 0;
+    const progressInterval = setInterval(() => {
+        progress = Math.min(progress + Math.random() * 5, 90);
+        progressBar.style.width = `${progress}%`;
+        progressText.textContent = `Migrating... ${Math.round(progress)}%`;
+    }, 500);
+
+    try {
+        const result = await api.migrateStorage(direction, deleteSource);
+
+        clearInterval(progressInterval);
+        progressBar.style.width = '100%';
+
+        resultDiv?.classList.remove('hidden');
+
+        if (result.success) {
+            resultDiv.innerHTML = `
+                <div class="p-4 text-sm text-green-800 rounded-lg bg-green-50 dark:bg-green-900 dark:text-green-300">
+                    <span class="font-medium">Migration complete!</span>
+                    ${result.migrated} file(s) migrated successfully.
+                </div>
+            `;
+            showToast(`Migration complete: ${result.migrated} file(s) migrated`, 'success');
+        } else {
+            resultDiv.innerHTML = `
+                <div class="p-4 text-sm text-amber-800 rounded-lg bg-amber-50 dark:bg-amber-900 dark:text-amber-300">
+                    <span class="font-medium">Migration completed with errors.</span>
+                    ${result.migrated} succeeded, ${result.failed} failed.
+                    ${result.errors ? `<br><br>Errors:<br>${result.errors.map(e => `- ${e.filename}: ${e.error}`).join('<br>')}` : ''}
+                </div>
+            `;
+            showToast(`Migration completed: ${result.migrated} succeeded, ${result.failed} failed`, 'warning');
+        }
+
+        // Reload migration status
+        await loadMigrationStatus();
+
+    } catch (error) {
+        clearInterval(progressInterval);
+        resultDiv?.classList.remove('hidden');
+        resultDiv.innerHTML = `
+            <div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900 dark:text-red-300">
+                <span class="font-medium">Migration failed:</span> ${error.message}
+            </div>
+        `;
+        showToast(`Migration failed: ${error.message}`, 'error');
+    } finally {
+        progressDiv?.classList.add('hidden');
+        btn.disabled = false;
+    }
+}
 
 async function initStorageSettings() {
     try {
@@ -672,6 +904,10 @@ function setupEventListeners() {
         document.getElementById('restore-file-input').value = '';
         selectedRestoreFile = null;
     });
+
+    // Migration buttons
+    document.getElementById('migrate-to-s3-btn')?.addEventListener('click', () => handleMigration('local-to-s3'));
+    document.getElementById('migrate-to-local-btn')?.addEventListener('click', () => handleMigration('s3-to-local'));
 }
 
 async function handleCreateBackup() {

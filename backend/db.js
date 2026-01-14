@@ -940,6 +940,54 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
     getCount() {
       const result = db.exec('SELECT COUNT(*) as count FROM matter_attachments');
       return result[0]?.values[0]?.[0] || 0;
+    },
+
+    getCountsByBackend() {
+      const result = db.exec(`
+        SELECT storage_backend, COUNT(*) as count, SUM(size_bytes) as total_size
+        FROM matter_attachments
+        GROUP BY storage_backend
+      `);
+      const counts = { filesystem: 0, s3: 0 };
+      const sizes = { filesystem: 0, s3: 0 };
+      if (result.length > 0) {
+        result[0].values.forEach(row => {
+          const backend = row[0];
+          const count = row[1];
+          const size = row[2] || 0;
+          if (backend === 'filesystem' || backend === 's3') {
+            counts[backend] = count;
+            sizes[backend] = size;
+          }
+        });
+      }
+      return { counts, sizes };
+    },
+
+    getByBackend(backend) {
+      const result = db.exec(`
+        SELECT * FROM matter_attachments WHERE storage_backend = ? ORDER BY id
+      `, [backend]);
+      if (result.length > 0) {
+        const columns = result[0].columns;
+        return result[0].values.map(row => {
+          const obj = {};
+          columns.forEach((col, i) => {
+            obj[col] = row[i];
+          });
+          return obj;
+        });
+      }
+      return [];
+    },
+
+    updateStorageBackend(id, newBackend, newStorageKey) {
+      db.run(`
+        UPDATE matter_attachments
+        SET storage_backend = ?, storage_key = ?
+        WHERE id = ?
+      `, [newBackend, newStorageKey, id]);
+      saveDatabase();
     }
   };
 

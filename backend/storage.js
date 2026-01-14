@@ -524,4 +524,35 @@ export function createStorageFromConfig(config) {
     return new FilesystemStorage(config.path);
 }
 
+/**
+ * Create storage instance for a specific backend type
+ * Used when retrieving attachments that may be in a different backend than current setting
+ * @param {string} backendType - 'filesystem' or 's3'
+ * @param {Object} settingsDb - Settings database helper
+ * @returns {FilesystemStorage|S3Storage|null} Storage instance or null if backend not configured
+ */
+export function createStorageForBackend(backendType, settingsDb) {
+    if (backendType === 's3') {
+        const config = {
+            accessKeyId: settingsDb.get('s3_access_key_id'),
+            secretAccessKey: settingsDb.get('s3_secret_access_key'),
+            bucket: settingsDb.get('s3_bucket'),
+            region: settingsDb.get('s3_region') || 'us-east-1',
+            endpoint: settingsDb.get('s3_endpoint') || null,
+            forcePathStyle: settingsDb.get('s3_path_style') === 'true'
+        };
+
+        // Check if S3 is configured
+        if (!config.accessKeyId || !config.secretAccessKey || !config.bucket) {
+            return null;
+        }
+
+        return new S3Storage(config);
+    }
+
+    // Filesystem storage
+    const uploadPath = settingsDb.get('storage_filesystem_path') || null;
+    return new FilesystemStorage(uploadPath);
+}
+
 export { FilesystemStorage, S3Storage, MAX_FILE_SIZE, ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES };

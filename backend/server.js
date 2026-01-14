@@ -9,7 +9,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createDatabase } from './db.js';
 import { initAudit, logInfo, logError, logWarning, logSecurity, logInfoFromRequest, logErrorFromRequest, logSecurityFromRequest, logWarningFromRequest, logDebugFromRequest, getUserContext, callClaudeWithLogging, ACTION_TYPES, ENTITY_TYPES } from './audit.js';
 import { hashPassword, verifyPassword, generateTokenId, generateApiKey, createAdminAuthMiddleware, getTokenExpiration, generateBootstrapToken, hashBootstrapToken, getBootstrapTokenExpiration, validatePasswordStrength } from './auth.js';
-import { createStorage, createStorageFromConfig, validateFileType, sanitizeFilename, MAX_FILE_SIZE } from './storage.js';
+import { createStorage, createStorageFromConfig, createStorageForBackend, validateFileType, sanitizeFilename, MAX_FILE_SIZE } from './storage.js';
 import { generateLegalDocument, generatePlaceholderDocument } from './legal-docs.js';
 import * as sampleTemplates from './sample-templates.js';
 import { fileURLToPath } from 'url';
@@ -494,10 +494,12 @@ export async function createServer(options = {}) {
     // Delete attachments from storage before deleting matter
     const attachments = attachmentsDb.getByMatterId(parseInt(id));
     if (attachments.length > 0) {
-      const storage = createStorage(settingsDb);
       for (const attachment of attachments) {
         try {
-          await storage.deleteObject(attachment.storage_key);
+          const storage = createStorageForBackend(attachment.storage_backend, settingsDb);
+          if (storage) {
+            await storage.deleteObject(attachment.storage_key);
+          }
         } catch (err) {
           fastify.log.warn({ attachmentId: attachment.id, error: err.message }, 'Failed to delete attachment from storage');
         }
@@ -1570,7 +1572,6 @@ export async function createServer(options = {}) {
       return reply.code(400).send({ error: 'BAD_REQUEST', message: 'IDs array required' });
     }
 
-    const storage = createStorage(settingsDb);
     const userContext = getUserContext(request);
 
     let deleted = 0;
@@ -1581,7 +1582,10 @@ export async function createServer(options = {}) {
         const attachments = attachmentsDb.getByMatterId(parseInt(id));
         for (const attachment of attachments) {
           try {
-            await storage.deleteObject(attachment.storage_key, userContext);
+            const storage = createStorageForBackend(attachment.storage_backend, settingsDb);
+            if (storage) {
+              await storage.deleteObject(attachment.storage_key, userContext);
+            }
             attachmentsDeleted++;
           } catch (err) {
             fastify.log.warn({ attachmentId: attachment.id, error: err.message }, 'Failed to delete attachment from storage during bulk delete');
@@ -1832,11 +1836,13 @@ export async function createServer(options = {}) {
       // Delete attachments from storage before deleting matter
       const attachments = attachmentsDb.getByMatterId(parseInt(id));
       if (attachments.length > 0) {
-        const storage = createStorage(settingsDb);
         const userContext = getUserContext(request);
         for (const attachment of attachments) {
           try {
-            await storage.deleteObject(attachment.storage_key, userContext);
+            const storage = createStorageForBackend(attachment.storage_backend, settingsDb);
+            if (storage) {
+              await storage.deleteObject(attachment.storage_key, userContext);
+            }
           } catch (err) {
             fastify.log.warn({ attachmentId: attachment.id, error: err.message }, 'Failed to delete attachment from storage');
           }
@@ -2145,8 +2151,14 @@ export async function createServer(options = {}) {
     }
 
     try {
-      // Get storage instance
-      const storage = createStorage(settingsDb);
+      // Get storage instance for the attachment's backend (not current global setting)
+      const storage = createStorageForBackend(attachment.storage_backend, settingsDb);
+      if (!storage) {
+        return reply.code(500).send({
+          error: 'STORAGE_NOT_CONFIGURED',
+          message: `Storage backend '${attachment.storage_backend}' is not configured`
+        });
+      }
       const userContext = getUserContext(request);
 
       // Get file stream
@@ -2174,8 +2186,14 @@ export async function createServer(options = {}) {
     }
 
     try {
-      // Get storage instance
-      const storage = createStorage(settingsDb);
+      // Get storage instance for the attachment's backend (not current global setting)
+      const storage = createStorageForBackend(attachment.storage_backend, settingsDb);
+      if (!storage) {
+        return reply.code(500).send({
+          error: 'STORAGE_NOT_CONFIGURED',
+          message: `Storage backend '${attachment.storage_backend}' is not configured`
+        });
+      }
       const userContext = getUserContext(request);
 
       // Delete from storage
@@ -2351,6 +2369,167 @@ export async function createServer(options = {}) {
     } catch (error) {
       return { success: false, message: error.message };
     }
+  });
+
+  // Get storage migration status
+  fastify.get('/admin/api/settings/storage/migration', { preHandler: adminAuthMiddleware }, async () => {
+    const currentBackend = settingsDb.get('storage_backend') || 'filesystem';
+    const { counts, sizes } = attachmentsDb.getCountsByBackend();
+
+    // Check if S3 is configured
+    const s3Configured = !!(
+      settingsDb.get('s3_access_key_id') &&
+      settingsDb.get('s3_secret_access_key') &&
+      settingsDb.get('s3_bucket')
+    );
+
+    return {
+      current_backend: currentBackend,
+      filesystem_count: counts.filesystem,
+      filesystem_size: sizes.filesystem,
+      s3_count: counts.s3,
+      s3_size: sizes.s3,
+      s3_configured: s3Configured,
+      can_migrate_to_s3: currentBackend === 's3' && counts.filesystem > 0 && s3Configured,
+      can_migrate_to_filesystem: currentBackend === 'filesystem' && counts.s3 > 0
+    };
+  });
+
+  // Execute storage migration
+  fastify.post('/admin/api/settings/storage/migrate', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { direction, deleteSource = false } = request.body || {};
+    const userContext = getUserContext(request);
+
+    if (!direction || !['local-to-s3', 's3-to-local'].includes(direction)) {
+      return reply.code(400).send({
+        error: 'INVALID_DIRECTION',
+        message: 'Direction must be "local-to-s3" or "s3-to-local"'
+      });
+    }
+
+    const sourceBackend = direction === 'local-to-s3' ? 'filesystem' : 's3';
+    const targetBackend = direction === 'local-to-s3' ? 's3' : 'filesystem';
+
+    // Get source and target storage instances
+    const sourceStorage = createStorageForBackend(sourceBackend, settingsDb);
+    const targetStorage = createStorageForBackend(targetBackend, settingsDb);
+
+    if (!sourceStorage) {
+      return reply.code(400).send({
+        error: 'SOURCE_NOT_CONFIGURED',
+        message: `Source storage backend '${sourceBackend}' is not configured`
+      });
+    }
+
+    if (!targetStorage) {
+      return reply.code(400).send({
+        error: 'TARGET_NOT_CONFIGURED',
+        message: `Target storage backend '${targetBackend}' is not configured`
+      });
+    }
+
+    // Test target connection
+    try {
+      const testResult = await targetStorage.testConnection();
+      if (!testResult.success) {
+        return reply.code(400).send({
+          error: 'TARGET_CONNECTION_FAILED',
+          message: `Cannot connect to ${targetBackend}: ${testResult.message}`
+        });
+      }
+    } catch (error) {
+      return reply.code(400).send({
+        error: 'TARGET_CONNECTION_FAILED',
+        message: `Cannot connect to ${targetBackend}: ${error.message}`
+      });
+    }
+
+    // Get attachments to migrate
+    const attachments = attachmentsDb.getByBackend(sourceBackend);
+    if (attachments.length === 0) {
+      return { success: true, migrated: 0, failed: 0, message: 'No attachments to migrate' };
+    }
+
+    // Log migration start
+    logInfoFromRequest(request, {
+      actionType: ACTION_TYPES.SYSTEM,
+      entityType: ENTITY_TYPES.SYSTEM,
+      summary: `Storage migration started: ${direction}`,
+      details: { direction, attachmentCount: attachments.length, deleteSource }
+    });
+
+    const results = {
+      migrated: 0,
+      failed: 0,
+      errors: []
+    };
+
+    // Process each attachment
+    for (const attachment of attachments) {
+      try {
+        // Read from source
+        const { stream, size } = await sourceStorage.getObjectStream(attachment.storage_key, userContext);
+
+        // Convert stream to buffer for re-upload
+        const chunks = [];
+        for await (const chunk of stream) {
+          chunks.push(chunk);
+        }
+        const buffer = Buffer.concat(chunks);
+
+        // Upload to target with same storage key
+        await targetStorage.putObject(
+          attachment.storage_key,
+          buffer,
+          attachment.content_type,
+          userContext
+        );
+
+        // Update database record
+        attachmentsDb.updateStorageBackend(attachment.id, targetBackend, attachment.storage_key);
+
+        // Optionally delete source
+        if (deleteSource) {
+          try {
+            await sourceStorage.deleteObject(attachment.storage_key, userContext);
+          } catch (deleteErr) {
+            // Log but don't fail migration if source delete fails
+            fastify.log.warn({
+              attachmentId: attachment.id,
+              error: deleteErr.message
+            }, 'Failed to delete source file after migration');
+          }
+        }
+
+        results.migrated++;
+      } catch (error) {
+        results.failed++;
+        results.errors.push({
+          attachmentId: attachment.id,
+          filename: attachment.original_filename,
+          error: error.message
+        });
+        fastify.log.error({
+          attachmentId: attachment.id,
+          error: error.message
+        }, 'Migration failed for attachment');
+      }
+    }
+
+    // Log migration completion
+    logInfoFromRequest(request, {
+      actionType: ACTION_TYPES.SYSTEM,
+      entityType: ENTITY_TYPES.SYSTEM,
+      summary: `Storage migration completed: ${results.migrated} migrated, ${results.failed} failed`,
+      details: { direction, migrated: results.migrated, failed: results.failed, deleteSource }
+    });
+
+    return {
+      success: results.failed === 0,
+      migrated: results.migrated,
+      failed: results.failed,
+      errors: results.errors.length > 0 ? results.errors : undefined
+    };
   });
 
   // Get all settings
@@ -4042,10 +4221,12 @@ Return ONLY a valid JSON array, no other text. Example:
 
       // Delete storage files for attachments
       if (attachments.length > 0) {
-        const storage = createStorage(settingsDb);
         for (const attachment of attachments) {
           try {
-            await storage.deleteObject(attachment.storage_key, { userId, username, ipAddress: ip });
+            const storage = createStorageForBackend(attachment.storage_backend, settingsDb);
+            if (storage) {
+              await storage.deleteObject(attachment.storage_key, { userId, username, ipAddress: ip });
+            }
           } catch (err) {
             fastify.log.warn({ error: err.message, key: attachment.storage_key }, 'Failed to delete attachment from storage during wipe');
           }
@@ -4165,10 +4346,12 @@ Return ONLY a valid JSON array, no other text. Example:
 
       // 4. Delete storage files for attachments
       if (attachments.length > 0) {
-        const storage = createStorage(settingsDb);
         for (const attachment of attachments) {
           try {
-            await storage.deleteObject(attachment.storage_key, { userId, username, ipAddress: ip });
+            const storage = createStorageForBackend(attachment.storage_backend, settingsDb);
+            if (storage) {
+              await storage.deleteObject(attachment.storage_key, { userId, username, ipAddress: ip });
+            }
           } catch (err) {
             fastify.log.warn({ error: err.message, key: attachment.storage_key }, 'Failed to delete attachment from storage during wipe');
           }
@@ -4277,10 +4460,12 @@ Return ONLY a valid JSON array, no other text. Example:
       // Delete all data - this must be atomic
       // 1. Delete storage files for attachments (before settings reset)
       if (attachments.length > 0) {
-        const storage = createStorage(settingsDb);
         for (const attachment of attachments) {
           try {
-            await storage.deleteObject(attachment.storage_key, { userId, username, ipAddress: ip });
+            const storage = createStorageForBackend(attachment.storage_backend, settingsDb);
+            if (storage) {
+              await storage.deleteObject(attachment.storage_key, { userId, username, ipAddress: ip });
+            }
           } catch (err) {
             fastify.log.warn({ error: err.message, key: attachment.storage_key }, 'Failed to delete attachment from storage during wipe');
           }
