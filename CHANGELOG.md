@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+---
+
+## [0.11.11] - 2026-01-14
+
 ### Changed
 
 - **Sample preset regeneration now uses centralized word banks**: The "Regenerate Sample Files" feature now uses the same templates as dynamic generation
@@ -1061,7 +1065,8 @@ Initial development phase establishing core functionality.
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| Unreleased | - | Sample presets use word banks, template amount fix |
+| Unreleased | - | |
+| 0.11.11 | 2026-01-14 | Sample presets use word banks, template amount fix |
 | 0.11.10 | 2026-01-14 | Unified sample generation with AI optional, per-type spice settings |
 | 0.11.9 | 2026-01-14 | - |
 | 0.11.8 | 2026-01-10 | - |
