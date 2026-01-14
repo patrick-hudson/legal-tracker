@@ -8,7 +8,7 @@ import { renderDashboard } from './components/dashboard.js';
 import { renderMatters } from './components/matters.js';
 import { renderMatterDetail } from './components/matter-detail.js';
 import { renderAnalytics } from './components/analytics.js';
-import { renderSecurity } from './components/security.js';
+import { renderSecurity } from './components/security/index.js';
 import { renderTrackerSettings } from './components/tracker-settings.js';
 import { renderDataManagement } from './components/data-management/index.js';
 import { renderSystemInfo } from './components/system-info.js';
@@ -20,7 +20,6 @@ class Router {
             '/dashboard': renderDashboard,
             '/matters': renderMatters,
             '/analytics': renderAnalytics,
-            '/security': renderSecurity,
             '/tracker-settings': renderTrackerSettings,
             '/system-info': renderSystemInfo,
             '/audit-log': renderAuditLog
@@ -28,6 +27,8 @@ class Router {
         // Dynamic routes with patterns
         this.dynamicRoutes = [
             { pattern: /^\/matters\/(\d+)$/, handler: renderMatterDetail },
+            // Security sub-routes
+            { pattern: /^\/security(\/.*)?$/, handler: (container, params) => renderSecurity(container, params?.[0] ?? '') },
             // Data management sub-routes
             { pattern: /^\/data-management(\/.*)?$/, handler: (container, params) => renderDataManagement(container, params?.[0] ?? '') }
         ];
@@ -159,6 +160,19 @@ class Router {
                 link.classList.remove('active', 'bg-gray-100', 'dark:bg-gray-700');
             }
         });
+
+        // Handle collapsible menu expansion for security routes
+        if (hash.startsWith('/security')) {
+            const secSubmenu = document.getElementById('security-submenu');
+            const secToggle = document.getElementById('security-toggle');
+            const secChevron = document.getElementById('security-chevron');
+            if (secSubmenu && !secSubmenu.classList.contains('block')) {
+                secSubmenu.classList.remove('hidden');
+                secSubmenu.classList.add('block');
+                secToggle?.setAttribute('aria-expanded', 'true');
+                secChevron?.classList.add('rotate-180');
+            }
+        }
 
         // Handle collapsible menu expansion for data-management routes
         if (hash.startsWith('/data-management')) {

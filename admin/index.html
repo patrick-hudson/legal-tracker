@@ -132,10 +132,22 @@
                         </a>
                     </li>
                     <li>
-                        <a href="#/security" class="nav-link flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
+                        <button type="button" id="security-toggle" data-collapse-toggle="security-submenu" class="flex items-center w-full p-2 text-gray-900 transition duration-75 rounded-lg group hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700" aria-controls="security-submenu" aria-expanded="false">
                             <svg class="flex-shrink-0 w-5 h-5 text-gray-500 transition duration-75 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path></svg>
-                            <span class="flex-1 ms-3 whitespace-nowrap">Security</span>
-                        </a>
+                            <span class="flex-1 ms-3 text-left whitespace-nowrap">Security</span>
+                            <svg id="security-chevron" class="w-4 h-4 transition-transform" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>
+                        </button>
+                        <ul id="security-submenu" class="hidden py-2 space-y-1">
+                            <li>
+                                <a href="#/security" class="nav-link flex items-center w-full p-2 pl-11 text-sm text-gray-900 rounded-lg hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700">Overview</a>
+                            </li>
+                            <li>
+                                <a href="#/security/api-keys" class="nav-link flex items-center w-full p-2 pl-11 text-sm text-gray-900 rounded-lg hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700">API Keys</a>
+                            </li>
+                            <li>
+                                <a href="#/security/account" class="nav-link flex items-center w-full p-2 pl-11 text-sm text-gray-900 rounded-lg hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700">Account</a>
+                            </li>
+                        </ul>
                     </li>
                     <li>
                         <button type="button" id="dm-toggle" data-collapse-toggle="dm-submenu" class="flex items-center w-full p-2 text-gray-900 transition duration-75 rounded-lg group hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700" aria-controls="dm-submenu" aria-expanded="false">
@@ -195,7 +207,7 @@
     <script type="module" src="/admin/js/components/dashboard.js"></script>
     <script type="module" src="/admin/js/components/matters.js"></script>
     <script type="module" src="/admin/js/components/analytics.js"></script>
-    <script type="module" src="/admin/js/components/security.js"></script>
+    <script type="module" src="/admin/js/components/security/index.js"></script>
     <script type="module" src="/admin/js/components/tracker-settings.js"></script>
     <script type="module" src="/admin/js/components/data-management/index.js"></script>
     <script type="module" src="/admin/js/components/system-info.js"></script>

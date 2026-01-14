@@ -1,124 +1,50 @@
 /**
- * Security Settings Component
- * External API Keys, Legacy API Key, Authentication, Change Password
+ * External API Keys Page
+ * Create, list, and revoke API keys for external integrations
  */
 
-import api from '../api.js';
-import auth from '../auth.js';
-import { showConfirm } from '../modal.js';
+import api from '../../api.js';
+import { showConfirm } from '../../modal.js';
+import { formatDate, formatRelativeTime, escapeHtml, showToast } from './shared.js';
 
 let apiKeys = [];
 
-export async function renderSecurity(container) {
+export async function renderApiKeys(container) {
     container.innerHTML = '<div class="flex justify-center items-center h-64"><div class="spinner"></div></div>';
 
     try {
-        const [{ settings }, keysResponse] = await Promise.all([
-            api.getSettings(),
-            api.getApiKeys()
-        ]);
+        const keysResponse = await api.getApiKeys();
         apiKeys = keysResponse.keys || [];
 
         container.innerHTML = `
             <div class="mb-4">
-                <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Security</h1>
-                <p class="text-gray-600 dark:text-gray-400">API keys, authentication, and password management</p>
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-white">External API Keys</h1>
+                <p class="text-gray-600 dark:text-gray-400">Create and manage API keys for external integrations and scripts</p>
             </div>
 
-            <!-- External API Keys Section (full width) -->
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
-                <div class="flex items-center justify-between mb-4">
+            <!-- Info Banner -->
+            <div class="p-4 mb-6 text-sm text-blue-800 rounded-lg bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400">
+                <div class="flex items-start">
+                    <svg class="flex-shrink-0 w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                    </svg>
                     <div>
-                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">External API Keys</h3>
-                        <p class="text-sm text-gray-600 dark:text-gray-400">Create API keys for external integrations and scripts. All API key requests are logged.</p>
+                        <p class="font-medium">External API Keys provide programmatic access to the admin panel API.</p>
+                        <p class="mt-1">All requests using API keys are automatically logged to the audit log. Use <code class="bg-blue-100 dark:bg-blue-900/40 px-1 rounded">X-API-Key</code> or <code class="bg-blue-100 dark:bg-blue-900/40 px-1 rounded">Authorization: Bearer</code> header.</p>
                     </div>
+                </div>
+            </div>
+
+            <!-- API Keys Table -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow">
+                <div class="flex items-center justify-between p-6 border-b dark:border-gray-700">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Your API Keys</h3>
                     <button id="create-api-key-btn" class="text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-4 py-2 text-sm font-medium">
                         Create New Key
                     </button>
                 </div>
-                <div id="api-keys-table-container">
+                <div id="api-keys-table-container" class="p-6">
                     ${renderApiKeysTable(apiKeys)}
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- Legacy Server API Key -->
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Server API Key (Legacy)</h3>
-                    <div class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Current Key</label>
-                            <div class="flex gap-2">
-                                <input type="password" id="api-key-display" value="${settings.api_key || 'Not set'}" readonly class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                                <button id="toggle-api-key" class="px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm dark:bg-gray-700 dark:text-white">Show</button>
-                            </div>
-                        </div>
-                        <div class="flex gap-2">
-                            <button id="copy-api-key" class="flex-1 text-gray-700 bg-white border border-gray-300 hover:bg-gray-100 rounded-lg px-4 py-2 text-sm dark:bg-gray-800 dark:text-white dark:border-gray-600">Copy</button>
-                            <button id="regenerate-api-key" class="flex-1 text-white bg-orange-600 hover:bg-orange-700 rounded-lg px-4 py-2 text-sm">Regenerate</button>
-                        </div>
-                        <p class="text-xs text-gray-500 dark:text-gray-400">Legacy server-wide API key. Use External API Keys above for better security and auditability.</p>
-                    </div>
-                </div>
-
-                <!-- Public API Authentication Settings -->
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Public API Access</h3>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">Controls access to the public API endpoints (/api/*). Does not affect admin panel access.</p>
-                    <div class="space-y-4">
-                        <div>
-                            <label class="flex items-center cursor-pointer">
-                                <input type="checkbox" id="require-auth" ${settings.require_auth === 'true' ? 'checked' : ''} class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
-                                <span class="ml-2 text-sm font-medium text-gray-900 dark:text-white">Require Authentication</span>
-                            </label>
-                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">When enabled, public API write requests require the legacy server API key or IP whitelist.</p>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">IP Whitelist (comma-separated)</label>
-                            <input type="text" id="ip-whitelist" value="${settings.ip_whitelist || ''}" placeholder="127.0.0.1, 192.168.1.1" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Allow public API access from these IP addresses without requiring the legacy API key.</p>
-                        </div>
-                        <button id="save-auth-btn" class="w-full text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-4 py-2 text-sm">Save Auth Settings</button>
-                    </div>
-                </div>
-
-                <!-- Change Password -->
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Change Password</h3>
-                    <form id="change-password-form" class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Current Password</label>
-                            <input type="password" name="current" required class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">New Password</label>
-                            <input type="password" name="new" required minlength="8" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Confirm New Password</label>
-                            <input type="password" name="confirm" required minlength="8" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                        </div>
-                        <button type="submit" class="w-full text-white bg-blue-600 hover:bg-blue-700 rounded-lg px-6 py-2 text-sm">Change Password</button>
-                    </form>
-                </div>
-
-                <!-- Storage Settings Link -->
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">File Storage</h3>
-                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                        Storage settings have been moved to the Data Management section for better organization.
-                    </p>
-                    <a href="#/data-management/backup" class="inline-flex items-center text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium">
-                        <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z"></path>
-                            <path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z"></path>
-                            <path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z"></path>
-                        </svg>
-                        Go to Backup & Storage
-                        <svg class="w-4 h-4 ml-1" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/>
-                        </svg>
-                    </a>
                 </div>
             </div>
 
@@ -189,12 +115,12 @@ export async function renderSecurity(container) {
             </div>
         `;
 
-        setupEventListeners(settings);
+        setupEventListeners();
 
     } catch (error) {
         container.innerHTML = `
             <div class="p-4 mb-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-gray-800 dark:text-red-400">
-                <span class="font-medium">Error!</span> Failed to load security settings: ${error.message}
+                <span class="font-medium">Error!</span> Failed to load API keys: ${error.message}
             </div>
         `;
     }
@@ -261,8 +187,8 @@ function renderApiKeysTable(keys) {
     `;
 }
 
-function setupEventListeners(currentSettings) {
-    // External API Keys - Create button
+function setupEventListeners() {
+    // Create button
     document.getElementById('create-api-key-btn')?.addEventListener('click', () => {
         document.getElementById('create-api-key-modal').classList.remove('hidden');
     });
@@ -317,95 +243,6 @@ function setupEventListeners(currentSettings) {
 
     // Setup revoke listeners
     setupRevokeListeners();
-
-    // Legacy API Key management
-    document.getElementById('toggle-api-key')?.addEventListener('click', (e) => {
-        const input = document.getElementById('api-key-display');
-        if (input.type === 'password') {
-            input.type = 'text';
-            e.target.textContent = 'Hide';
-        } else {
-            input.type = 'password';
-            e.target.textContent = 'Show';
-        }
-    });
-
-    document.getElementById('copy-api-key')?.addEventListener('click', () => {
-        const input = document.getElementById('api-key-display');
-        navigator.clipboard.writeText(input.value);
-        showToast('API key copied to clipboard', 'success');
-    });
-
-    document.getElementById('regenerate-api-key')?.addEventListener('click', async () => {
-        const confirmed = await showConfirm('Are you sure you want to regenerate the legacy API key? The old key will stop working.', {
-            title: 'Regenerate Legacy API Key',
-            confirmText: 'Regenerate',
-            cancelText: 'Cancel',
-            type: 'danger'
-        });
-
-        if (!confirmed) return;
-
-        try {
-            const response = await api.generateApiKey();
-            document.getElementById('api-key-display').value = response.api_key;
-            showToast('Legacy API key regenerated successfully', 'success');
-        } catch (error) {
-            showToast(`Error: ${error.message}`, 'error');
-        }
-    });
-
-    // Auth settings
-    document.getElementById('save-auth-btn')?.addEventListener('click', async () => {
-        try {
-            const requireAuth = document.getElementById('require-auth').checked;
-            const ipWhitelist = document.getElementById('ip-whitelist').value;
-
-            await api.updateSetting('require_auth', requireAuth.toString());
-            await api.updateSetting('ip_whitelist', ipWhitelist);
-
-            showToast('Auth settings saved successfully', 'success');
-        } catch (error) {
-            showToast(`Error: ${error.message}`, 'error');
-        }
-    });
-
-    // Change password
-    document.getElementById('change-password-form')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const formData = new FormData(e.target);
-        const current = formData.get('current');
-        const newPassword = formData.get('new');
-        const confirm = formData.get('confirm');
-
-        if (newPassword !== confirm) {
-            showToast('Passwords do not match', 'error');
-            return;
-        }
-
-        try {
-            const username = auth.getUser()?.username;
-            if (!username) {
-                throw new Error('User not authenticated');
-            }
-            const hashedCurrentPassword = await auth.hashPassword(username, current);
-            const hashedNewPassword = await auth.hashPassword(username, newPassword);
-
-            const response = await api.changePassword(hashedCurrentPassword, hashedNewPassword);
-
-            showToast(response.message || 'Password changed successfully. Redirecting to login...', 'success');
-            e.target.reset();
-
-            auth.currentUser = null;
-            auth.isAuthenticated = false;
-
-            setTimeout(() => {
-                window.location.href = '/admin';
-            }, 2000);
-        } catch (error) {
-            showToast(`Error: ${error.message}`, 'error');
-        }
-    });
 }
 
 function setupRevokeListeners() {
@@ -440,49 +277,4 @@ function setupRevokeListeners() {
             }
         });
     });
-}
-
-function formatDate(dateString) {
-    if (!dateString) return '-';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-}
-
-function formatRelativeTime(dateString) {
-    if (!dateString) return 'Never';
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins} min ago`;
-    if (diffHours < 24) return `${diffHours} hr ago`;
-    if (diffDays < 7) return `${diffDays} days ago`;
-    return formatDate(dateString);
-}
-
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-function showToast(message, type = 'info') {
-    const toast = document.createElement('div');
-    toast.className = `toast p-4 rounded-lg shadow-lg ${
-        type === 'success' ? 'bg-green-500' :
-        type === 'error' ? 'bg-red-500' :
-        'bg-blue-500'
-    } text-white`;
-    toast.textContent = message;
-    document.body.appendChild(toast);
-
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
 }

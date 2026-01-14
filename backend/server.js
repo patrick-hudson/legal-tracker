@@ -672,6 +672,20 @@ export async function createServer(options = {}) {
     }
   });
 
+  fastify.get('/admin/js/components/security/:file', async (request, reply) => {
+    try {
+      const js = serveStaticFile('js/components/security', request.params.file);
+      // Disable caching for JavaScript files to prevent stale code
+      reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+      reply.header('Pragma', 'no-cache');
+      reply.header('Expires', '0');
+      return reply.type('application/javascript').send(js);
+    } catch (error) {
+      fastify.log.warn({ file: request.params.file, error: error.message }, 'Static file access denied');
+      return reply.code(404).send({ error: 'File not found' });
+    }
+  });
+
   // Create admin auth middleware (hybrid: supports both API keys and JWT sessions)
   const adminAuthMiddleware = createHybridAuthMiddleware(adminSessionsDb, adminUsersDb, apiKeysDb);
 

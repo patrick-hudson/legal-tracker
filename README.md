@@ -6,7 +6,7 @@
 
 *Full-featured legal matter management for the paranoid and penny-conscious.*
 
-[![Version](https://img.shields.io/badge/version-0.8.0-amber?style=flat-square)](https://github.com/patrick-hudson/legal-tracker/releases)
+[![Version](https://img.shields.io/badge/version-0.13.3-amber?style=flat-square)](https://github.com/patrick-hudson/legal-tracker/releases)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen?style=flat-square)](https://nodejs.org)
 [![CI](https://img.shields.io/github/actions/workflow/status/patrick-hudson/legal-tracker/ci.yml?style=flat-square&label=tests)](https://github.com/patrick-hudson/legal-tracker/actions)
@@ -135,6 +135,9 @@ Theme preference is saved to localStorage and persists across sessions.
 - [Production Deployment](#production-deployment)
 - [Configuration](#configuration)
 - [Admin Panel](#admin-panel)
+  - [Security](#security)
+  - [Data Management](#data-management)
+  - [Audit Log](#audit-log)
 - [API Reference](#api-reference)
   - [Authentication](#authentication)
   - [Error Responses](#error-responses)
@@ -150,7 +153,8 @@ Theme preference is saved to localStorage and persists across sessions.
   - [Claude AI Integration](#claude-ai-integration)
   - [User Management](#user-management)
   - [Session Management](#session-management)
-  - [Data Management](#data-management)
+  - [External API Keys](#external-api-keys)
+  - [Data Management](#data-management-1)
   - [Analytics](#analytics)
 - [Development](#development)
 - [Backup & Restore](#backup--restore)
@@ -346,7 +350,7 @@ Files are stored in `./data/uploads`. No additional configuration needed.
 
 #### S3-Compatible Storage
 
-Configure via the Admin Panel → Security → File Storage, or via environment:
+Configure via the Admin Panel → Data Management → Backup & Storage, or via environment:
 
 ```env
 STORAGE_BACKEND=s3
@@ -364,7 +368,7 @@ Supports: AWS S3, MinIO, Backblaze B2, Wasabi, and other S3-compatible services.
 To enable AI document generation and AI-powered sample data:
 
 1. Get an API key from [Anthropic Console](https://console.anthropic.com/)
-2. Go to Admin Panel → Security → AI Configuration
+2. Go to Admin Panel → Data Management → AI Settings
 3. Enter and validate your API key
 4. Select a model and spice level
 
@@ -417,12 +421,43 @@ Export matters in three formats:
 
 ### Data Management
 
+The Data Management section is organized into sub-pages:
+
+| Page | What it contains |
+|------|------------------|
+| **Overview** | Data summary cards, AI config preview, storage preview, quick actions |
+| **AI Settings** | Claude API key, model selection, spice levels, sample data generation |
+| **Backup & Storage** | Storage backend config (local/S3), backup creation and restore |
+| **Wipe Data** | Selective wipe, wipe customer data, factory reset |
+
+#### Wipe Operations
+
 | Operation | What it does |
 |-----------|--------------|
-| **Add Sample Data** | Generate test matters with optional AI descriptions |
-| **Wipe Matters** | Delete all matters, keep admin users and settings |
-| **Wipe + Reset** | Delete matters and reset settings to defaults |
-| **Factory Reset** | Nuclear option. Deletes everything. Requires `ENABLE_DB_RESET=true` |
+| **Selective Wipe** | Choose specific data types to wipe (matters, notes, attachments, audit log) |
+| **Wipe Customer Data** | Delete matters, notes, attachments, settings, audit log. Preserves users. |
+| **Factory Reset** | Nuclear option. Deletes everything including users. Requires `ENABLE_DB_RESET=true` |
+
+### Audit Log
+
+The Audit Log page provides a comprehensive record of all admin actions and system events:
+
+- **Filtering**: Search, level filter (ERROR/SECURITY/WARNING/INFO/DEBUG), date range, user, action type
+- **Quick filters**: "Errors Only", "Last Hour", "Last 24h", "Last 7 Days"
+- **Stats dashboard**: Error/warning/security event counts for last 24 hours
+- **Auto-refresh**: Real-time monitoring with 10-second polling
+- **CSV export**: Export filtered entries with current filters applied
+- **Expandable rows**: View full request/response data and stack traces
+
+### Security
+
+The Security section is organized into sub-pages:
+
+| Page | What it contains |
+|------|------------------|
+| **Overview** | Legacy server API key, public API access settings, quick links |
+| **API Keys** | Create and manage External API Keys for programmatic access |
+| **Account** | Change password, view session info, security tips |
 
 ---
 
@@ -444,7 +479,7 @@ LEGAL MATTER uses multiple authentication methods:
 External API Keys provide programmatic access to the admin panel API with full audit logging.
 
 **Creating a Key:**
-1. Go to Admin Panel > Security > External API Keys
+1. Go to Admin Panel > Security > API Keys
 2. Click "Create New Key"
 3. Enter a descriptive name (e.g., "CI Pipeline", "Zapier Integration")
 4. Optionally set an expiration (30 days, 90 days, 1 year, or never)
@@ -558,7 +593,7 @@ curl https://your-domain.com/api/version
 **Response `200 OK`:**
 ```json
 {
-  "version": "0.8.0",
+  "version": "0.13.3",
   "commitHash": "abc123def456789...",
   "commitHashShort": "abc123d",
   "commitPushed": true,
@@ -2650,7 +2685,7 @@ cp backend/data/tracker.db ~/backups/tracker-$(date +%Y%m%d).db
 <details>
 <summary><strong>AI features not working</strong></summary>
 
-- Verify API key is entered and validated in Admin → Security
+- Verify API key is entered and validated in Admin → Data Management → AI Settings
 - Check server logs for Claude API errors
 - Ensure your Anthropic account has available credits
 

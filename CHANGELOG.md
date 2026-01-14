@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **Security page restructured into sub-pages**: Improved organization with collapsible sidebar menu
+  - **Overview**: Legacy server API key, public API access settings, and quick links
+  - **API Keys**: Dedicated page for External API Keys management (create, list, revoke)
+  - **Account**: Change password, view account info, session management, security tips
+  - Follows same pattern as Data Management sub-pages
+
 ---
 
 ## [0.14.0] - 2026-01-14
