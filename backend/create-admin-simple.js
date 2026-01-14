@@ -5,7 +5,7 @@
  * Usage: node create-admin-simple.js <username> <password> [email]
  */
 
-import { createDatabase } from './db.js';
+import { createDatabase } from './db/index.js';
 import { hashPassword } from './auth.js';
 import crypto from 'crypto';
 import 'dotenv/config';

@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **Database layer modularized**: Extracted 8 query objects from db.js into separate files
+  - `db/queries/settings.js` - Key-value settings store (4 methods)
+  - `db/queries/matters.js` - Matter CRUD and statistics (7 methods)
+  - `db/queries/users.js` - Admin user management (11 methods)
+  - `db/queries/sessions.js` - Session token management (8 methods)
+  - `db/queries/bootstrap.js` - Bootstrap token management (7 methods)
+  - `db/queries/api-keys.js` - API key management (12 methods)
+  - `db/queries/notes.js` - Private notes CRUD (10 methods)
+  - `db/queries/attachments.js` - Attachment records (15 methods)
+  - `db/queries/audit-log.js` - Audit log queries (15 methods)
+  - `db/schema.js` - Table creation SQL
+  - `db/migrations.js` - Schema migrations
+  - `db/index.js` - Main entry point, backwards compatible
+
 ---
 
 ## [0.16.1] - 2026-01-14

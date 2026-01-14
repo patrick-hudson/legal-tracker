@@ -7,7 +7,7 @@
  * Usage: node create-admin.js
  */
 
-import { createDatabase } from './db.js';
+import { createDatabase } from './db/index.js';
 import { hashPassword } from './auth.js';
 import * as readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';

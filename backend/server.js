@@ -6,7 +6,7 @@ import fastifyCookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import fastifyMultipart from '@fastify/multipart';
 import Anthropic from '@anthropic-ai/sdk';
-import { createDatabase } from './db.js';
+import { createDatabase } from './db/index.js';
 import { initAudit, logInfo, logError, logWarning, logSecurity, logInfoFromRequest, logErrorFromRequest, logSecurityFromRequest, logWarningFromRequest, logDebugFromRequest, getUserContext, callClaudeWithLogging, ACTION_TYPES, ENTITY_TYPES } from './audit.js';
 import { hashPassword, verifyPassword, generateTokenId, createHybridAuthMiddleware, getTokenExpiration, generateBootstrapToken, hashBootstrapToken, getBootstrapTokenExpiration, generateUserApiKey, getApiKeyPrefix, hashApiKey, autoRequireScope } from './auth.js';
 import { createStorage, createStorageFromConfig, createStorageForBackend, validateFileType, sanitizeFilename, MAX_FILE_SIZE } from './storage.js';
