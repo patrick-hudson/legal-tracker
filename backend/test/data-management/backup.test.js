@@ -4,8 +4,8 @@
 
 import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert';
-import { createServer } from '../server.js';
-import { hashPassword } from '../auth.js';
+import { createServer } from '../../server.js';
+import { hashPassword } from '../../auth.js';
 import crypto from 'crypto';
 import AdmZip from 'adm-zip';
 

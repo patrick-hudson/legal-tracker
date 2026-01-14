@@ -12,10 +12,10 @@
 
 import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert';
-import { createServer } from '../server.js';
+import { createServer } from '../../server.js';
 import crypto from 'crypto';
-import { hashPassword } from '../auth.js';
-import { logDebug, initAudit, ENTITY_TYPES, ACTION_TYPES } from '../audit.js';
+import { hashPassword } from '../../auth.js';
+import { logDebug, initAudit, ENTITY_TYPES, ACTION_TYPES } from '../../audit.js';
 
 describe('Audit Log Tests', () => {
   let server;

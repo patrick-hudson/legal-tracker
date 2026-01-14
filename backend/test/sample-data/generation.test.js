@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { createServer } from '../server.js';
-import { hashPassword } from '../auth.js';
+import { createServer } from '../../server.js';
+import { hashPassword } from '../../auth.js';
 import crypto from 'crypto';
 
 describe('Sample Data Management', () => {

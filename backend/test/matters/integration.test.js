@@ -1,8 +1,8 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { createServer } from '../server.js';
+import { createServer } from '../../server.js';
 import crypto from 'crypto';
-import { hashPassword } from '../auth.js';
+import { hashPassword } from '../../auth.js';
 
 /**
  * Comprehensive End-to-End Tests with Proper Isolation

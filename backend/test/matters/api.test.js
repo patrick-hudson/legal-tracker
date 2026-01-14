@@ -1,6 +1,6 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
-import { createServer } from '../server.js';
+import { createServer } from '../../server.js';
 
 describe('Legal Tracker API Integration Tests', () => {
   let server;

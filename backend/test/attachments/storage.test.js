@@ -1,10 +1,10 @@
 import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert';
-import { createServer } from '../server.js';
+import { createServer } from '../../server.js';
 import crypto from 'crypto';
-import { hashPassword } from '../auth.js';
-import { FilesystemStorage, validateFileType, sanitizeFilename } from '../storage.js';
-import { textToPdf, generatePlaceholderDocument, DOCUMENT_TYPES } from '../legal-docs.js';
+import { hashPassword } from '../../auth.js';
+import { FilesystemStorage, validateFileType, sanitizeFilename } from '../../storage.js';
+import { textToPdf, generatePlaceholderDocument, DOCUMENT_TYPES } from '../../legal-docs.js';
 import { Readable } from 'stream';
 
 describe('Attachments Tests', () => {

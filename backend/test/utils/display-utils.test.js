@@ -31,7 +31,7 @@ const {
     renderEmptyState,
     renderTableCell,
     PLACEHOLDER
-} = await import('../../admin/js/display-utils.js');
+} = await import('../../../admin/js/display-utils.js');
 
 describe('Display Utils Module', () => {
 

@@ -1,7 +1,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
-import { createServer } from '../server.js';
-import { generateBootstrapToken, hashBootstrapToken, getBootstrapTokenExpiration } from '../auth.js';
+import { createServer } from '../../server.js';
+import { generateBootstrapToken, hashBootstrapToken, getBootstrapTokenExpiration } from '../../auth.js';
 
 /**
  * Helper function to hash password client-side (same as client does)

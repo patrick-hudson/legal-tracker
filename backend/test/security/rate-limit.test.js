@@ -8,7 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import crypto from 'crypto';
-import { createServer } from '../server.js';
+import { createServer } from '../../server.js';
 
 // Helper function to hash password client-side (same as admin/js/auth.js)
 function hashPasswordClientSide(username, password, salt) {

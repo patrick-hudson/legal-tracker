@@ -46,6 +46,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - 40% of matters get lawyer info, 30% get opposing counsel, 50% get case numbers
   - More varied matter descriptions from the 140+ template pool
 
+### Changed
+
+- **Test suite reorganized into feature directories**: Tests now grouped by feature for better CI readability
+  - New directory structure: `auth/`, `matters/`, `private-notes/`, `attachments/`, `audit-log/`, `data-management/`, `sample-data/`, `security/`, `utils/`
+  - Shared test helpers in `helpers/setup.js` reduce duplication
+  - Tests run in parallel (4 concurrent) for faster execution
+  - Each test file is independently runnable
+  - Updated test README with new structure and usage examples
+
 ### Fixed
 
 - **Template amount handling**: Fixed TypeError when document template receives amount as string vs number
