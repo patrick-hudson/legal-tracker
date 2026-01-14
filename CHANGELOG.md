@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Aggregated release notes from failed builds**: GitHub releases now include context from failed CI builds
+  - Failed builds record commit info to `.github/pending-releases.json`
+  - Next successful release includes "Previously Failed Builds" section listing all failed attempts
+  - Shows build number, date, commit message, and short SHA for each failed build
+  - Pending releases file automatically cleared after successful release
+
+### Changed
+
+- **CI workflow restructured into separate jobs**: Test, release, and failure recording now run as independent jobs
+  - `test` job runs all tests across Node 20.x and 22.x
+  - `release` job only runs when tests pass (creates version, changelog, tag, GitHub release)
+  - `record-failed-build` job runs when tests fail (records build info for future release notes)
+  - Cleaner separation of concerns and better failure handling
+
 ---
 
 ## [0.12.1] - 2026-01-14
