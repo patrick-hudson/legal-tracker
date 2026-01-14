@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **Sidebar dropdown chevrons not rotating**: Added click handlers to flip chevron arrows when Security and Data Management submenus are toggled
+
+### Changed
+
+- **Security Overview page redesigned**: Removed legacy API key management and database-based public API settings (which were removed in 0.16.0), replaced with:
+  - External API Keys summary with active key count
+  - Account Security card
+  - Quick Actions (Create API Key, Change Password, View Audit Log)
+  - Public API Access info explaining environment variable configuration
+
+### Removed
+
+- **Dead code cleanup**: Removed `generateApiKey()` from api.js (endpoint was removed in 0.16.0)
+
 ---
 
 ## [0.16.4] - 2026-01-14
@@ -1338,7 +1354,7 @@ Initial development phase establishing core functionality.
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| Unreleased | - | |
+| Unreleased | - | Sidebar chevron rotation, Security Overview redesign |
 | 0.16.4 | 2026-01-14 | Fix watchdog status showing undefined |
 | 0.16.3 | 2026-01-14 | Routes extraction from server.js (90% reduction) |
 | 0.16.2 | 2026-01-14 | Database layer modularized into query objects |

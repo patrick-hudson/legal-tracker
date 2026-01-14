@@ -290,12 +290,6 @@ class AdminAPI {
         });
     }
 
-    async generateApiKey() {
-        return this.request('/settings/api-key/generate', {
-            method: 'POST'
-        });
-    }
-
     // Claude API key management
     async validateAndSaveClaudeApiKey(apiKey) {
         return this.request('/settings/claude-api-key/validate-and-save', {

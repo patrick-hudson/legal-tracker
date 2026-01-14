@@ -24,6 +24,9 @@ async function init() {
     // Initialize router
     router.init();
 
+    // Set up sidebar collapse toggle handlers for chevron rotation
+    setupSidebarCollapseHandlers();
+
     // Check authentication and route
     await router.handleRoute();
 }
@@ -93,6 +96,47 @@ async function handleLogout(e) {
 
     // Redirect to admin page (will show login screen)
     window.location.href = '/admin';
+}
+
+/**
+ * Set up sidebar collapsible menu handlers for chevron rotation
+ */
+function setupSidebarCollapseHandlers() {
+    // Security submenu
+    const securityToggle = document.getElementById('security-toggle');
+    const securityChevron = document.getElementById('security-chevron');
+    const securitySubmenu = document.getElementById('security-submenu');
+
+    if (securityToggle && securityChevron && securitySubmenu) {
+        securityToggle.addEventListener('click', () => {
+            const isExpanded = securitySubmenu.classList.contains('hidden');
+            if (isExpanded) {
+                // Opening
+                securityChevron.classList.add('rotate-180');
+            } else {
+                // Closing
+                securityChevron.classList.remove('rotate-180');
+            }
+        });
+    }
+
+    // Data Management submenu
+    const dmToggle = document.getElementById('dm-toggle');
+    const dmChevron = document.getElementById('dm-chevron');
+    const dmSubmenu = document.getElementById('dm-submenu');
+
+    if (dmToggle && dmChevron && dmSubmenu) {
+        dmToggle.addEventListener('click', () => {
+            const isExpanded = dmSubmenu.classList.contains('hidden');
+            if (isExpanded) {
+                // Opening
+                dmChevron.classList.add('rotate-180');
+            } else {
+                // Closing
+                dmChevron.classList.remove('rotate-180');
+            }
+        });
+    }
 }
 
 // Initialize when DOM is ready
