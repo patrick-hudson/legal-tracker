@@ -1119,6 +1119,11 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
       saveDatabase();
     },
 
+    deleteAll() {
+      db.run('DELETE FROM audit_log');
+      saveDatabase();
+    },
+
     getCount() {
       const result = db.exec('SELECT COUNT(*) as count FROM audit_log');
       return result[0]?.values[0]?.[0] || 0;

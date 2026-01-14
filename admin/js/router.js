@@ -10,7 +10,7 @@ import { renderMatterDetail } from './components/matter-detail.js';
 import { renderAnalytics } from './components/analytics.js';
 import { renderSecurity } from './components/security.js';
 import { renderTrackerSettings } from './components/tracker-settings.js';
-import { renderDataManagement } from './components/data-management.js';
+import { renderDataManagement } from './components/data-management/index.js';
 import { renderSystemInfo } from './components/system-info.js';
 import { renderAuditLog } from './components/audit-log.js';
 
@@ -22,13 +22,14 @@ class Router {
             '/analytics': renderAnalytics,
             '/security': renderSecurity,
             '/tracker-settings': renderTrackerSettings,
-            '/data-management': renderDataManagement,
             '/system-info': renderSystemInfo,
             '/audit-log': renderAuditLog
         };
         // Dynamic routes with patterns
         this.dynamicRoutes = [
-            { pattern: /^\/matters\/(\d+)$/, handler: renderMatterDetail }
+            { pattern: /^\/matters\/(\d+)$/, handler: renderMatterDetail },
+            // Data management sub-routes
+            { pattern: /^\/data-management(\/.*)?$/, handler: (container, params) => renderDataManagement(container, params?.[0] ?? '') }
         ];
         this.defaultRoute = '/dashboard';
     }
@@ -149,12 +150,29 @@ class Router {
 
         navLinks.forEach(link => {
             const linkHash = link.getAttribute('href').slice(1);
-            if (linkHash === hash) {
+            // Check for exact match or parent match (e.g., /data-management is parent of /data-management/ai)
+            const isExactMatch = linkHash === hash;
+            const isParentMatch = linkHash && hash.startsWith(linkHash + '/');
+
+            if (isExactMatch || isParentMatch) {
                 link.classList.add('active', 'bg-gray-100', 'dark:bg-gray-700');
             } else {
                 link.classList.remove('active', 'bg-gray-100', 'dark:bg-gray-700');
             }
         });
+
+        // Handle collapsible menu expansion for data-management routes
+        if (hash.startsWith('/data-management')) {
+            const dmSubmenu = document.getElementById('dm-submenu');
+            const dmToggle = document.getElementById('dm-toggle');
+            const dmChevron = document.getElementById('dm-chevron');
+            if (dmSubmenu && !dmSubmenu.classList.contains('block')) {
+                dmSubmenu.classList.remove('hidden');
+                dmSubmenu.classList.add('block');
+                dmToggle?.setAttribute('aria-expanded', 'true');
+                dmChevron?.classList.add('rotate-180');
+            }
+        }
     }
 
     navigate(path) {

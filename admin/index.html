@@ -138,10 +138,25 @@
                         </a>
                     </li>
                     <li>
-                        <a href="#/data-management" class="nav-link flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
+                        <button type="button" id="dm-toggle" data-collapse-toggle="dm-submenu" class="flex items-center w-full p-2 text-gray-900 transition duration-75 rounded-lg group hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700" aria-controls="dm-submenu" aria-expanded="false">
                             <svg class="flex-shrink-0 w-5 h-5 text-gray-500 transition duration-75 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z"></path><path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z"></path><path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z"></path></svg>
-                            <span class="flex-1 ms-3 whitespace-nowrap">Data Management</span>
-                        </a>
+                            <span class="flex-1 ms-3 text-left whitespace-nowrap">Data Management</span>
+                            <svg id="dm-chevron" class="w-4 h-4 transition-transform" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>
+                        </button>
+                        <ul id="dm-submenu" class="hidden py-2 space-y-1">
+                            <li>
+                                <a href="#/data-management" class="nav-link flex items-center w-full p-2 pl-11 text-sm text-gray-900 rounded-lg hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700">Overview</a>
+                            </li>
+                            <li>
+                                <a href="#/data-management/ai" class="nav-link flex items-center w-full p-2 pl-11 text-sm text-gray-900 rounded-lg hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700">AI Settings</a>
+                            </li>
+                            <li>
+                                <a href="#/data-management/backup" class="nav-link flex items-center w-full p-2 pl-11 text-sm text-gray-900 rounded-lg hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700">Backup & Storage</a>
+                            </li>
+                            <li>
+                                <a href="#/data-management/wipe" class="nav-link flex items-center w-full p-2 pl-11 text-sm text-gray-900 rounded-lg hover:bg-gray-100 dark:text-white dark:hover:bg-gray-700">Wipe Data</a>
+                            </li>
+                        </ul>
                     </li>
                     <li>
                         <a href="#/system-info" class="nav-link flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
@@ -182,7 +197,7 @@
     <script type="module" src="/admin/js/components/analytics.js"></script>
     <script type="module" src="/admin/js/components/security.js"></script>
     <script type="module" src="/admin/js/components/tracker-settings.js"></script>
-    <script type="module" src="/admin/js/components/data-management.js"></script>
+    <script type="module" src="/admin/js/components/data-management/index.js"></script>
     <script type="module" src="/admin/js/components/system-info.js"></script>
     <script type="module" src="/admin/js/app.js"></script>
 </body>
