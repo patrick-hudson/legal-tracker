@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+---
+
+## [0.16.5] - 2026-01-14
+
 ### Fixed
 
 - **Sidebar dropdown chevrons not rotating**: Added click handlers to flip chevron arrows when Security and Data Management submenus are toggled
@@ -1354,7 +1358,8 @@ Initial development phase establishing core functionality.
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| Unreleased | - | Sidebar chevron rotation, Security Overview redesign |
+| Unreleased | - | |
+| 0.16.5 | 2026-01-14 | Sidebar chevron rotation, Security Overview redesign |
 | 0.16.4 | 2026-01-14 | Fix watchdog status showing undefined |
 | 0.16.3 | 2026-01-14 | Routes extraction from server.js (90% reduction) |
 | 0.16.2 | 2026-01-14 | Database layer modularized into query objects |
