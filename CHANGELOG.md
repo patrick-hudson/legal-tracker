@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+---
+
+## [0.13.0] - 2026-01-14
+
 ### Added
 
 - **Storage migration functionality**: Transfer attachments between local filesystem and S3 storage backends
