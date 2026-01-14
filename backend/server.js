@@ -12,6 +12,9 @@ import { hashPassword, verifyPassword, generateTokenId, createHybridAuthMiddlewa
 import { createStorage, createStorageFromConfig, createStorageForBackend, validateFileType, sanitizeFilename, MAX_FILE_SIZE } from './storage.js';
 import { generateLegalDocument, generatePlaceholderDocument } from './legal-docs.js';
 import * as sampleTemplates from './sample-templates.js';
+import { DEFAULT_APP_SETTINGS, INPUT_LIMITS, CACHE_TTL_MS } from './lib/constants.js';
+import { validateStringLength } from './lib/validation.js';
+import { getClientIP } from './lib/helpers.js';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve } from 'path';
 import { readFileSync, existsSync } from 'fs';
@@ -33,34 +36,6 @@ const commitPushCache = {
   timestamp: 0,
   refreshing: false
 };
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
-/**
- * Default application settings (canonical source of truth)
- * Used for fresh installs and settings reset operations
- */
-const DEFAULT_APP_SETTINGS = {
-  lifetime_spent: '0',
-  drain_rate_cents_per_second: '0',
-  auto_drain_enabled: 'false',
-  // AI/Claude settings
-  claude_api_key: '',
-  claude_key_validated: 'false',
-  claude_model: '',
-  ai_spice_level: '1',
-  ai_custom_prompt: '',
-  // Per-type AI settings (null = use default ai_spice_level)
-  ai_spice_matters: '',
-  ai_spice_notes: '',
-  ai_spice_attachments: '',
-  ai_spice_audit_log: '',
-  ai_prompt_matters: '',
-  ai_prompt_notes: '',
-  ai_prompt_attachments: '',
-  ai_prompt_audit_log: ''
-  // Note: drain_start_time and last_matter_date are set dynamically to current time
-};
-
 // Load environment variables from .env file in backend directory
 dotenv.config({ path: join(__dirname, '.env') });
 
@@ -185,36 +160,6 @@ export async function createServer(options = {}) {
       }
     }
   });
-
-  // Input validation limits
-  const INPUT_LIMITS = {
-    username: 100,
-    password: 1000, // Allow long passwords
-    email: 255,
-    note: 10000, // 10KB for notes
-    confirmationString: 100
-  };
-
-  // Validate string length
-  function validateStringLength(value, fieldName, maxLength) {
-    if (value && value.length > maxLength) {
-      throw new Error(`${fieldName} exceeds maximum length of ${maxLength} characters`);
-    }
-  }
-
-  // Helper to get client IP
-  function getClientIP(request) {
-    // Check various headers for real IP (when behind proxy)
-    const forwardedFor = request.headers['x-forwarded-for'];
-    if (forwardedFor) {
-      return forwardedFor.split(',')[0].trim();
-    }
-    const realIP = request.headers['x-real-ip'];
-    if (realIP) {
-      return realIP;
-    }
-    return request.ip;
-  }
 
   // ============ PUBLIC ROUTES (Read-only, no auth required) ============
 
