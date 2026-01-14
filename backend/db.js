@@ -153,6 +153,22 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
     CREATE INDEX IF NOT EXISTS idx_audit_log_user_id ON audit_log(user_id);
     CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id);
 
+    CREATE TABLE IF NOT EXISTS api_keys (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      key_prefix TEXT NOT NULL,
+      key_hash TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_used_at DATETIME,
+      expires_at DATETIME,
+      revoked_at DATETIME,
+      FOREIGN KEY (user_id) REFERENCES admin_users(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix);
+    CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id);
+
     -- Initialize default settings if they don't exist
     INSERT OR IGNORE INTO settings (key, value) VALUES ('lifetime_spent', '0');
     INSERT OR IGNORE INTO settings (key, value) VALUES ('last_matter_date', datetime('now'));
@@ -671,6 +687,144 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
         });
       }
       return [];
+    }
+  };
+
+  const apiKeysDb = {
+    create(userId, name, keyPrefix, keyHash, expiresAt = null) {
+      db.run(`
+        INSERT INTO api_keys (user_id, name, key_prefix, key_hash, created_at, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `, [userId, name, keyPrefix, keyHash, new Date().toISOString(), expiresAt]);
+
+      const result = db.exec('SELECT last_insert_rowid() as id');
+      const id = result[0].values[0][0];
+
+      saveDatabase();
+      return { id };
+    },
+
+    getById(id) {
+      const result = db.exec(`
+        SELECT ak.*, u.username as created_by_username
+        FROM api_keys ak
+        LEFT JOIN admin_users u ON ak.user_id = u.id
+        WHERE ak.id = ?
+      `, [id]);
+      if (result.length > 0 && result[0].values.length > 0) {
+        const columns = result[0].columns;
+        const row = result[0].values[0];
+        const obj = {};
+        columns.forEach((col, i) => {
+          obj[col] = row[i];
+        });
+        return obj;
+      }
+      return null;
+    },
+
+    getByPrefix(prefix) {
+      // Get all active keys with matching prefix (for validation)
+      const result = db.exec(`
+        SELECT ak.*, u.username
+        FROM api_keys ak
+        LEFT JOIN admin_users u ON ak.user_id = u.id
+        WHERE ak.key_prefix = ? AND ak.revoked_at IS NULL
+      `, [prefix]);
+      if (result.length > 0) {
+        const columns = result[0].columns;
+        return result[0].values.map(row => {
+          const obj = {};
+          columns.forEach((col, i) => {
+            obj[col] = row[i];
+          });
+          return obj;
+        });
+      }
+      return [];
+    },
+
+    updateLastUsed(id) {
+      db.run(`
+        UPDATE api_keys SET last_used_at = ? WHERE id = ?
+      `, [new Date().toISOString(), id]);
+      saveDatabase();
+    },
+
+    revoke(id) {
+      db.run(`
+        UPDATE api_keys SET revoked_at = ? WHERE id = ?
+      `, [new Date().toISOString(), id]);
+      saveDatabase();
+    },
+
+    getAll() {
+      // Returns all keys (for admin view) - never returns key_hash
+      const result = db.exec(`
+        SELECT ak.id, ak.user_id, ak.name, ak.key_prefix, ak.created_at, ak.last_used_at, ak.expires_at, ak.revoked_at, u.username as created_by_username
+        FROM api_keys ak
+        LEFT JOIN admin_users u ON ak.user_id = u.id
+        ORDER BY ak.created_at DESC
+      `);
+      if (result.length > 0) {
+        const columns = result[0].columns;
+        return result[0].values.map(row => {
+          const obj = {};
+          columns.forEach((col, i) => {
+            obj[col] = row[i];
+          });
+          return obj;
+        });
+      }
+      return [];
+    },
+
+    getByUserId(userId) {
+      // Returns keys for a specific user - never returns key_hash
+      const result = db.exec(`
+        SELECT id, user_id, name, key_prefix, created_at, last_used_at, expires_at, revoked_at
+        FROM api_keys
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+      `, [userId]);
+      if (result.length > 0) {
+        const columns = result[0].columns;
+        return result[0].values.map(row => {
+          const obj = {};
+          columns.forEach((col, i) => {
+            obj[col] = row[i];
+          });
+          return obj;
+        });
+      }
+      return [];
+    },
+
+    delete(id) {
+      db.run('DELETE FROM api_keys WHERE id = ?', [id]);
+      saveDatabase();
+    },
+
+    deleteAll() {
+      db.run('DELETE FROM api_keys');
+      saveDatabase();
+    },
+
+    deleteAllForUser(userId) {
+      db.run('DELETE FROM api_keys WHERE user_id = ?', [userId]);
+      saveDatabase();
+    },
+
+    revokeAllForUser(userId) {
+      db.run(`
+        UPDATE api_keys SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL
+      `, [new Date().toISOString(), userId]);
+      saveDatabase();
+    },
+
+    getCount() {
+      const result = db.exec('SELECT COUNT(*) as count FROM api_keys WHERE revoked_at IS NULL');
+      return result[0]?.values[0]?.[0] || 0;
     }
   };
 
@@ -1317,14 +1471,14 @@ export async function createDatabase(dbPath = join(__dirname, 'data', 'tracker.d
    * SQLite stores sequences in sqlite_sequence table when AUTOINCREMENT is used
    */
   function resetAllSequences() {
-    const tables = ['matters', 'private_notes', 'matter_attachments', 'admin_users', 'admin_sessions', 'admin_bootstrap_tokens', 'audit_log'];
+    const tables = ['matters', 'private_notes', 'matter_attachments', 'admin_users', 'admin_sessions', 'admin_bootstrap_tokens', 'audit_log', 'api_keys'];
     for (const table of tables) {
       db.run('DELETE FROM sqlite_sequence WHERE name = ?', [table]);
     }
     saveDatabase();
   }
 
-  return { db, settingsDb, mattersDb, adminUsersDb, adminSessionsDb, adminBootstrapTokensDb, privateNotesDb, attachmentsDb, auditLogDb, saveDatabase, resetAllSequences };
+  return { db, settingsDb, mattersDb, adminUsersDb, adminSessionsDb, adminBootstrapTokensDb, apiKeysDb, privateNotesDb, attachmentsDb, auditLogDb, saveDatabase, resetAllSequences };
 }
 
 // Create default database instance for backwards compatibility

@@ -92,9 +92,13 @@ export async function loginAsAdmin(baseURL, username = TEST_ADMIN_USERNAME, pass
 export async function adminRequest(baseURL, path, options = {}, cookie) {
     const url = `${baseURL}/admin/api${path}`;
     const headers = {
-        'Content-Type': 'application/json',
         ...options.headers
     };
+
+    // Only set Content-Type for requests with a body
+    if (options.body) {
+        headers['Content-Type'] = 'application/json';
+    }
 
     if (cookie) {
         headers['Cookie'] = `admin_token=${cookie}`;

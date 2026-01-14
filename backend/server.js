@@ -8,7 +8,7 @@ import fastifyMultipart from '@fastify/multipart';
 import Anthropic from '@anthropic-ai/sdk';
 import { createDatabase } from './db.js';
 import { initAudit, logInfo, logError, logWarning, logSecurity, logInfoFromRequest, logErrorFromRequest, logSecurityFromRequest, logWarningFromRequest, logDebugFromRequest, getUserContext, callClaudeWithLogging, ACTION_TYPES, ENTITY_TYPES } from './audit.js';
-import { hashPassword, verifyPassword, generateTokenId, generateApiKey, createAdminAuthMiddleware, getTokenExpiration, generateBootstrapToken, hashBootstrapToken, getBootstrapTokenExpiration, validatePasswordStrength } from './auth.js';
+import { hashPassword, verifyPassword, generateTokenId, generateApiKey, createAdminAuthMiddleware, createHybridAuthMiddleware, getTokenExpiration, generateBootstrapToken, hashBootstrapToken, getBootstrapTokenExpiration, validatePasswordStrength, generateUserApiKey, getApiKeyPrefix, hashApiKey } from './auth.js';
 import { createStorage, createStorageFromConfig, createStorageForBackend, validateFileType, sanitizeFilename, MAX_FILE_SIZE } from './storage.js';
 import { generateLegalDocument, generatePlaceholderDocument } from './legal-docs.js';
 import * as sampleTemplates from './sample-templates.js';
@@ -91,7 +91,7 @@ export async function createServer(options = {}) {
   } = options;
 
   // Create database instance
-  const { db, settingsDb, mattersDb, adminUsersDb, adminSessionsDb, adminBootstrapTokensDb, privateNotesDb, attachmentsDb, auditLogDb, saveDatabase, resetAllSequences } = await createDatabase(dbPath);
+  const { db, settingsDb, mattersDb, adminUsersDb, adminSessionsDb, adminBootstrapTokensDb, apiKeysDb, privateNotesDb, attachmentsDb, auditLogDb, saveDatabase, resetAllSequences } = await createDatabase(dbPath);
 
   // Initialize audit logging service
   initAudit({ auditLogDb, settingsDb });
@@ -672,8 +672,8 @@ export async function createServer(options = {}) {
     }
   });
 
-  // Create admin auth middleware
-  const adminAuthMiddleware = createAdminAuthMiddleware(adminSessionsDb, adminUsersDb);
+  // Create admin auth middleware (hybrid: supports both API keys and JWT sessions)
+  const adminAuthMiddleware = createHybridAuthMiddleware(adminSessionsDb, adminUsersDb, apiKeysDb);
 
   // API request logging hooks (only logs when setting is enabled and level is DEBUG)
   // Capture request body before processing
@@ -707,11 +707,7 @@ export async function createServer(options = {}) {
     // Only log if user is authenticated (request.adminUser is set by middleware)
     if (!request.adminUser) return;
 
-    // Check if API request logging is enabled
-    const logApiRequests = settingsDb.get('log_api_requests');
-    if (logApiRequests !== 'true') return;
-
-    // Build request details
+    // Build request details (shared by both API key and debug logging)
     const requestDetails = {
       method: request.method,
       url: request.url
@@ -723,17 +719,50 @@ export async function createServer(options = {}) {
       requestDetails.body = request.logBody;
     }
 
-    // Log at DEBUG level
-    logDebugFromRequest(request, {
-      actionType: ACTION_TYPES.API_CALL,
-      entityType: ENTITY_TYPES.SYSTEM,
-      summary: `${request.method} ${request.url} -> ${reply.statusCode}`,
-      durationMs: reply.elapsedTime ? Math.round(reply.elapsedTime) : null,
-      request: requestDetails,
-      response: {
-        statusCode: reply.statusCode
-      }
-    });
+    const isApiKeyAuth = request.authMethod === 'api-key';
+    const logApiRequests = settingsDb.get('log_api_requests') === 'true';
+
+    // API Key requests: ALWAYS log at INFO level (external API access audit trail)
+    if (isApiKeyAuth) {
+      const level = reply.statusCode >= 500 ? 'ERROR' : reply.statusCode >= 400 ? 'WARNING' : 'INFO';
+      const logFn = level === 'ERROR' ? logErrorFromRequest : level === 'WARNING' ? logWarningFromRequest : logInfoFromRequest;
+
+      logFn(request, {
+        actionType: 'api_request',
+        entityType: 'api',
+        summary: `API Key: ${request.method} ${request.url} -> ${reply.statusCode}`,
+        durationMs: reply.elapsedTime ? Math.round(reply.elapsedTime) : null,
+        details: {
+          method: request.method,
+          path: request.url,
+          query: Object.keys(request.query || {}).length > 0 ? request.query : undefined,
+          statusCode: reply.statusCode,
+          auth_method: 'api-key',
+          api_key_id: request.apiKeyId,
+          api_key_name: request.apiKeyName
+        }
+      });
+    }
+
+    // Debug logging: Log ALL authenticated API responses when debug mode is on
+    // This provides full visibility into API usage regardless of auth method
+    if (logApiRequests) {
+      logDebugFromRequest(request, {
+        actionType: ACTION_TYPES.API_CALL,
+        entityType: ENTITY_TYPES.SYSTEM,
+        summary: `${request.method} ${request.url} -> ${reply.statusCode}`,
+        durationMs: reply.elapsedTime ? Math.round(reply.elapsedTime) : null,
+        request: requestDetails,
+        response: {
+          statusCode: reply.statusCode
+        },
+        details: {
+          auth_method: request.authMethod || 'session',
+          api_key_id: request.apiKeyId,
+          api_key_name: request.apiKeyName
+        }
+      });
+    }
   });
 
   // ============ WATCHDOG PROXY ENDPOINTS ============
@@ -3293,6 +3322,125 @@ Return ONLY a JSON array of strings, no other text. Example format:
     }
 
     adminSessionsDb.invalidate(id);
+
+    return { success: true };
+  });
+
+  // ============ API KEY MANAGEMENT ============
+
+  // List all API keys (for admin view - never returns full key or hash)
+  fastify.get('/admin/api/api-keys', { preHandler: adminAuthMiddleware }, async () => {
+    const keys = apiKeysDb.getAll();
+    return { keys };
+  });
+
+  // Create a new API key
+  fastify.post('/admin/api/api-keys', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { name, expires_in_days } = request.body || {};
+
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      return reply.code(400).send({
+        error: 'BAD_REQUEST',
+        message: 'Name is required'
+      });
+    }
+
+    if (name.length > 100) {
+      return reply.code(400).send({
+        error: 'BAD_REQUEST',
+        message: 'Name must be 100 characters or less'
+      });
+    }
+
+    // Calculate expiration if provided
+    let expiresAt = null;
+    if (expires_in_days && typeof expires_in_days === 'number' && expires_in_days > 0) {
+      const expiration = new Date();
+      expiration.setDate(expiration.getDate() + expires_in_days);
+      expiresAt = expiration.toISOString();
+    }
+
+    // Generate the API key
+    const fullKey = generateUserApiKey();
+    const keyPrefix = getApiKeyPrefix(fullKey);
+    const keyHash = await hashApiKey(fullKey);
+
+    // Create the key in database
+    const { id } = apiKeysDb.create(
+      request.adminUser.id,
+      name.trim(),
+      keyPrefix,
+      keyHash,
+      expiresAt
+    );
+
+    // Log the creation
+    logInfoFromRequest(request, {
+      actionType: ACTION_TYPES.CREATE,
+      entityType: 'api_key',
+      entityId: id,
+      summary: `Created API key "${name.trim()}"`,
+      details: {
+        key_name: name.trim(),
+        key_prefix: keyPrefix,
+        expires_at: expiresAt
+      }
+    });
+
+    // Return the full key - this is the ONLY time it will be shown
+    return reply.code(201).send({
+      success: true,
+      key: {
+        id,
+        name: name.trim(),
+        key: fullKey, // Full key shown only on creation
+        key_prefix: keyPrefix,
+        created_at: new Date().toISOString(),
+        expires_at: expiresAt
+      }
+    });
+  });
+
+  // Revoke an API key
+  fastify.delete('/admin/api/api-keys/:id', { preHandler: adminAuthMiddleware }, async (request, reply) => {
+    const { id } = request.params;
+    const keyId = parseInt(id, 10);
+
+    if (isNaN(keyId)) {
+      return reply.code(400).send({
+        error: 'BAD_REQUEST',
+        message: 'Invalid key ID'
+      });
+    }
+
+    const key = apiKeysDb.getById(keyId);
+    if (!key) {
+      return reply.code(404).send({
+        error: 'NOT_FOUND',
+        message: 'API key not found'
+      });
+    }
+
+    if (key.revoked_at) {
+      return reply.code(400).send({
+        error: 'ALREADY_REVOKED',
+        message: 'API key is already revoked'
+      });
+    }
+
+    apiKeysDb.revoke(keyId);
+
+    // Log the revocation
+    logInfoFromRequest(request, {
+      actionType: ACTION_TYPES.DELETE,
+      entityType: 'api_key',
+      entityId: keyId,
+      summary: `Revoked API key "${key.name}"`,
+      details: {
+        key_name: key.name,
+        key_prefix: key.key_prefix
+      }
+    });
 
     return { success: true };
   });

@@ -430,13 +430,52 @@ Export matters in three formats:
 
 ### Authentication
 
-LEGAL MATTER uses three authentication methods:
+LEGAL MATTER uses multiple authentication methods:
 
 | Method | Used For | How to Authenticate |
 |--------|----------|---------------------|
 | **None** | Public read endpoints | No authentication required |
-| **API Key / IP** | Protected write endpoints | `X-API-Key` header or source IP in whitelist |
-| **JWT Session** | Admin panel endpoints | Cookie `admin_token` (set on login) |
+| **Legacy API Key / IP** | Protected write endpoints (public API) | `X-API-Key` header or source IP in whitelist |
+| **External API Keys** | Admin panel endpoints (programmatic) | `X-API-Key` or `Authorization: Bearer` header |
+| **JWT Session** | Admin panel endpoints (browser) | Cookie `admin_token` (set on login) |
+
+#### External API Keys
+
+External API Keys provide programmatic access to the admin panel API with full audit logging.
+
+**Creating a Key:**
+1. Go to Admin Panel > Security > External API Keys
+2. Click "Create New Key"
+3. Enter a descriptive name (e.g., "CI Pipeline", "Zapier Integration")
+4. Optionally set an expiration (30 days, 90 days, 1 year, or never)
+5. **Copy the key immediately** - it's only shown once
+
+**Using the Key:**
+
+```bash
+# Option 1: X-API-Key header
+curl -H "X-API-Key: lt_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6" \
+  https://your-domain.com/admin/api/matters
+
+# Option 2: Authorization Bearer header
+curl -H "Authorization: Bearer lt_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6" \
+  https://your-domain.com/admin/api/matters
+```
+
+**Key Format:** `lt_live_` prefix + 32 hex characters (40 chars total)
+
+**Key Properties:**
+- Tied to the user who created it
+- Can be revoked at any time (immediately stops working)
+- Optional expiration date
+- `last_used_at` tracking
+- All requests logged to audit log with key name
+
+**Security Notes:**
+- Keys are stored as bcrypt hashes (not recoverable)
+- Invalid API keys return 401 immediately (no fallthrough to session auth)
+- Revoked or expired keys are rejected instantly
+- All API key requests are logged at INFO level in the audit log
 
 #### Password Hashing
 
@@ -2123,6 +2162,110 @@ curl -X DELETE https://your-domain.com/admin/api/sessions/1 \
 ```json
 {
   "success": true
+}
+```
+
+---
+
+### External API Keys
+
+Manage API keys for programmatic access to the admin API.
+
+---
+
+#### GET /admin/api/api-keys
+
+List all API keys.
+
+```bash
+curl https://your-domain.com/admin/api/api-keys \
+  -H "X-API-Key: lt_live_your_key_here"
+```
+
+**Response `200 OK`:**
+```json
+{
+  "keys": [
+    {
+      "id": 1,
+      "user_id": 1,
+      "name": "CI Pipeline",
+      "key_prefix": "lt_live_a1b2c3d4",
+      "created_at": "2025-01-15T10:00:00.000Z",
+      "last_used_at": "2025-01-15T12:30:00.000Z",
+      "expires_at": null,
+      "revoked_at": null,
+      "created_by_username": "admin"
+    }
+  ]
+}
+```
+
+Note: Full key and key hash are never returned in list operations.
+
+---
+
+#### POST /admin/api/api-keys
+
+Create a new API key.
+
+```bash
+curl -X POST https://your-domain.com/admin/api/api-keys \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: lt_live_your_key_here" \
+  -d '{
+    "name": "My Integration",
+    "expires_in_days": 90
+  }'
+```
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Key name (1-100 chars) |
+| `expires_in_days` | number | No | Days until expiration (null = never) |
+
+**Response `201 Created`:**
+```json
+{
+  "success": true,
+  "key": {
+    "id": 2,
+    "name": "My Integration",
+    "key": "lt_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",
+    "key_prefix": "lt_live_a1b2c3d4",
+    "created_at": "2025-01-15T14:00:00.000Z",
+    "expires_at": "2025-04-15T14:00:00.000Z"
+  }
+}
+```
+
+**Important:** The full `key` value is only returned on creation. Copy it immediately.
+
+---
+
+#### DELETE /admin/api/api-keys/:id
+
+Revoke an API key.
+
+```bash
+curl -X DELETE https://your-domain.com/admin/api/api-keys/2 \
+  -H "X-API-Key: lt_live_your_key_here"
+```
+
+**Response `200 OK`:**
+```json
+{
+  "success": true
+}
+```
+
+**Error `400 Bad Request`:**
+```json
+{
+  "error": "ALREADY_REVOKED",
+  "message": "API key is already revoked"
 }
 ```
 

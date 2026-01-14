@@ -12,6 +12,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 
+- **External API Keys for programmatic access**: New authentication method for external integrations
+  - Create named API keys with optional expiration (30 days, 90 days, 1 year, or never)
+  - Key format: `lt_live_` prefix + 32 hex chars for easy identification in logs
+  - Keys are stored as bcrypt hashes (secure, not recoverable)
+  - Keys can be revoked at any time (immediately stops working)
+  - Last-used tracking shows when each key was last authenticated
+  - Supports both `X-API-Key` and `Authorization: Bearer` headers
+
+- **Hybrid authentication middleware**: Admin API now accepts both API keys and JWT sessions
+  - API key requests authenticated first (401 if invalid, no fallthrough)
+  - Session auth used when no API key header present (unchanged behavior)
+  - Browser users continue using JWT sessions automatically
+
+- **Automatic audit logging for API key requests**: All external API calls logged at INFO level
+  - Logs include method, path, status code, duration, API key ID and name
+  - 4xx errors logged at WARNING level, 5xx at ERROR level
+  - Provides full audit trail for external integrations
+
+- **API Keys management UI in Security page**: Full CRUD interface for managing keys
+  - "Create New Key" modal with name and expiration options
+  - Table showing all keys with name, created date, last used, expiration, and status
+  - One-click revocation with confirmation dialog
+  - Key shown only once on creation (copy immediately warning)
+
+- **API key management endpoints**: `GET/POST/DELETE /admin/api/api-keys`
+
 - **Audit log status indicators**: Shows current log level and API logging status at top of audit log page
   - Log Level badge shows current minimum level (DEBUG/INFO/WARNING/SECURITY/ERROR) with color-coded styling
   - API Logging badge shows ON/OFF status for admin API request logging
@@ -23,6 +49,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Choose between "Migrate & Delete from S3" or "Migrate & Keep in S3"
   - Warning banner highlights the number of files that need to be migrated
   - No "skip" option since credentials will be removed and files would become inaccessible
+
+- **Debug logging now captures all API responses**: When debug mode is enabled, ALL authenticated admin API responses are logged regardless of auth method (session or API key)
+
+- **Security page "Public API Access" clarification**: Renamed "Authentication" section to "Public API Access" with clearer descriptions explaining these settings only affect the public API (/api/*), not the admin panel
 
 ### Fixed
 

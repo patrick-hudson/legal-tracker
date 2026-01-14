@@ -641,6 +641,24 @@ class AdminAPI {
             body: JSON.stringify({ count, startDate, endDate, useAi, spiceLevelOverride })
         });
     }
+
+    // External API Keys (for programmatic access)
+    async getApiKeys() {
+        return this.request('/api-keys');
+    }
+
+    async createApiKey(name, expiresInDays = null) {
+        return this.request('/api-keys', {
+            method: 'POST',
+            body: JSON.stringify({ name, expires_in_days: expiresInDays })
+        });
+    }
+
+    async revokeApiKey(id) {
+        return this.request(`/api-keys/${id}`, {
+            method: 'DELETE'
+        });
+    }
 }
 
 // Create singleton instance
