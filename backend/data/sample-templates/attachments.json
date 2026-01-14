@@ -1,0 +1,77 @@
+{
+  "documentTypes": {
+    "demand_letter": {
+      "name": "Demand Letter",
+      "filenames": [
+        "demand_letter.pdf",
+        "formal_demand.pdf",
+        "demand_for_payment.pdf",
+        "notice_of_claim.pdf"
+      ],
+      "template": "DEMAND LETTER\n\nCASE NO: {caseNumber}\n\nTO: {opposingParty}\nFROM: {ourClient}\nDATE: {date}\n\nRE: {matterDescription}\n\n\nDear Sir/Madam:\n\nPlease be advised that we represent {ourClient} in connection with the above-referenced matter.\n\nDEMAND\n\nBased on the facts and circumstances of this matter, our client hereby demands the following:\n\n1. Full payment of damages in the amount of ${amount};\n2. Written acknowledgment of responsibility;\n3. Cessation of any ongoing harmful conduct.\n\nFACTUAL BACKGROUND\n\nThis matter arises from {matterDescription}. Our client has suffered damages as a direct result of your actions or omissions.\n\nLEGAL BASIS\n\nOur client's claims are supported by applicable law and the facts of this case. We are prepared to pursue all available legal remedies if this matter is not resolved satisfactorily.\n\nRESPONSE REQUIRED\n\nPlease respond to this demand within thirty (30) days of the date of this letter. Failure to respond may result in the initiation of formal legal proceedings without further notice.\n\nThis letter is sent without prejudice to any and all rights and remedies available to our client.\n\nVery truly yours,\n\n_______________________\n{lawyerName}\n{firmName}\n\ncc: File"
+    },
+    "cease_desist": {
+      "name": "Cease and Desist Letter",
+      "filenames": [
+        "cease_and_desist.pdf",
+        "cease_desist_notice.pdf",
+        "stop_notice.pdf"
+      ],
+      "template": "CEASE AND DESIST LETTER\n\nCASE REF: {caseNumber}\n\nVIA CERTIFIED MAIL\n\nTO: {opposingParty}\nFROM: {ourClient}\nDATE: {date}\n\nRE: IMMEDIATE CEASE AND DESIST DEMAND\n{matterDescription}\n\n\nDear Sir/Madam:\n\nThis firm represents {ourClient} in connection with the above-referenced matter. We write to demand that you immediately cease and desist from the conduct described herein.\n\nUNLAWFUL CONDUCT\n\nIt has come to our client's attention that you have engaged in the following wrongful conduct:\n\n{matterDescription}\n\nThis conduct violates our client's rights and causes ongoing harm.\n\nDEMAND\n\nYou are hereby demanded to:\n\n1. Immediately cease and desist from all infringing activity;\n2. Confirm in writing within ten (10) days that you have complied with this demand;\n3. Preserve all documents and communications related to this matter.\n\nCONSEQUENCES OF NON-COMPLIANCE\n\nIf you fail to comply with this demand, our client is prepared to pursue all available legal remedies, including but not limited to:\n\n- Seeking injunctive relief;\n- Filing a civil lawsuit for damages;\n- Reporting the matter to appropriate authorities.\n\nThis letter shall not be construed as a waiver of any rights or remedies available to our client.\n\nGovern yourself accordingly.\n\nVery truly yours,\n\n_______________________\n{lawyerName}\n{firmName}"
+    },
+    "complaint": {
+      "name": "Complaint Filing",
+      "filenames": [
+        "complaint.pdf",
+        "civil_complaint.pdf",
+        "initial_complaint.pdf"
+      ],
+      "template": "IN THE SUPERIOR COURT OF THE STATE\nCOUNTY DIVISION\n\n{ourClient},\n                    Plaintiff,\n\n        v.\n\n{opposingParty},\n                    Defendant.\n\nCASE NO: {caseNumber}\n\nCOMPLAINT\n\nPlaintiff {ourClient}, by and through undersigned counsel, hereby files this Complaint against Defendant {opposingParty}, and alleges as follows:\n\nPARTIES\n\n1. Plaintiff {ourClient} is a party with standing to bring this action.\n\n2. Defendant {opposingParty} is properly subject to the jurisdiction of this Court.\n\nJURISDICTION AND VENUE\n\n3. This Court has jurisdiction over the subject matter of this action.\n\n4. Venue is proper in this Court.\n\nFACTUAL ALLEGATIONS\n\n5. {matterDescription}\n\n6. As a direct and proximate result of Defendant's conduct, Plaintiff has suffered damages.\n\nCAUSES OF ACTION\n\nFIRST CAUSE OF ACTION\n(Against Defendant)\n\n7. Plaintiff incorporates by reference all preceding paragraphs.\n\n8. Defendant's conduct constitutes a violation of Plaintiff's rights.\n\n9. Plaintiff is entitled to damages in an amount to be proven at trial.\n\nPRAYER FOR RELIEF\n\nWHEREFORE, Plaintiff prays for judgment as follows:\n\n1. For damages according to proof;\n2. For costs of suit;\n3. For such other relief as the Court deems just and proper.\n\nDated: {date}\n\n_______________________\n{lawyerName}\nAttorney for Plaintiff\n{firmName}"
+    },
+    "motion_dismiss": {
+      "name": "Motion to Dismiss",
+      "filenames": [
+        "motion_to_dismiss.pdf",
+        "mtd_brief.pdf",
+        "dismissal_motion.pdf"
+      ],
+      "template": "IN THE SUPERIOR COURT OF THE STATE\nCOUNTY DIVISION\n\n{ourClient},\n                    Defendant,\n\n        v.\n\n{opposingParty},\n                    Plaintiff.\n\nCASE NO: {caseNumber}\n\nDEFENDANT'S MOTION TO DISMISS\n\nDefendant {ourClient}, by and through undersigned counsel, hereby moves to dismiss Plaintiff's Complaint pursuant to applicable rules of civil procedure.\n\nINTRODUCTION\n\nPlaintiff's Complaint fails to state a claim upon which relief can be granted. This matter concerns {matterDescription}.\n\nSTATEMENT OF FACTS\n\nThe allegations in Plaintiff's Complaint, even if accepted as true, do not support a cognizable legal claim.\n\nARGUMENT\n\nI. LEGAL STANDARD\n\nA motion to dismiss should be granted when the complaint fails to state a claim upon which relief can be granted.\n\nII. APPLICATION\n\nPlaintiff has failed to adequately plead the essential elements of any viable cause of action.\n\nCONCLUSION\n\nFor the foregoing reasons, Defendant respectfully requests that this Court dismiss Plaintiff's Complaint with prejudice.\n\nDated: {date}\n\n_______________________\n{lawyerName}\nAttorney for Defendant\n{firmName}"
+    },
+    "settlement_offer": {
+      "name": "Settlement Offer",
+      "filenames": [
+        "settlement_offer.pdf",
+        "settlement_proposal.pdf",
+        "offer_to_settle.pdf"
+      ],
+      "template": "SETTLEMENT OFFER\nCONFIDENTIAL - FOR SETTLEMENT PURPOSES ONLY\n\nCASE NO: {caseNumber}\n\nFROM: {ourClient}\nTO: {opposingParty}\nDATE: {date}\n\nRE: Settlement Offer - {matterDescription}\n\n\nWithout admission of liability, and solely for the purpose of resolving this dispute, {ourClient} hereby extends the following settlement offer:\n\nTERMS\n\n1. Payment: ${amount}\n2. Timing: Within thirty (30) days of execution of settlement agreement\n3. Release: Mutual general release of all claims\n4. Confidentiality: Terms to remain confidential\n5. No admission: Settlement not to be construed as admission of liability\n\nCONDITIONS\n\nThis offer is:\n- Open for acceptance until {expirationDate}\n- Subject to execution of a mutually agreeable settlement agreement\n- Contingent upon dismissal with prejudice of all pending claims\n\nThis communication is made pursuant to applicable rules regarding settlement negotiations and is inadmissible for any purpose other than settlement discussions.\n\nPlease advise at your earliest convenience whether your client wishes to accept this offer or to make a counter-proposal.\n\nVery truly yours,\n\n_______________________\n{lawyerName}\n{firmName}"
+    },
+    "invoice": {
+      "name": "Legal Invoice",
+      "filenames": [
+        "invoice.pdf",
+        "legal_invoice.pdf",
+        "billing_statement.pdf"
+      ],
+      "template": "LEGAL INVOICE\n\n{firmName}\n123 Legal Plaza, Suite 400\nCity, State 12345\n\nINVOICE NUMBER: {invoiceNumber}\nDATE: {date}\nDUE DATE: {dueDate}\n\nBILL TO:\n{ourClient}\n\nRE: {matterDescription}\nMATTER NUMBER: {caseNumber}\n\n\nPROFESSIONAL SERVICES\n\nFor professional services rendered through {date}:\n\nDate        Description                              Hours    Rate     Amount\n------------------------------------------------------------------------\n{date}      Legal research and analysis              2.5     $350    $875.00\n{date}      Document preparation and review         3.0     $350    $1,050.00\n{date}      Client communications                   1.0     $350    $350.00\n{date}      Court appearance preparation            2.0     $350    $700.00\n------------------------------------------------------------------------\n                                      SUBTOTAL FEES:                $2,975.00\n\nCOSTS AND EXPENSES\n\nFiling fees                                                         $450.00\nCourt reporter fees                                                 $325.00\nCopying and postage                                                 $85.00\n------------------------------------------------------------------------\n                                      SUBTOTAL COSTS:               $860.00\n\n------------------------------------------------------------------------\n                                      TOTAL AMOUNT DUE:             ${amount}\n\n\nPAYMENT TERMS\n\nPayment is due within 30 days. Please remit payment to the address above.\n\nThank you for your business."
+    },
+    "retainer_agreement": {
+      "name": "Retainer Agreement",
+      "filenames": [
+        "retainer_agreement.pdf",
+        "engagement_letter.pdf",
+        "fee_agreement.pdf"
+      ],
+      "template": "RETAINER AGREEMENT\n\n{firmName}\nAttorneys at Law\n\nDATE: {date}\n\nRE: Engagement for Legal Services\n{matterDescription}\n\nDear {ourClient}:\n\nThis letter confirms your engagement of {firmName} to represent you in connection with the matter described above.\n\nSCOPE OF REPRESENTATION\n\n{matterDescription}\n\nFEES\n\nOur fees will be based on the hourly rates of the attorneys and staff working on your matter:\n\n- Partners: $450 per hour\n- Associates: $350 per hour\n- Paralegals: $175 per hour\n\nRETAINER\n\nYou agree to pay an initial retainer of ${amount}. This retainer will be deposited in our client trust account and applied against fees and costs as they are incurred.\n\nBILLING\n\nYou will receive monthly statements detailing the services rendered and costs incurred.\n\nTERMINATION\n\nEither party may terminate this agreement upon written notice.\n\nPlease sign below to acknowledge your agreement to these terms.\n\nVery truly yours,\n\n_______________________\n{lawyerName}\n{firmName}\n\nACCEPTED AND AGREED:\n\n_______________________\n{ourClient}\nDate: _________________"
+    },
+    "deposition_summary": {
+      "name": "Deposition Summary",
+      "filenames": [
+        "deposition_summary.pdf",
+        "depo_summary.pdf",
+        "witness_summary.pdf"
+      ],
+      "template": "DEPOSITION SUMMARY\n\nCASE NO: {caseNumber}\n{matterDescription}\n\nDEPONENT: {witnessName}\nDATE: {date}\nLOCATION: Conference Room A\n\nATTORNEYS PRESENT:\n- {lawyerName} ({firmName}) - Examining\n- Opposing Counsel - Defending\n\nSUMMARY OF TESTIMONY\n\nThe deponent provided testimony regarding their knowledge of the facts underlying this dispute.\n\nKEY TESTIMONY\n\n1. Background: Deponent described their role and involvement in the matter.\n\n2. Timeline: Deponent provided dates and sequence of relevant events.\n\n3. Documents: Deponent identified and authenticated various exhibits.\n\n4. Communications: Deponent described conversations with parties.\n\nIMPORTANT ADMISSIONS\n\n- Deponent acknowledged awareness of key facts.\n- Deponent confirmed receipt of relevant documents.\n\nCREDIBILITY ASSESSMENT\n\nDeponent appeared generally credible but was evasive on certain topics.\n\nFOLLOW-UP REQUIRED\n\n- Request additional documents referenced in testimony\n- Identify potential impeachment evidence\n- Consider deposition of additional witnesses\n\nPrepared by: {lawyerName}\nDate: {date}"
+    }
+  }
+}

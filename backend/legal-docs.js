@@ -6,6 +6,7 @@
 import PDFDocument from 'pdfkit';
 import { Readable } from 'stream';
 import { callClaudeWithLogging } from './audit.js';
+import * as sampleTemplates from './sample-templates.js';
 
 // Document types that can be generated
 const DOCUMENT_TYPES = [
@@ -227,68 +228,27 @@ export async function generateLegalDocument(client, model, matter, spiceLevel = 
 
 /**
  * Generate a fallback/placeholder PDF when Claude is not available
+ * Uses realistic templates from the word banks
  * @param {Object} matter - Matter data
  * @returns {Promise<{ buffer: Buffer, filename: string, contentType: string }>}
  */
 export async function generatePlaceholderDocument(matter) {
     const docType = getRandomDocumentType();
-    const docName = DOCUMENT_TYPE_NAMES[docType];
 
-    const content = `
-${docName.toUpperCase()}
+    // Use template-based generation for more realistic static documents
+    const docData = sampleTemplates.generateDocumentFromTemplate(docType, {
+        matterDescription: matter.note || 'Legal matter requiring attention',
+        amount: matter.cost ? (matter.cost / 100).toFixed(2) : '5000.00'
+    });
 
-CASE NO: ${Math.floor(Math.random() * 900000 + 100000)}-CV
-
-IN THE MATTER OF:
-Legal Matter #${matter.id || 'N/A'}
-
-DATE: ${new Date().toLocaleDateString()}
-
-
-TO WHOM IT MAY CONCERN:
-
-This is a placeholder document generated for demonstration purposes.
-
-Matter Description: ${matter.note || 'No description provided'}
-Matter Date: ${matter.matter_date || 'Not specified'}
-Associated Cost: $${(matter.cost || 0).toFixed(2)}
-
-This document serves as a template attachment for the legal tracking system.
-In a production environment, this would contain actual legal content
-generated based on the matter details and document type.
-
-
-PLACEHOLDER CONTENT SECTION
-
-Lorem ipsum dolor sit amet, consectetur adipiscing elit.
-Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
-Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.
-
-
-CONCLUSION
-
-This placeholder document has been generated automatically.
-
-
-Respectfully submitted,
-
-_______________________
-[Signature]
-
-_______________________
-[Date]
-    `.trim();
-
-    const buffer = await textToPdf(content, docType, matter);
-
-    const filename = `placeholder_${docType}_${Date.now()}.pdf`;
+    const buffer = await textToPdf(docData.content, docType, matter);
 
     return {
         buffer,
-        filename,
+        filename: docData.filename,
         contentType: 'application/pdf',
         docType,
-        docName
+        docName: docData.docName
     };
 }
 

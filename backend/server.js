@@ -11,6 +11,7 @@ import { initAudit, logInfo, logError, logWarning, logSecurity, logInfoFromReque
 import { hashPassword, verifyPassword, generateTokenId, generateApiKey, createAdminAuthMiddleware, getTokenExpiration, generateBootstrapToken, hashBootstrapToken, getBootstrapTokenExpiration, validatePasswordStrength } from './auth.js';
 import { createStorage, createStorageFromConfig, validateFileType, sanitizeFilename, MAX_FILE_SIZE } from './storage.js';
 import { generateLegalDocument, generatePlaceholderDocument } from './legal-docs.js';
+import * as sampleTemplates from './sample-templates.js';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve } from 'path';
 import { readFileSync, existsSync } from 'fs';
@@ -2955,115 +2956,8 @@ Return ONLY a JSON array of strings, no other text. Example format:
     }
   });
 
-  // Load static matter descriptions
-  let staticDescriptions = [];
-  try {
-    const descriptionsPath = join(__dirname, 'data', 'matter-descriptions.json');
-    const descriptionsContent = readFileSync(descriptionsPath, 'utf-8');
-    staticDescriptions = JSON.parse(descriptionsContent).descriptions || [];
-  } catch (err) {
-    logWarning({
-      entityType: ENTITY_TYPES.SYSTEM,
-      summary: 'Could not load matter descriptions, using fallback',
-      details: { error: err.message }
-    });
-    // Fallback descriptions
-    staticDescriptions = [
-      'Contract review and negotiation',
-      'Employment dispute consultation',
-      'Trademark registration',
-      'Lease agreement review',
-      'NDA drafting',
-      'Partnership agreement',
-      'IP protection consultation',
-      'Tax compliance advice',
-      'Corporate governance review',
-      'Litigation support'
-    ];
-  }
-
-  // Static private notes fallback (for when Claude API is not configured)
-  const staticPrivateNotes = [
-    // Call logs
-    { content: 'Client called to discuss case status. Expressed satisfaction with progress.', type: 'phone_call' },
-    { content: 'Left voicemail for opposing counsel regarding settlement terms.', type: 'phone_call' },
-    { content: 'Conference call with co-counsel - agreed on discovery timeline.', type: 'phone_call' },
-    { content: 'Client unable to reach by phone, sent follow-up email instead.', type: 'email' },
-    // Case updates
-    { content: 'Received new documents from discovery. Will review by end of week.', type: 'note' },
-    { content: 'Motion deadline extended by 2 weeks per court order.', type: 'filing' },
-    { content: 'Judge assigned to case: Hon. Williams. Known for strict deadlines.', type: 'note' },
-    { content: 'Expert witness confirmed availability for trial dates.', type: 'note' },
-    // Strategy notes
-    { content: 'Consider mediation before trial - client open to settlement in $X range.', type: 'meeting' },
-    { content: 'Key witness may be unreliable - need backup documentation.', type: 'note' },
-    { content: 'Opposing counsel tends to delay. Build buffer into all deadlines.', type: 'note' },
-    { content: 'Strong precedent found in similar case from 2022. Could be persuasive.', type: 'note' },
-    // Client communications
-    { content: 'Client requested weekly status updates instead of bi-weekly.', type: 'email' },
-    { content: 'Billing concerns raised - provided detailed breakdown of hours.', type: 'email' },
-    { content: 'Client traveling next month. Need to schedule depositions around availability.', type: 'meeting' },
-    { content: 'Introduced client to paralegal who will handle routine inquiries.', type: 'meeting' },
-    // Court appearances
-    { content: 'Status conference attended. Next hearing set for 30 days.', type: 'court_appearance' },
-    { content: 'Motion hearing - argued for summary judgment. Decision pending.', type: 'court_appearance' },
-    // Letters
-    { content: 'Sent demand letter to opposing party. 30-day response deadline.', type: 'letter_sent' },
-    { content: 'Received response to discovery requests. Documents attached.', type: 'letter_received' },
-    // Internal warnings
-    { content: 'CAUTION: Client has missed two payment deadlines. Monitor closely.', type: 'note' },
-    { content: 'Note: Previous counsel had conflicts with this client. Handle with care.', type: 'note' },
-    { content: 'Watch for statute of limitations - approaching fast.', type: 'note' },
-    { content: 'Insurance coverage may be disputed. Verify before proceeding.', type: 'note' },
-    // Observations
-    { content: 'Opposing counsel seems disorganized. May work in our favor.', type: 'note' },
-    { content: 'Witness testimony conflicts with deposition. Possible impeachment opportunity.', type: 'note' },
-    { content: 'Judge seemed receptive to our argument at preliminary hearing.', type: 'court_appearance' },
-    { content: 'Court reporter noted for transcription errors - request expedited review.', type: 'note' },
-    // General commentary
-    { content: 'Good outcome today. Client happy with result.', type: 'note' },
-    { content: 'Need to follow up on outstanding items before next hearing.', type: 'note' },
-    { content: 'Case more complex than initially estimated. Discuss fee adjustment.', type: 'meeting' },
-    { content: 'All documents filed. Awaiting court response.', type: 'filing' }
-  ];
-
-  // Static lawyer names and firms for sample data generation
-  const staticLawyerData = {
-    lawyers: [
-      { name: 'Sarah Mitchell', firm: 'Mitchell & Associates' },
-      { name: 'James Chen', firm: 'Chen Law Group' },
-      { name: 'Rebecca Torres', firm: 'Torres Legal Partners' },
-      { name: 'Michael O\'Brien', firm: 'O\'Brien & Associates' },
-      { name: 'Elizabeth Park', firm: 'Park & Williams LLP' },
-      { name: 'David Kim', firm: 'Kim Legal Services' },
-      { name: 'Jennifer Adams', firm: 'Adams & Partners' },
-      { name: 'Robert Martinez', firm: 'Martinez Law Firm' },
-      { name: 'Amanda Foster', firm: 'Foster & Associates' },
-      { name: 'Christopher Lee', firm: 'Lee Legal Group' }
-    ],
-    opposingCounsel: [
-      { name: 'Marcus Thompson', firm: 'Thompson & Reed' },
-      { name: 'Angela White', firm: 'White Law Offices' },
-      { name: 'Steven Garcia', firm: 'Garcia & Associates' },
-      { name: 'Katherine Brown', firm: 'Brown Legal Partners' },
-      { name: 'William Davis', firm: 'Davis & Miller LLP' },
-      { name: 'Patricia Wilson', firm: 'Wilson Law Group' },
-      { name: 'Thomas Anderson', firm: 'Anderson & Smith' },
-      { name: 'Jessica Taylor', firm: 'Taylor Legal Services' },
-      { name: 'Daniel Robinson', firm: 'Robinson & Associates' },
-      { name: 'Michelle Clark', firm: 'Clark & Partners' }
-    ]
-  };
-
-  // Case number prefixes by type
-  const caseNumberPrefixes = ['CV', 'CR', 'FA', 'PR', 'BK', 'AP', 'MC'];
-
-  // Helper function to generate random case number
-  function generateCaseNumber(year) {
-    const prefix = caseNumberPrefixes[Math.floor(Math.random() * caseNumberPrefixes.length)];
-    const number = Math.floor(Math.random() * 99999).toString().padStart(5, '0');
-    return `${year}-${prefix}-${number}`;
-  }
+  // Sample data generation now uses centralized word banks from sample-templates.js
+  // Helper functions delegate to the sampleTemplates module for consistency
 
   /**
    * Get AI settings for a specific generation type.
@@ -3373,8 +3267,8 @@ Return ONLY a JSON array of strings, no other text. Example format:
         const minCents = minCostDollars !== undefined ? Math.round(minCostDollars * 100) : 10000;
         const maxCents = maxCostDollars !== undefined ? Math.round(maxCostDollars * 100) : 5000000;
 
-        // Get descriptions
-        let descriptions = staticDescriptions;
+        // Get descriptions - use static templates by default, AI if enabled
+        let descriptions = sampleTemplates.getMatterDescriptions(matterCount);
 
         if (useAiDescriptions) {
           const userContext = getUserContext(request);
@@ -3398,8 +3292,8 @@ Return ONLY a JSON array of strings, no other text. Example format:
             logWarningFromRequest(request, {
               actionType: ACTION_TYPES.SAMPLE_DATA_GENERATE,
               entityType: ENTITY_TYPES.MATTER,
-              summary: `AI description generation failed, using ${staticDescriptions.length} static descriptions`,
-              details: { requestedCount: matterCount, staticCount: staticDescriptions.length }
+              summary: `AI description generation failed, using static descriptions`,
+              details: { requestedCount: matterCount }
             });
           }
         }
@@ -3430,21 +3324,19 @@ Return ONLY a JSON array of strings, no other text. Example format:
           // Generate lawyer info based on percentage
           let lawyerInfo = null;
           if (Math.random() * 100 < lawyerPercentage) {
-            const lawyer = staticLawyerData.lawyers[Math.floor(Math.random() * staticLawyerData.lawyers.length)];
-            lawyerInfo = { name: lawyer.name, firm: lawyer.firm };
+            lawyerInfo = sampleTemplates.getRandomLawyer();
           }
 
           // Generate opposing counsel info based on percentage
           let opposingInfo = null;
           if (Math.random() * 100 < opposingCounselPercentage) {
-            const opposing = staticLawyerData.opposingCounsel[Math.floor(Math.random() * staticLawyerData.opposingCounsel.length)];
-            opposingInfo = { name: opposing.name, firm: opposing.firm };
+            opposingInfo = sampleTemplates.getRandomOpposingCounsel();
           }
 
           // Generate case number based on percentage
           let caseNumber = null;
           if (Math.random() * 100 < caseNumberPercentage) {
-            caseNumber = generateCaseNumber(randomDate.getFullYear());
+            caseNumber = sampleTemplates.generateCaseNumber(randomDate.getFullYear());
           }
 
           sampleMatters.push({
@@ -3588,11 +3480,7 @@ Return ONLY a JSON array of strings, no other text. Example format:
 
             // Fall back to static notes if AI didn't generate notes for this matter
             if (!notesForMatter || notesForMatter.length === 0) {
-              notesForMatter = [];
-              for (let j = 0; j < noteCount; j++) {
-                const staticNote = staticPrivateNotes[Math.floor(Math.random() * staticPrivateNotes.length)];
-                notesForMatter.push(typeof staticNote === 'object' ? staticNote : { content: staticNote, type: 'note' });
-              }
+              notesForMatter = sampleTemplates.generateNotes(noteCount);
               if (useAiDescriptions) {
                 logDebugFromRequest(request, {
                   actionType: ACTION_TYPES.SAMPLE_DATA_GENERATE,
@@ -3946,50 +3834,6 @@ Return ONLY a JSON array of strings, no other text. Example format:
       let entries = [];
       let usedAi = false;
 
-      // Static fallback data
-      const staticEntries = [
-        // INFO - Login activity
-        { level: 'INFO', action_type: 'login', entity_type: 'user', summary: 'User logged in successfully' },
-        { level: 'INFO', action_type: 'logout', entity_type: 'user', summary: 'User logged out' },
-        { level: 'INFO', action_type: 'login', entity_type: 'user', summary: 'Session started from new device' },
-        // INFO - CRUD operations
-        { level: 'INFO', action_type: 'create', entity_type: 'matter', summary: 'Created new legal matter' },
-        { level: 'INFO', action_type: 'update', entity_type: 'matter', summary: 'Updated matter details' },
-        { level: 'INFO', action_type: 'delete', entity_type: 'matter', summary: 'Deleted matter record' },
-        { level: 'INFO', action_type: 'create', entity_type: 'private_note', summary: 'Added private note to matter' },
-        { level: 'INFO', action_type: 'update', entity_type: 'private_note', summary: 'Updated private note' },
-        { level: 'INFO', action_type: 'create', entity_type: 'attachment', summary: 'Uploaded document attachment' },
-        { level: 'INFO', action_type: 'delete', entity_type: 'attachment', summary: 'Removed attachment from matter' },
-        { level: 'INFO', action_type: 'settings_change', entity_type: 'system', summary: 'Updated system settings' },
-        { level: 'INFO', action_type: 'export', entity_type: 'matter', summary: 'Exported matters to CSV' },
-        { level: 'INFO', action_type: 'sample_data', entity_type: 'system', summary: 'Generated sample data' },
-        // WARNING - Validation issues, rate limits
-        { level: 'WARNING', action_type: 'validation', entity_type: 'matter', summary: 'Invalid date format in matter creation' },
-        { level: 'WARNING', action_type: 'rate_limit', entity_type: 'api', summary: 'Rate limit threshold reached (80%)' },
-        { level: 'WARNING', action_type: 'config', entity_type: 'system', summary: 'Claude API key not configured' },
-        { level: 'WARNING', action_type: 'auth', entity_type: 'user', summary: 'Multiple failed login attempts detected' },
-        { level: 'WARNING', action_type: 'storage', entity_type: 'attachment', summary: 'Storage usage exceeding 80% of quota' },
-        { level: 'WARNING', action_type: 'validation', entity_type: 'attachment', summary: 'File type not in allowed list' },
-        // ERROR - Failures, exceptions
-        { level: 'ERROR', action_type: 'api_call', entity_type: 'claude_api', summary: 'Claude API request failed: rate limited', stack_trace: 'Error: Rate limited\n    at callClaudeApi (server.js:1234)\n    at generateDescription (server.js:2345)' },
-        { level: 'ERROR', action_type: 'database', entity_type: 'system', summary: 'Database query timeout after 30s', stack_trace: 'Error: Query timeout\n    at executeQuery (db.js:456)\n    at getMatters (db.js:789)' },
-        { level: 'ERROR', action_type: 'storage', entity_type: 'attachment', summary: 'Failed to upload file to S3', stack_trace: 'Error: Access Denied\n    at S3Storage.putObject (storage.js:234)\n    at uploadAttachment (server.js:3456)' },
-        { level: 'ERROR', action_type: 'auth', entity_type: 'user', summary: 'Session validation failed: token expired', stack_trace: 'Error: Token expired\n    at validateSession (auth.js:123)\n    at adminAuthMiddleware (server.js:567)' },
-        { level: 'ERROR', action_type: 'validation', entity_type: 'matter', summary: 'Foreign key constraint violation', stack_trace: 'Error: SQLITE_CONSTRAINT: FOREIGN KEY constraint failed\n    at mattersDb.create (db.js:890)' },
-        // SECURITY - Security events
-        { level: 'SECURITY', action_type: 'auth', entity_type: 'user', summary: 'Login from unrecognized IP address' },
-        { level: 'SECURITY', action_type: 'auth', entity_type: 'user', summary: 'Password changed' },
-        { level: 'SECURITY', action_type: 'session', entity_type: 'user', summary: 'Session invalidated by user' },
-        { level: 'SECURITY', action_type: 'bootstrap', entity_type: 'system', summary: 'Bootstrap token used for initial setup' },
-        // DEBUG - API calls, storage operations (usually not shown but for sample completeness)
-        { level: 'DEBUG', action_type: 'api_call', entity_type: 'claude_api', summary: 'Claude API request: claude-3-5-sonnet', duration_ms: 1234 },
-        { level: 'DEBUG', action_type: 'api_call', entity_type: 'attachment', summary: 'Storage putObject: uuid/document.pdf (45678 bytes, 89ms)', duration_ms: 89 },
-        { level: 'DEBUG', action_type: 'api_call', entity_type: 'attachment', summary: 'Storage getObjectStream: uuid/document.pdf (45678 bytes, 12ms)', duration_ms: 12 }
-      ];
-
-      const usernames = ['admin', 'jsmith', 'mwilson', 'ljohnson', 'kbrown', 'agarcia', 'rmartin', null];
-      const ipAddresses = ['192.168.1.100', '10.0.0.50', '172.16.0.25', '127.0.0.1', '::1', '203.0.113.42'];
-
       // Try AI generation if requested
       if (useAi) {
         const claudeApiKey = settingsDb.get('claude_api_key');
@@ -4064,16 +3908,19 @@ Return ONLY a valid JSON array, no other text. Example:
 
       // Fall back to static data if AI didn't work
       if (entries.length === 0) {
-        // Generate entries from static templates
-        for (let i = 0; i < entryCount; i++) {
-          const template = staticEntries[Math.floor(Math.random() * staticEntries.length)];
-          entries.push({
-            ...template,
-            username: usernames[Math.floor(Math.random() * usernames.length)],
-            ip_address: ipAddresses[Math.floor(Math.random() * ipAddresses.length)],
-            entity_id: template.entity_type === 'matter' ? Math.floor(Math.random() * 100) + 1 : null
-          });
-        }
+        // Generate entries from centralized templates
+        const generatedEntries = sampleTemplates.generateAuditLogEntries(entryCount, dateStart, dateEnd);
+        entries = generatedEntries.map(entry => ({
+          level: entry.level,
+          action_type: entry.action_type,
+          entity_type: entry.entity_type,
+          summary: entry.summary,
+          username: entry.username,
+          ip_address: entry.ip_address,
+          entity_id: entry.entity_type === 'matter' ? Math.floor(Math.random() * 100) + 1 : null,
+          stack_trace: entry.stack_trace,
+          duration_ms: entry.duration_ms
+        }));
       }
 
       // Assign timestamps with realistic patterns (more activity during business hours)

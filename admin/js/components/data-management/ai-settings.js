@@ -11,12 +11,10 @@ import {
     loadState,
     getDefaultPrompt,
     getSpiceLevelName,
-    getEffectiveSpiceLevel,
     hasCustomSpiceLevel,
     showToast,
     showPersistentToast,
-    dismissPersistentToast,
-    SPICE_INSTRUCTIONS
+    dismissPersistentToast
 } from './shared.js';
 
 // Render a per-type spice level card
@@ -277,6 +275,19 @@ export async function renderAiSettings(container) {
                         Loading datasets...
                     </div>
                     <div id="sample-datasets-container" class="hidden">
+                        <!-- Quick Generate Section -->
+                        <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-sm font-semibold text-green-800 dark:text-green-400">Quick Generate</p>
+                                    <p class="text-xs text-green-700 dark:text-green-300">Generate 25 matters with default settings</p>
+                                </div>
+                                <button id="quick-generate-btn" class="text-white bg-green-600 hover:bg-green-700 rounded-lg px-4 py-2 text-sm font-semibold">
+                                    Generate Now
+                                </button>
+                            </div>
+                        </div>
+
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                             <div>
                                 <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Dataset</label>
@@ -292,7 +303,7 @@ export async function renderAiSettings(container) {
                         <div id="sample-dataset-info" class="text-xs text-gray-500 dark:text-gray-400 hidden mb-4"></div>
                         <div id="sample-action-buttons" class="flex gap-2">
                             <button id="populate-sample-btn" class="flex-1 text-white bg-green-600 hover:bg-green-700 rounded-lg px-4 py-2 text-sm font-semibold">
-                                Populate Data
+                                Advanced Options
                             </button>
                             <button id="regenerate-samples-btn" class="text-gray-700 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:text-gray-300 dark:hover:bg-gray-500 rounded-lg px-4 py-2 text-xs">
                                 Regenerate Files
@@ -913,7 +924,10 @@ async function loadSampleDatasets() {
         loadingEl.classList.add('hidden');
         containerEl.classList.remove('hidden');
 
-        // Setup populate button
+        // Setup Quick Generate button
+        setupQuickGenerateButton();
+
+        // Setup populate button (now "Advanced Options")
         setupPopulateButton();
 
         // Setup regenerate button
@@ -948,6 +962,29 @@ async function loadSampleDatasets() {
         document.getElementById('sample-datasets-loading').textContent = 'Failed to load datasets';
         console.error('Failed to load sample datasets:', error);
     }
+}
+
+function setupQuickGenerateButton() {
+    document.getElementById('quick-generate-btn')?.addEventListener('click', async () => {
+        const btn = document.getElementById('quick-generate-btn');
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="flex items-center"><span class="spinner-sm mr-2"></span>Generating...</span>';
+
+        showPersistentToast('Generating 25 matters... please wait', 'loading');
+
+        try {
+            const response = await api.populateSampleData('generate', { count: 25 });
+            dismissPersistentToast();
+            showToast(`Successfully added ${response.matters_added} sample matters ($${response.total_cost_added.toFixed(2)})`, 'success');
+        } catch (error) {
+            dismissPersistentToast();
+            showToast(`Error: ${error.message}`, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    });
 }
 
 function setupPopulateButton() {
@@ -999,33 +1036,28 @@ async function showGenerateModal(count) {
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
     const formatDate = (d) => d.toISOString().split('T')[0];
 
+    const aiEnabled = state.isClaudeKeyValidated && state.aiSettings.selectedModel;
+    const aiDisabledReason = !state.hasClaudeApiKey
+        ? 'Configure Claude API key above'
+        : !state.isClaudeKeyValidated
+        ? 'Validate your API key above'
+        : !state.aiSettings.selectedModel
+        ? 'Select a model above'
+        : '';
+
     const modalContent = `
         <div class="space-y-4">
-            <!-- Quick Generate Section -->
-            <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm font-semibold text-green-800 dark:text-green-400">Quick Generate</p>
-                        <p class="text-xs text-green-700 dark:text-green-300">Generate ${count} matters with default settings</p>
-                    </div>
-                    <button id="modal-quick-generate-btn" class="text-white bg-green-600 hover:bg-green-700 rounded-lg px-4 py-2 text-sm font-semibold">
-                        Generate Now
-                    </button>
-                </div>
-            </div>
-
-            <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
-                <p class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Advanced Options</p>
-
+            <!-- Basic Settings -->
+            <div class="space-y-4">
                 <!-- Count -->
-                <div class="mb-4">
+                <div>
                     <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Number of Matters</label>
                     <input type="number" id="modal-count-input" value="${count}" min="1" max="1000"
                         class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                 </div>
 
                 <!-- Date Range -->
-                <div class="grid grid-cols-2 gap-4 mb-4">
+                <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
                         <input type="date" id="modal-start-date" value="${formatDate(oneYearAgo)}"
@@ -1039,7 +1071,7 @@ async function showGenerateModal(count) {
                 </div>
 
                 <!-- Cost Range -->
-                <div class="grid grid-cols-2 gap-4 mb-4">
+                <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Min Cost ($)</label>
                         <input type="number" id="modal-min-cost" value="100" min="0" step="1"
@@ -1053,121 +1085,138 @@ async function showGenerateModal(count) {
                 </div>
 
                 <!-- Cents Handling -->
-                <div class="mb-4">
+                <div>
                     <label class="flex items-center cursor-pointer">
                         <input type="checkbox" id="modal-whole-dollars" checked
-                            class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
+                            class="w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500">
                         <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Whole dollars only</span>
                     </label>
                 </div>
+            </div>
 
-                <!-- AI Descriptions -->
-                <div class="mb-4">
-                    <label class="flex items-center cursor-pointer ${!state.isClaudeKeyValidated || !state.aiSettings.selectedModel ? 'opacity-50' : ''}">
-                        <input type="checkbox" id="modal-use-ai" ${!state.isClaudeKeyValidated || !state.aiSettings.selectedModel ? 'disabled' : ''}
-                            class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
-                        <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Use AI for matter descriptions</span>
+            <!-- AI Enhancement Section (Optional) -->
+            <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+                <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">AI Enhancement (Optional)</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                    ${aiEnabled
+                        ? 'Enable AI for more creative and contextual content. Without AI, realistic templates are used.'
+                        : 'Realistic templates will be used for all generated content.'
+                    }
+                </p>
+                <div class="mb-3">
+                    <label class="flex items-center cursor-pointer ${!aiEnabled ? 'opacity-50' : ''}">
+                        <input type="checkbox" id="modal-use-ai-master" ${!aiEnabled ? 'disabled' : ''}
+                            class="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500">
+                        <span class="ml-2 text-sm font-medium text-gray-900 dark:text-white">Enhance with AI</span>
                     </label>
-                    ${!state.hasClaudeApiKey
-                        ? '<p class="text-xs text-amber-600 dark:text-amber-400 ml-6">Configure Claude API key above</p>'
-                        : !state.isClaudeKeyValidated
-                        ? '<p class="text-xs text-amber-600 dark:text-amber-400 ml-6">Validate your API key above</p>'
-                        : !state.aiSettings.selectedModel
-                        ? '<p class="text-xs text-amber-600 dark:text-amber-400 ml-6">Select a model above</p>'
-                        : `<p class="text-xs text-gray-500 dark:text-gray-400 ml-6">Using: <span class="font-medium">${getSpiceLevelName(state.aiSettings.spiceLevel)}</span> spice level</p>`
+                    ${!aiEnabled
+                        ? `<p class="text-xs text-gray-500 dark:text-gray-400 ml-6 mt-1">${aiDisabledReason}</p>`
+                        : `<p class="text-xs text-gray-500 dark:text-gray-400 ml-6 mt-1">Spice level: <span class="font-medium text-purple-600 dark:text-purple-400">${getSpiceLevelName(state.aiSettings.spiceLevel)}</span></p>`
                     }
                 </div>
 
-                <!-- Private Notes Generation -->
-                <div class="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
-                    <p class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Private Notes</p>
-                    <div class="mb-3">
-                        <label class="flex items-center cursor-pointer">
-                            <input type="checkbox" id="modal-generate-notes"
-                                class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
-                            <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Generate private notes for matters</span>
-                        </label>
-                    </div>
-                    <div id="notes-options" class="hidden ml-6 space-y-3">
-                        <div>
-                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Percentage of matters with notes</label>
-                            <div class="flex items-center gap-2">
-                                <input type="range" id="modal-notes-percentage" min="0" max="100" value="30"
-                                    class="w-full h-2 bg-gray-200 rounded-lg cursor-pointer dark:bg-gray-700">
-                                <span id="notes-percentage-display" class="text-sm text-gray-600 dark:text-gray-400 w-12 text-right">30%</span>
-                            </div>
+                <!-- AI Options (collapsible) -->
+                <div id="ai-options-container" class="hidden ml-4 pl-2 border-l-2 border-purple-200 dark:border-purple-800 space-y-2">
+                    <p class="text-xs text-gray-500 dark:text-gray-400 py-1">Select which content types to enhance:</p>
+                    <label class="flex items-center cursor-pointer py-1">
+                        <input type="checkbox" id="modal-use-ai-matters" checked
+                            class="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 ai-sub-option">
+                        <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Matter descriptions</span>
+                    </label>
+                    <label class="flex items-center cursor-pointer py-1">
+                        <input type="checkbox" id="modal-use-ai-notes" checked
+                            class="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 ai-sub-option">
+                        <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Private notes content</span>
+                    </label>
+                    <label class="flex items-center cursor-pointer py-1">
+                        <input type="checkbox" id="modal-use-ai-attachments" checked
+                            class="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 ai-sub-option">
+                        <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Document attachments</span>
+                    </label>
+                    <label class="flex items-center cursor-pointer py-1">
+                        <input type="checkbox" id="modal-use-ai-audit" checked
+                            class="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 ai-sub-option">
+                        <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Audit log entries</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Additional Data Generation -->
+            <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+                <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Additional Data</p>
+
+                <!-- Private Notes -->
+                <div class="mb-3">
+                    <label class="flex items-center cursor-pointer">
+                        <input type="checkbox" id="modal-generate-notes"
+                            class="w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500">
+                        <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Generate private notes</span>
+                    </label>
+                </div>
+                <div id="notes-options" class="hidden ml-6 mb-4 space-y-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Percentage of matters with notes</label>
+                        <div class="flex items-center gap-2">
+                            <input type="range" id="modal-notes-percentage" min="0" max="100" value="30"
+                                class="w-full h-2 bg-gray-200 rounded-lg cursor-pointer dark:bg-gray-600">
+                            <span id="notes-percentage-display" class="text-sm text-gray-600 dark:text-gray-400 w-12 text-right">30%</span>
                         </div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Min notes per matter</label>
-                                <input type="number" id="modal-min-notes" value="1" min="1" max="10"
-                                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Max notes per matter</label>
-                                <input type="number" id="modal-max-notes" value="3" min="1" max="10"
-                                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                            </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Min per matter</label>
+                            <input type="number" id="modal-min-notes" value="1" min="1" max="10"
+                                class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2 dark:bg-gray-600 dark:border-gray-500 dark:text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Max per matter</label>
+                            <input type="number" id="modal-max-notes" value="3" min="1" max="10"
+                                class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2 dark:bg-gray-600 dark:border-gray-500 dark:text-white">
                         </div>
                     </div>
                 </div>
 
-                <!-- Attachments Generation -->
-                <div class="border-t border-gray-200 dark:border-gray-600 pt-4 mt-4">
-                    <p class="text-sm font-medium text-gray-900 dark:text-white mb-2">Document Attachments</p>
-                    <div class="mb-3">
-                        <label class="flex items-center cursor-pointer">
-                            <input type="checkbox" id="modal-generate-attachments"
-                                class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
-                            <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Generate AI legal documents</span>
-                        </label>
-                    </div>
-                    <div id="attachments-options" class="hidden ml-6 space-y-3">
-                        <div>
-                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Percentage of matters with documents</label>
-                            <div class="flex items-center gap-2">
-                                <input type="range" id="modal-attachments-percentage" min="0" max="100" value="25"
-                                    class="w-full h-2 bg-gray-200 rounded-lg cursor-pointer dark:bg-gray-700">
-                                <span id="attachments-percentage-display" class="text-sm text-gray-600 dark:text-gray-400 w-12 text-right">25%</span>
-                            </div>
-                        </div>
+                <!-- Document Attachments -->
+                <div class="mb-3">
+                    <label class="flex items-center cursor-pointer">
+                        <input type="checkbox" id="modal-generate-attachments"
+                            class="w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500">
+                        <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Generate document attachments</span>
+                    </label>
+                </div>
+                <div id="attachments-options" class="hidden ml-6 mb-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Percentage of matters with documents</label>
+                    <div class="flex items-center gap-2">
+                        <input type="range" id="modal-attachments-percentage" min="0" max="100" value="25"
+                            class="w-full h-2 bg-gray-200 rounded-lg cursor-pointer dark:bg-gray-600">
+                        <span id="attachments-percentage-display" class="text-sm text-gray-600 dark:text-gray-400 w-12 text-right">25%</span>
                     </div>
                 </div>
 
-                <!-- Audit Log Generation -->
-                <div class="border-t border-gray-200 dark:border-gray-600 pt-4 mt-4">
-                    <p class="text-sm font-medium text-gray-900 dark:text-white mb-2">Audit Log Entries</p>
-                    <div class="mb-3">
-                        <label class="flex items-center cursor-pointer">
-                            <input type="checkbox" id="modal-generate-audit-log"
-                                class="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500">
-                            <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Generate audit log entries</span>
-                        </label>
+                <!-- Audit Log -->
+                <div class="mb-3">
+                    <label class="flex items-center cursor-pointer">
+                        <input type="checkbox" id="modal-generate-audit-log"
+                            class="w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500">
+                        <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Generate audit log entries</span>
+                    </label>
+                </div>
+                <div id="audit-log-options" class="hidden ml-6 space-y-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Number of entries (50-500)</label>
+                        <input type="number" id="modal-audit-log-count" value="100" min="50" max="500"
+                            class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2 dark:bg-gray-600 dark:border-gray-500 dark:text-white">
                     </div>
-                    <div id="audit-log-options" class="hidden ml-6 space-y-3">
+                    <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Number of entries (50-500)</label>
-                            <input type="number" id="modal-audit-log-count" value="100" min="50" max="500"
-                                class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
+                            <input type="date" id="modal-audit-log-start-date" value="${formatDate(oneYearAgo)}"
+                                class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2 dark:bg-gray-600 dark:border-gray-500 dark:text-white">
                         </div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
-                                <input type="date" id="modal-audit-log-start-date" value="${formatDate(oneYearAgo)}"
-                                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">End Date</label>
-                                <input type="date" id="modal-audit-log-end-date" value="${formatDate(today)}"
-                                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="flex items-center cursor-pointer ${!state.isClaudeKeyValidated || !state.aiSettings.selectedModel ? 'opacity-50' : ''}">
-                                <input type="checkbox" id="modal-audit-log-use-ai" ${!state.isClaudeKeyValidated || !state.aiSettings.selectedModel ? 'disabled' : ''}
-                                    class="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500">
-                                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Use AI for realistic entries</span>
-                            </label>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">End Date</label>
+                            <input type="date" id="modal-audit-log-end-date" value="${formatDate(today)}"
+                                class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2 dark:bg-gray-600 dark:border-gray-500 dark:text-white">
                         </div>
                     </div>
                 </div>
@@ -1195,6 +1244,35 @@ async function showGenerateModal(count) {
             { text: 'Generate', type: 'primary', value: 'generate' }
         ],
         onOpen: (modal) => {
+            // Master AI checkbox - shows/hides sub-options and auto-checks them
+            const masterAiCheckbox = modal.querySelector('#modal-use-ai-master');
+            const aiOptionsContainer = modal.querySelector('#ai-options-container');
+            const aiSubOptions = modal.querySelectorAll('.ai-sub-option');
+
+            masterAiCheckbox?.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    aiOptionsContainer?.classList.remove('hidden');
+                    // Auto-check all sub-options when master is checked
+                    aiSubOptions.forEach(opt => opt.checked = true);
+                } else {
+                    aiOptionsContainer?.classList.add('hidden');
+                    // Uncheck all sub-options when master is unchecked
+                    aiSubOptions.forEach(opt => opt.checked = false);
+                }
+            });
+
+            // If any sub-option is unchecked, don't uncheck the master (keep it as partial)
+            // But if all sub-options are unchecked, uncheck the master
+            aiSubOptions.forEach(opt => {
+                opt.addEventListener('change', () => {
+                    const anyChecked = Array.from(aiSubOptions).some(o => o.checked);
+                    if (!anyChecked && masterAiCheckbox) {
+                        masterAiCheckbox.checked = false;
+                        aiOptionsContainer?.classList.add('hidden');
+                    }
+                });
+            });
+
             // Wire up notes checkbox toggle
             const notesCheckbox = modal.querySelector('#modal-generate-notes');
             const notesOptions = modal.querySelector('#notes-options');
@@ -1246,38 +1324,10 @@ async function showGenerateModal(count) {
                 }
             });
 
-            // Wire up quick generate button
-            const quickBtn = modal.querySelector('#modal-quick-generate-btn');
-            quickBtn?.addEventListener('click', async () => {
-                const statusArea = modal.querySelector('#modal-status-area');
-                const statusText = modal.querySelector('#modal-status-text');
-                statusArea.classList.remove('hidden');
-                statusText.textContent = `Generating ${count} matters with defaults...`;
-                quickBtn.disabled = true;
-                quickBtn.textContent = 'Generating...';
-
-                modal.querySelectorAll('.modal-action-btn').forEach(btn => btn.disabled = true);
-
-                showPersistentToast(`Generating ${count} matters... please wait`, 'loading');
-
-                try {
-                    const response = await api.populateSampleData('generate', { count });
-                    dismissPersistentToast();
-                    showToast(`Successfully added ${response.matters_added} sample matters ($${response.total_cost_added.toFixed(2)})`, 'success');
-                    modal.querySelector('.modal-close')?.click();
-                } catch (error) {
-                    dismissPersistentToast();
-                    statusArea.classList.add('hidden');
-                    quickBtn.disabled = false;
-                    quickBtn.textContent = 'Generate Now';
-                    modal.querySelectorAll('.modal-action-btn').forEach(btn => btn.disabled = false);
-                    showToast(`Error: ${error.message}`, 'error');
-                }
-            });
-
             // Capture form values before button click
             modal.querySelectorAll('.modal-action-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
+                    const useAiMaster = modal.querySelector('#modal-use-ai-master')?.checked ?? false;
                     capturedFormValues = {
                         count: parseInt(modal.querySelector('#modal-count-input')?.value || count),
                         startDate: modal.querySelector('#modal-start-date')?.value,
@@ -1285,7 +1335,12 @@ async function showGenerateModal(count) {
                         minCost: parseFloat(modal.querySelector('#modal-min-cost')?.value || 100),
                         maxCost: parseFloat(modal.querySelector('#modal-max-cost')?.value || 50000),
                         wholeDollars: modal.querySelector('#modal-whole-dollars')?.checked ?? true,
-                        useAi: modal.querySelector('#modal-use-ai')?.checked ?? false,
+                        // AI options
+                        useAiMatters: useAiMaster && (modal.querySelector('#modal-use-ai-matters')?.checked ?? false),
+                        useAiNotes: useAiMaster && (modal.querySelector('#modal-use-ai-notes')?.checked ?? false),
+                        useAiAttachments: useAiMaster && (modal.querySelector('#modal-use-ai-attachments')?.checked ?? false),
+                        useAiAudit: useAiMaster && (modal.querySelector('#modal-use-ai-audit')?.checked ?? false),
+                        // Additional data
                         generateNotes: modal.querySelector('#modal-generate-notes')?.checked ?? false,
                         notesPercentage: parseInt(modal.querySelector('#modal-notes-percentage')?.value || 30),
                         minNotes: parseInt(modal.querySelector('#modal-min-notes')?.value || 1),
@@ -1295,8 +1350,7 @@ async function showGenerateModal(count) {
                         generateAuditLog: modal.querySelector('#modal-generate-audit-log')?.checked ?? false,
                         auditLogCount: parseInt(modal.querySelector('#modal-audit-log-count')?.value || 100),
                         auditLogStartDate: modal.querySelector('#modal-audit-log-start-date')?.value,
-                        auditLogEndDate: modal.querySelector('#modal-audit-log-end-date')?.value,
-                        auditLogUseAi: modal.querySelector('#modal-audit-log-use-ai')?.checked ?? false
+                        auditLogEndDate: modal.querySelector('#modal-audit-log-end-date')?.value
                     };
                 }, { capture: true });
             });
@@ -1306,10 +1360,11 @@ async function showGenerateModal(count) {
     // Handle Generate button click
     if (result === 'generate' && capturedFormValues) {
         const {
-            count: modalCount, startDate, endDate, minCost, maxCost, wholeDollars, useAi,
+            count: modalCount, startDate, endDate, minCost, maxCost, wholeDollars,
+            useAiMatters, useAiNotes, useAiAttachments, useAiAudit,
             generateNotes, notesPercentage, minNotes, maxNotes,
             generateAttachments, attachmentsPercentage,
-            generateAuditLog, auditLogCount, auditLogStartDate, auditLogEndDate, auditLogUseAi
+            generateAuditLog, auditLogCount, auditLogStartDate, auditLogEndDate
         } = capturedFormValues;
 
         // Validation
@@ -1322,8 +1377,9 @@ async function showGenerateModal(count) {
             return;
         }
 
+        const anyAi = useAiMatters || useAiNotes || useAiAttachments || useAiAudit;
         let loadingMsg = `Generating ${modalCount} matters`;
-        if (useAi) loadingMsg += ` with AI (${getSpiceLevelName(state.aiSettings.spiceLevel)})`;
+        if (anyAi) loadingMsg += ` with AI`;
         if (generateNotes) loadingMsg += ` + notes`;
         if (generateAttachments) loadingMsg += ` + documents`;
         if (generateAuditLog) loadingMsg += ` + ${auditLogCount} audit entries`;
@@ -1333,7 +1389,7 @@ async function showGenerateModal(count) {
         const btn = document.getElementById('populate-sample-btn');
         if (btn) {
             btn.disabled = true;
-            btn.innerHTML = useAi
+            btn.innerHTML = anyAi
                 ? '<span class="flex items-center justify-center"><span class="spinner-sm mr-2"></span>Generating with AI...</span>'
                 : 'Generating...';
         }
@@ -1346,14 +1402,16 @@ async function showGenerateModal(count) {
                 minCostDollars: minCost,
                 maxCostDollars: maxCost,
                 wholeDollarsOnly: wholeDollars,
-                useAiDescriptions: useAi,
-                spiceLevelOverride: useAi ? state.aiSettings.spiceLevel : undefined,
+                useAiDescriptions: useAiMatters,
+                spiceLevelOverride: useAiMatters ? state.aiSettings.spiceLevel : undefined,
                 generatePrivateNotes: generateNotes,
                 notesPercentage: generateNotes ? notesPercentage : undefined,
                 minNotesPerMatter: generateNotes ? minNotes : undefined,
                 maxNotesPerMatter: generateNotes ? maxNotes : undefined,
+                useAiNotes: useAiNotes,
                 generateAttachments: generateAttachments,
-                attachmentsPercentage: generateAttachments ? attachmentsPercentage : undefined
+                attachmentsPercentage: generateAttachments ? attachmentsPercentage : undefined,
+                useAiAttachments: useAiAttachments
             });
 
             // Generate audit log if requested
@@ -1364,8 +1422,8 @@ async function showGenerateModal(count) {
                         count: auditLogCount,
                         startDate: auditLogStartDate,
                         endDate: auditLogEndDate,
-                        useAi: auditLogUseAi,
-                        spiceLevelOverride: auditLogUseAi ? state.aiSettings.spiceLevel : undefined
+                        useAi: useAiAudit,
+                        spiceLevelOverride: useAiAudit ? state.aiSettings.spiceLevel : undefined
                     });
                 } catch (auditError) {
                     console.error('Failed to generate audit log entries:', auditError);
@@ -1373,18 +1431,31 @@ async function showGenerateModal(count) {
             }
 
             dismissPersistentToast();
-            const aiNote = response.used_ai_descriptions ? ` (AI @ ${getSpiceLevelName(state.aiSettings.spiceLevel)})` : '';
-            const notesNote = response.private_notes_generated ? ` + ${response.private_notes_generated} notes` : '';
-            const attachmentsNote = response.attachments_generated ? ` + ${response.attachments_generated} documents` : '';
-            const auditLogNote = auditLogResult?.created ? ` + ${auditLogResult.created} audit entries` : '';
-            showToast(`Successfully added ${response.matters_added} sample matters ($${response.total_cost_added.toFixed(2)})${aiNote}${notesNote}${attachmentsNote}${auditLogNote}`, 'success');
+
+            // Build detailed success message
+            const parts = [`Added ${response.matters_added} matters ($${response.total_cost_added.toFixed(2)})`];
+            if (response.private_notes_generated > 0) {
+                parts.push(`${response.private_notes_generated} notes`);
+            }
+            if (response.attachments_generated > 0) {
+                parts.push(`${response.attachments_generated} documents`);
+            }
+            if (auditLogResult?.created > 0) {
+                parts.push(`${auditLogResult.created} audit entries`);
+            }
+
+            // Add AI indicator if any AI was used
+            const aiUsed = response.used_ai_descriptions || auditLogResult?.used_ai;
+            const modeNote = aiUsed ? ' (AI enhanced)' : ' (templates)';
+
+            showToast(parts.join(' + ') + modeNote, 'success');
         } catch (error) {
             dismissPersistentToast();
             showToast(`Error: ${error.message}`, 'error');
         } finally {
             if (btn) {
                 btn.disabled = false;
-                btn.textContent = 'Populate Data';
+                btn.textContent = 'Advanced Options';
             }
         }
     }

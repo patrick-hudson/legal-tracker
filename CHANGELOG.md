@@ -12,6 +12,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 
+- **Unified sample data generation with AI as optional enhancement**: Harmonized generation system that works fully without AI
+  - New centralized word banks in `backend/data/sample-templates/` with JSON files for all data types
+  - 140+ matter descriptions with template-based generation for more variety
+  - 20 lawyers and 20 opposing counsel with realistic firm names
+  - 20 individual and 30 company client names
+  - 100+ private note templates organized by interaction type (phone_call, email, meeting, court_appearance, filing, letter_sent, letter_received, note)
+  - Full document templates for 8 legal document types with placeholder substitution
+  - 60+ audit log templates across all severity levels (INFO, WARNING, ERROR, SECURITY, DEBUG)
+  - New `sample-templates.js` module provides clean API for accessing word banks
+  - Backend refactored to use centralized templates instead of embedded static data
+  - Legal document placeholder generation now uses realistic templates
+  - Generation works fully without Claude API configuration
+  - AI becomes an optional "enhancement layer" with clear UI indication
+  - Success messages now show "(AI enhanced)" or "(templates)" to indicate generation mode
+
 - **Per-type AI spice settings**: Each generation type (Matters, Notes, Attachments, Audit Log) can now have its own spice level
   - New "Per-Type Spice Settings" section in AI Settings page with individual controls
   - Each type can use the default spice level or have a custom override
