@@ -25,6 +25,7 @@ import {
     loadSelectionState,
     saveSelectionState,
     clearSelectionState,
+    loadStateFromUrl,
     showToast,
     debounce
 } from './shared.js';
@@ -38,6 +39,9 @@ import { handleExportCSV } from './export.js';
 import { showAddSingleModal, showAddMultipleModal } from './modals.js';
 
 export async function renderMatters(container) {
+    // Restore state from URL (page, search, sort, order)
+    loadStateFromUrl();
+
     // Restore selection state from sessionStorage
     loadSelectionState();
 
@@ -155,11 +159,17 @@ export async function renderMatters(container) {
         window.location.hash = `/matters/${row.dataset.matterId}`;
     });
 
+    // Sync search input with URL state
+    const searchInput = document.getElementById('search-input');
+    if (currentSearch) {
+        searchInput.value = currentSearch;
+    }
+
     // Load matters
     await loadMatters();
 
     // Event listeners
-    document.getElementById('search-input').addEventListener('input', debounce(handleSearch, 300));
+    searchInput.addEventListener('input', debounce(handleSearch, 300));
     document.getElementById('add-single-btn').addEventListener('click', () => showAddSingleModal(loadMatters));
     document.getElementById('add-multiple-btn').addEventListener('click', () => showAddMultipleModal(loadMatters));
     document.getElementById('export-csv-btn').addEventListener('click', () => handleExportCSV(handleDeselectAll));
@@ -349,9 +359,9 @@ function updatePagination(start, end, total) {
     }
 
     controls.innerHTML = `
-        <button ${currentPage === 1 ? 'disabled' : ''} onclick="changePage(${currentPage - 1})" class="px-3 py-1 text-sm rounded border ${currentPage === 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100'} dark:border-gray-600">Previous</button>
-        <span class="px-3 py-1 text-sm">Page ${currentPage} of ${totalPages}</span>
-        <button ${currentPage === totalPages ? 'disabled' : ''} onclick="changePage(${currentPage + 1})" class="px-3 py-1 text-sm rounded border ${currentPage === totalPages ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100'} dark:border-gray-600">Next</button>
+        <button ${currentPage === 1 ? 'disabled' : ''} onclick="changePage(${currentPage - 1})" class="px-4 py-2 text-sm font-medium rounded-lg border ${currentPage === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100 dark:bg-gray-800 dark:text-white dark:border-gray-600 dark:hover:bg-gray-700'}">Previous</button>
+        <span class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300">Page ${currentPage} of ${totalPages}</span>
+        <button ${currentPage === totalPages ? 'disabled' : ''} onclick="changePage(${currentPage + 1})" class="px-4 py-2 text-sm font-medium rounded-lg border ${currentPage === totalPages ? 'bg-gray-100 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100 dark:bg-gray-800 dark:text-white dark:border-gray-600 dark:hover:bg-gray-700'}">Next</button>
     `;
 }
 

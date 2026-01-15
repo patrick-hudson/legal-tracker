@@ -90,8 +90,10 @@ export async function createServer(options = {}) {
   await fastify.register(fastifyCookie);
 
   // Rate limiting - protect against brute force attacks
-  // Can be disabled for tests to avoid delays from rate limit workarounds
-  if (!disableRateLimit) {
+  // Can be disabled for tests, or when audit_log_level is DEBUG (development mode)
+  const auditLogLevel = settingsDb.get('audit_log_level') || 'INFO';
+  const shouldDisableRateLimit = disableRateLimit || auditLogLevel === 'DEBUG';
+  if (!shouldDisableRateLimit) {
     await fastify.register(rateLimit, {
       global: false, // Don't apply globally, only to specific routes
       max: 100, // Max requests per time window
@@ -173,15 +175,9 @@ export async function createServer(options = {}) {
   // Create scope validation middleware (auto-detects required scope from route)
   const scopeMiddleware = autoRequireScope();
 
-  // Add scope validation hook for all admin API routes (runs after auth middleware)
-  fastify.addHook('preHandler', async (request, reply) => {
-    // Only check scopes for authenticated admin API requests
-    if (!request.url.startsWith('/admin/api/')) return;
-    if (!request.adminUser) return; // Not authenticated yet or public route
-
-    // Run scope validation
-    await scopeMiddleware(request, reply);
-  });
+  // Combined middleware: auth first, then scope validation
+  // This ensures scope check runs AFTER auth sets request.adminUser and request.apiKeyScopes
+  const adminAuthWithScopes = [adminAuthMiddleware, scopeMiddleware];
 
   // API request logging hooks (only logs when setting is enabled and level is DEBUG)
   // Capture request body before processing
@@ -291,8 +287,8 @@ export async function createServer(options = {}) {
     saveDatabase,
     resetAllSequences,
 
-    // Middleware
-    adminAuthMiddleware,
+    // Middleware (auth + scope validation combined)
+    adminAuthMiddleware: adminAuthWithScopes,
 
     // Configuration
     cookieSecure: COOKIE_SECURE,

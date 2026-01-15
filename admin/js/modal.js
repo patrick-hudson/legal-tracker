@@ -83,8 +83,26 @@ export function showAlert(message, options = {}) {
 
         modal.querySelector('.modal-close').addEventListener('click', closeModal);
         modal.querySelector('.modal-ok').addEventListener('click', closeModal);
+
+        // Track mousedown target and selection state to prevent closing when dragging or selecting text
+        let mouseDownTarget = null;
+        let hadSelectionOnMouseDown = false;
+        modal.addEventListener('mousedown', (e) => {
+            mouseDownTarget = e.target;
+            // Capture selection state NOW, before click clears it
+            const selection = window.getSelection();
+            hadSelectionOnMouseDown = selection && selection.toString().length > 0;
+        });
         modal.addEventListener('click', (e) => {
-            if (e.target === modal) closeModal();
+            // Only close if both mousedown and click happened on the backdrop
+            if (e.target === modal && mouseDownTarget === modal) {
+                // If text was selected when mousedown happened, don't close (selection is now cleared by the click)
+                if (!hadSelectionOnMouseDown) {
+                    closeModal();
+                }
+            }
+            mouseDownTarget = null;
+            hadSelectionOnMouseDown = false;
         });
 
         // Focus the OK button
@@ -171,8 +189,26 @@ export function showConfirm(message, options = {}) {
         modal.querySelector('.modal-close').addEventListener('click', () => closeModal(false));
         modal.querySelector('.modal-cancel').addEventListener('click', () => closeModal(false));
         modal.querySelector('.modal-confirm').addEventListener('click', () => closeModal(true));
+
+        // Track mousedown target and selection state to prevent closing when dragging or selecting text
+        let mouseDownTarget = null;
+        let hadSelectionOnMouseDown = false;
+        modal.addEventListener('mousedown', (e) => {
+            mouseDownTarget = e.target;
+            // Capture selection state NOW, before click clears it
+            const selection = window.getSelection();
+            hadSelectionOnMouseDown = selection && selection.toString().length > 0;
+        });
         modal.addEventListener('click', (e) => {
-            if (e.target === modal) closeModal(false);
+            // Only close if both mousedown and click happened on the backdrop
+            if (e.target === modal && mouseDownTarget === modal) {
+                // If text was selected when mousedown happened, don't close (selection is now cleared by the click)
+                if (!hadSelectionOnMouseDown) {
+                    closeModal(false);
+                }
+            }
+            mouseDownTarget = null;
+            hadSelectionOnMouseDown = false;
         });
 
         // Focus the confirm button for easy Enter confirmation
@@ -268,9 +304,25 @@ export function showCustomModal(options = {}) {
         // Close button
         modal.querySelector('.modal-close').addEventListener('click', () => closeModal(null));
 
-        // Background click closes
+        // Track mousedown target and selection state to prevent closing when dragging or selecting text
+        let mouseDownTarget = null;
+        let hadSelectionOnMouseDown = false;
+        modal.addEventListener('mousedown', (e) => {
+            mouseDownTarget = e.target;
+            // Capture selection state NOW, before click clears it
+            const selection = window.getSelection();
+            hadSelectionOnMouseDown = selection && selection.toString().length > 0;
+        });
         modal.addEventListener('click', (e) => {
-            if (e.target === modal) closeModal(null);
+            // Only close if both mousedown and click happened on the backdrop
+            if (e.target === modal && mouseDownTarget === modal) {
+                // If text was selected when mousedown happened, don't close (selection is now cleared by the click)
+                if (!hadSelectionOnMouseDown) {
+                    closeModal(null);
+                }
+            }
+            mouseDownTarget = null;
+            hadSelectionOnMouseDown = false;
         });
 
         // Action buttons

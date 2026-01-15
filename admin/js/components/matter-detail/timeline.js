@@ -102,7 +102,7 @@ export function renderTimeline(notes, attachments, order = 'desc') {
                                                         <span>${formatDate(entry.date, { format: 'short', placeholder: 'Unknown' })}</span>
                                                         ${entry.created_by ? `<span>by ${escapeHtml(entry.created_by)}</span>` : ''}
                                                     </div>
-                                                    <p class="text-sm text-gray-700 dark:text-gray-300 line-clamp-2">${escapeHtml(entry.content)}</p>
+                                                    <p class="text-sm text-gray-700 dark:text-gray-300 line-clamp-2 break-words">${escapeHtml(entry.content)}</p>
                                                 </div>
                                             </li>
                                         `;
@@ -119,7 +119,7 @@ export function renderTimeline(notes, attachments, order = 'desc') {
                                                         <span>${formatDate(entry.date, { format: 'short', placeholder: 'Unknown' })}</span>
                                                         ${entry.created_by ? `<span>by ${escapeHtml(entry.created_by)}</span>` : ''}
                                                     </div>
-                                                    <p class="text-sm font-medium text-gray-900 dark:text-white">${escapeHtml(entry.filename)}</p>
+                                                    <p class="text-sm font-medium text-gray-900 dark:text-white break-all">${escapeHtml(entry.filename)}</p>
                                                     <p class="text-xs text-gray-500 dark:text-gray-400">${formatFileSize(entry.size_bytes)}</p>
                                                 </div>
                                             </li>

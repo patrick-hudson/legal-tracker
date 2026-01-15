@@ -6,6 +6,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **Modal UX improvements**: Enhanced modal backdrop click behavior
+  - Modals no longer close when dragging cursor from inside modal to outside (prevents accidental dismissal when selecting text)
+  - Clicking outside modal when text is highlighted now clears selection instead of closing modal (prevents misclicks)
+  - Selection state captured on mousedown to handle browser clearing selection before click event fires
+
+- **Note text overflow**: Fixed long notes causing horizontal scroll across multiple pages
+  - Dashboard recent matters: Added `line-clamp-2` truncation and `max-w-xs` to note column
+  - Matters list: Note column properly constrained with word breaking
+  - Matter detail view: Note display uses `break-words` to wrap long text
+  - Timeline view: Notes truncated with `line-clamp-2` and `break-words`
+  - Private notes section: Long notes collapsed with "Show more/less" toggle and character count
+
+- **URL-based pagination state**: Matters list page number, search, sort, and order now persisted in URL
+  - Refreshing browser maintains current page position
+  - URL format: `/matters?page=2&search=test&sort=cost&order=ASC`
+  - Back/forward navigation works correctly
+
+### Changed
+
+- **Edit Matter modal**: Changed note field from single-line input to resizable textarea
+  - Modal size expands for long notes (>200 chars)
+  - Character count display
+  - Textarea resizable with min/max height constraints
+
+- **Edit/Add Note modals**: Enhanced for long content
+  - Larger modal size for notes >500 characters
+  - Resizable textareas with character count
+  - View-only modal for reading long notes without editing
+
+- **Dashboard recent matters**: Rows now clickable to navigate to matter detail page
+
 ---
 
 ## [0.16.7] - 2026-01-15

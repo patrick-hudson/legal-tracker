@@ -122,4 +122,45 @@ export default async function adminStaticRoutes(fastify, opts) {
       return reply.code(404).send({ error: 'File not found' });
     }
   });
+
+  // Modular component directories (matters, matter-detail)
+  fastify.get('/admin/js/components/matters/:file', async (request, reply) => {
+    try {
+      const js = serveStaticFile('js/components/matters', request.params.file);
+      reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+      reply.header('Pragma', 'no-cache');
+      reply.header('Expires', '0');
+      return reply.type('application/javascript').send(js);
+    } catch (error) {
+      fastify.log.warn({ file: request.params.file, error: error.message }, 'Static file access denied');
+      return reply.code(404).send({ error: 'File not found' });
+    }
+  });
+
+  fastify.get('/admin/js/components/matter-detail/:file', async (request, reply) => {
+    try {
+      const js = serveStaticFile('js/components/matter-detail', request.params.file);
+      reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+      reply.header('Pragma', 'no-cache');
+      reply.header('Expires', '0');
+      return reply.type('application/javascript').send(js);
+    } catch (error) {
+      fastify.log.warn({ file: request.params.file, error: error.message }, 'Static file access denied');
+      return reply.code(404).send({ error: 'File not found' });
+    }
+  });
+
+  // Modular API directory
+  fastify.get('/admin/js/api/:file', async (request, reply) => {
+    try {
+      const js = serveStaticFile('js/api', request.params.file);
+      reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+      reply.header('Pragma', 'no-cache');
+      reply.header('Expires', '0');
+      return reply.type('application/javascript').send(js);
+    } catch (error) {
+      fastify.log.warn({ file: request.params.file, error: error.message }, 'Static file access denied');
+      return reply.code(404).send({ error: 'File not found' });
+    }
+  });
 }

@@ -69,7 +69,7 @@ export function renderMatterView(container, matter, reloadMatter) {
                 ` : ''}
                 <div class="md:col-span-2">
                     <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Note</dt>
-                    <dd class="text-gray-900 dark:text-white">${safeEscapeHtml(matter.note, 'No note')}</dd>
+                    <dd class="text-gray-900 dark:text-white break-words">${safeEscapeHtml(matter.note, 'No note')}</dd>
                 </div>
             </dl>
 
@@ -361,6 +361,12 @@ function setupCollapsibleSections(privateNotes, attachments) {
 async function showEditMatterModal(matter, reloadMatter) {
     let capturedFormData = null;
 
+    // Determine modal size based on note length
+    const noteLength = (matter.note || '').length;
+    const isLongNote = noteLength > 200;
+    const modalSize = isLongNote ? 'xl' : 'lg';
+    const textareaRows = isLongNote ? 6 : 3;
+
     const content = `
         <form id="edit-matter-form">
             <div class="grid grid-cols-2 gap-4 mb-4">
@@ -376,9 +382,12 @@ async function showEditMatterModal(matter, reloadMatter) {
                 </div>
             </div>
             <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Note</label>
-                <input type="text" name="note" value="${escapeHtml(matter.note || '')}" required
-                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                <div class="flex justify-between items-center mb-2">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Note</label>
+                    <span id="note-char-count" class="text-xs text-gray-500 dark:text-gray-400">${noteLength.toLocaleString()} characters</span>
+                </div>
+                <textarea name="note" rows="${textareaRows}" required
+                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white resize-y min-h-[80px] max-h-[40vh]">${escapeHtml(matter.note || '')}</textarea>
             </div>
             <div class="mb-4">
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Case/Matter Number</label>
@@ -427,8 +436,17 @@ async function showEditMatterModal(matter, reloadMatter) {
             { text: 'Cancel', type: 'secondary', value: 'cancel' },
             { text: 'Save Changes', type: 'primary', value: 'submit' }
         ],
-        size: 'lg',
+        size: modalSize,
         onOpen: (modal) => {
+            // Character count for note field
+            const noteTextarea = modal.querySelector('[name="note"]');
+            const charCount = modal.querySelector('#note-char-count');
+            noteTextarea?.addEventListener('input', () => {
+                if (charCount) {
+                    charCount.textContent = `${noteTextarea.value.length.toLocaleString()} characters`;
+                }
+            });
+
             // Capture form data before modal closes
             modal.querySelectorAll('.modal-action-btn').forEach(btn => {
                 btn.addEventListener('click', () => {

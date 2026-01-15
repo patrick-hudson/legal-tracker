@@ -316,13 +316,21 @@ export function getScopesDisplayName(scopes) {
 }
 
 /**
- * Normalize a route path for matching (replace :param with :id)
- * @param {string} path - Route path
+ * Normalize a route path for matching
+ * - For route definitions: replace :param with :id
+ * - For actual paths: replace numeric segments with :id
+ * @param {string} path - Route path (definition or actual)
  * @returns {string} Normalized path
  */
 export function normalizeRoutePath(path) {
-  // Replace named params with generic :id
-  return path.replace(/:\w+/g, ':id');
+  // Replace named params (route definitions) with generic :id
+  let normalized = path.replace(/:\w+/g, ':id');
+
+  // Replace numeric path segments (actual request paths) with :id
+  // e.g., /admin/api/matters/123 -> /admin/api/matters/:id
+  normalized = normalized.replace(/\/(\d+)(?=\/|$)/g, '/:id');
+
+  return normalized;
 }
 
 /**
@@ -340,10 +348,38 @@ export function getRouteScope(method, path) {
     return ROUTE_SCOPES[key];
   }
 
-  // Try with different param names
+  // Try with different param names (for numeric IDs)
   for (const [routeKey, scope] of Object.entries(ROUTE_SCOPES)) {
     const normalizedRouteKey = routeKey.replace(/:\w+/g, ':id');
     if (normalizedRouteKey === key) {
+      return scope;
+    }
+  }
+
+  // Try pattern matching for non-numeric parameters (e.g., settings/:key)
+  const method_ = method.toUpperCase();
+  const pathParts = path.split('/');
+  for (const [routeKey, scope] of Object.entries(ROUTE_SCOPES)) {
+    const [routeMethod, routePath] = routeKey.split(' ');
+    if (routeMethod !== method_) continue;
+
+    const routeParts = routePath.split('/');
+    if (routeParts.length !== pathParts.length) continue;
+
+    // Check if all parts match (literal or parameter)
+    let matches = true;
+    for (let i = 0; i < routeParts.length; i++) {
+      const routePart = routeParts[i];
+      const pathPart = pathParts[i];
+      // Parameter segment (starts with :) matches anything
+      if (routePart.startsWith(':')) continue;
+      // Literal must match exactly
+      if (routePart !== pathPart) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) {
       return scope;
     }
   }

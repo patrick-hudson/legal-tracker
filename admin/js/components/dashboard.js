@@ -138,6 +138,15 @@ export async function renderDashboard(container) {
         // Render charts
         renderCharts(data);
 
+        // Add click handler for recent matters rows
+        const tbody = document.getElementById('recent-matters-tbody');
+        tbody?.addEventListener('click', (e) => {
+            const row = e.target.closest('tr[data-matter-id]');
+            if (row) {
+                window.location.hash = `/matters/${row.dataset.matterId}`;
+            }
+        });
+
     } catch (error) {
         container.innerHTML = renderErrorBanner(error, 'Error! Failed to load dashboard:');
     }
@@ -149,12 +158,14 @@ function renderRecentMatters(matters) {
     }
 
     return matters.map(matter => `
-        <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover-row">
-            <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">
+        <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 hover-row cursor-pointer" data-matter-id="${matter.id}">
+            <td class="px-6 py-4 font-medium text-gray-900 dark:text-white whitespace-nowrap">
                 ${formatDate(matter.matter_date, { format: 'datetime', placeholder: PLACEHOLDER.DASH })}
             </td>
-            <td class="px-6 py-4">${escapeHtml(matter.note, 'No note')}</td>
-            <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">
+            <td class="px-6 py-4 max-w-xs">
+                <span class="line-clamp-2 break-words">${escapeHtml(matter.note, 'No note')}</span>
+            </td>
+            <td class="px-6 py-4 font-medium text-gray-900 dark:text-white whitespace-nowrap">
                 ${formatCurrency(matter.cost, { fromCents: true })}
             </td>
         </tr>

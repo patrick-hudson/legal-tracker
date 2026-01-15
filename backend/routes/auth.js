@@ -231,11 +231,23 @@ export default async function authRoutes(fastify, opts) {
     return { success: true, message: 'Logged out successfully' };
   });
 
-  // Get current admin user
+  // Get current admin user (and API key info if using API key auth)
   fastify.get('/admin/api/auth/me', { preHandler: adminAuthMiddleware }, async (request) => {
-    return {
-      user: request.adminUser
+    const response = {
+      user: request.adminUser,
+      auth_method: request.authMethod || 'session'
     };
+
+    // Include API key details if authenticated via API key
+    if (request.authMethod === 'api-key') {
+      response.api_key = {
+        id: request.apiKeyId,
+        name: request.apiKeyName,
+        scopes: request.apiKeyScopes || []
+      };
+    }
+
+    return response;
   });
 
   // Change password

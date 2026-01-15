@@ -17,13 +17,63 @@ export let currentOrder = 'DESC';
 export let selectedMatters = new Set();
 export let loadedMatters = [];
 
-// State setters
-export function setCurrentPage(page) { currentPage = page; }
-export function setCurrentSearch(search) { currentSearch = search; }
-export function setCurrentSort(sort) { currentSort = sort; }
-export function setCurrentOrder(order) { currentOrder = order; }
+// State setters - update URL when changing pagination state
+export function setCurrentPage(page) {
+    currentPage = page;
+    updateUrlState();
+}
+export function setCurrentSearch(search) {
+    currentSearch = search;
+    updateUrlState();
+}
+export function setCurrentSort(sort) {
+    currentSort = sort;
+    updateUrlState();
+}
+export function setCurrentOrder(order) {
+    currentOrder = order;
+    updateUrlState();
+}
 export function setLoadedMatters(matters) { loadedMatters = matters; }
 export function clearSelectedMatters() { selectedMatters.clear(); }
+
+// URL state management
+function updateUrlState() {
+    const params = new URLSearchParams();
+    if (currentPage > 1) params.set('page', currentPage);
+    if (currentSearch) params.set('search', currentSearch);
+    if (currentSort !== 'matter_date') params.set('sort', currentSort);
+    if (currentOrder !== 'DESC') params.set('order', currentOrder);
+
+    const queryString = params.toString();
+    const newHash = queryString ? `/matters?${queryString}` : '/matters';
+
+    // Only update if different to avoid adding history entries
+    if (window.location.hash !== `#${newHash}`) {
+        history.replaceState(null, '', `#${newHash}`);
+    }
+}
+
+// Parse URL state on page load
+export function loadStateFromUrl() {
+    const hash = window.location.hash.slice(1); // Remove #
+    const [, queryString] = hash.split('?');
+    if (!queryString) return;
+
+    const params = new URLSearchParams(queryString);
+
+    const page = parseInt(params.get('page'));
+    if (page && page > 0) currentPage = page;
+
+    const search = params.get('search');
+    if (search) currentSearch = search;
+
+    const sort = params.get('sort');
+    if (sort) currentSort = sort;
+
+    const order = params.get('order');
+    if (order === 'ASC' || order === 'DESC') currentOrder = order;
+}
 
 // Storage keys
 export const STORAGE_KEY_ORDER = 'matters_column_order';
@@ -69,8 +119,16 @@ export const COLUMN_DEFINITIONS = {
         sortable: false,
         hideable: true,
         headerClass: 'px-6 py-3',
-        cellClass: 'px-6 py-4',
-        renderCell: (matter) => safeEscapeHtml(matter.note, 'No note')
+        cellClass: 'px-6 py-4 max-w-md',
+        renderCell: (matter) => {
+            const note = matter.note || 'No note';
+            const escaped = safeEscapeHtml(note, 'No note');
+            // Escape for HTML attribute (replace quotes)
+            const attrEscaped = escaped.replace(/"/g, '&quot;');
+            // Truncate display and show full note on hover
+            const truncated = note.length > 100 ? safeEscapeHtml(note.substring(0, 100)) + '...' : escaped;
+            return `<div class="line-clamp-2 break-words" title="${attrEscaped}">${truncated}</div>`;
+        }
     },
     cost: {
         key: 'cost',

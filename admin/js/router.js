@@ -67,8 +67,9 @@ class Router {
         // Update user info in header
         this.updateUserInfo();
 
-        // Get current route
-        const hash = window.location.hash.slice(1) || this.defaultRoute;
+        // Get current route (strip query params for matching)
+        const fullHash = window.location.hash.slice(1) || this.defaultRoute;
+        const [hash] = fullHash.split('?');
 
         // Update active nav link
         this.updateActiveLink();
@@ -146,7 +147,8 @@ class Router {
     }
 
     updateActiveLink(clickedLink = null) {
-        const hash = window.location.hash.slice(1) || this.defaultRoute;
+        const fullHash = window.location.hash.slice(1) || this.defaultRoute;
+        const [hash] = fullHash.split('?'); // Strip query params
         const navLinks = document.querySelectorAll('.nav-link');
 
         navLinks.forEach(link => {
