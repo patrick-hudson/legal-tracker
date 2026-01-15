@@ -2,7 +2,7 @@
  * Analytics Component
  */
 
-import api from '../api.js';
+import api from '../api/index.js';
 import { renderErrorBanner } from '../display-utils.js';
 
 export async function renderAnalytics(container) {

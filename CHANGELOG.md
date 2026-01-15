@@ -6,9 +6,51 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **Admin API client modularized**: Split admin/js/api.js (677 lines, 75 methods) into domain modules
+  - `admin/js/api/index.js` - API class orchestrator (70 lines)
+  - `admin/js/api/auth.js` - Auth and bootstrap methods
+  - `admin/js/api/matters.js` - Matter CRUD operations
+  - `admin/js/api/notes.js` - Private notes CRUD
+  - `admin/js/api/attachments.js` - File attachment operations
+  - `admin/js/api/settings.js` - App settings, storage, AI config
+  - `admin/js/api/users.js` - User management, sessions, API keys
+  - `admin/js/api/data.js` - Dashboard, analytics, sample data, wipe, backup, audit log
+
+- **Matter detail component modularized**: Split admin/js/components/matter-detail.js (1679 lines) into focused modules
+  - `admin/js/components/matter-detail/index.js` - Entry point (50 lines)
+  - `admin/js/components/matter-detail/shared.js` - Constants, utilities, toast helpers
+  - `admin/js/components/matter-detail/timeline.js` - Activity timeline rendering
+  - `admin/js/components/matter-detail/notes.js` - Notes section and CRUD
+  - `admin/js/components/matter-detail/attachments.js` - Attachments section and CRUD
+  - `admin/js/components/matter-detail/view.js` - Main view, edit modal, collapsible sections
+
+- **Matters list component modularized**: Split admin/js/components/matters.js (1560 lines) into focused modules
+  - `admin/js/components/matters/index.js` - Main orchestrator (200 lines)
+  - `admin/js/components/matters/shared.js` - State, column definitions, utilities
+  - `admin/js/components/matters/columns.js` - Column preferences, drag/drop reordering
+  - `admin/js/components/matters/export.js` - CSV/JSON/HTML export generation
+  - `admin/js/components/matters/modals.js` - Add single/multiple matter modals
+
 ---
 
 ## [0.16.6] - 2026-01-15
+
+### Changed
+
+- **Public frontend modularized**: Split frontend/app.js (1553 lines) into focused ES modules
+  - `frontend/utils.js` - DISPLAY formatting utilities (71 lines)
+  - `frontend/themes.js` - Theme definitions (10 themes, 131 lines)
+  - `frontend/state.js` - Application state management (147 lines)
+  - `frontend/api.js` - API fetch functions (203 lines)
+  - `frontend/handlers.js` - Event handlers (214 lines)
+  - `frontend/render/index.js` - Render orchestrator (41 lines)
+  - `frontend/render/shared.js` - Shared render helpers (104 lines)
+  - `frontend/render/crt.js` - CRT theme renderer (8 themes, 252 lines)
+  - `frontend/render/modern.js` - MINIMAL 2025 theme renderer (218 lines)
+  - `frontend/render/retro.js` - GEOCITIES 1996 theme renderer (232 lines)
+  - frontend/app.js reduced from 1553 lines to 60 lines (96% reduction)
 
 ---
 
@@ -25,19 +67,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Account Security card
   - Quick Actions (Create API Key, Change Password, View Audit Log)
   - Public API Access info explaining environment variable configuration
-
-- **Public frontend modularized**: Split frontend/app.js (1553 lines) into focused ES modules
-  - `frontend/utils.js` - DISPLAY formatting utilities (71 lines)
-  - `frontend/themes.js` - Theme definitions (10 themes, 131 lines)
-  - `frontend/state.js` - Application state management (147 lines)
-  - `frontend/api.js` - API fetch functions (203 lines)
-  - `frontend/handlers.js` - Event handlers (214 lines)
-  - `frontend/render/index.js` - Render orchestrator (41 lines)
-  - `frontend/render/shared.js` - Shared render helpers (104 lines)
-  - `frontend/render/crt.js` - CRT theme renderer (8 themes, 252 lines)
-  - `frontend/render/modern.js` - MINIMAL 2025 theme renderer (218 lines)
-  - `frontend/render/retro.js` - GEOCITIES 1996 theme renderer (232 lines)
-  - frontend/app.js reduced from 1553 lines to 60 lines (96% reduction)
 
 ### Removed
 
@@ -1375,8 +1404,8 @@ Initial development phase establishing core functionality.
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| Unreleased | - | |
-| 0.16.5 | 2026-01-14 | Sidebar chevrons, Security Overview redesign, Public frontend modularized (96% reduction) |
+| 0.16.6 | 2026-01-15 | Public frontend modularized (96% reduction) |
+| 0.16.5 | 2026-01-14 | Sidebar chevrons, Security Overview redesign |
 | 0.16.4 | 2026-01-14 | Fix watchdog status showing undefined |
 | 0.16.3 | 2026-01-14 | Routes extraction from server.js (90% reduction) |
 | 0.16.2 | 2026-01-14 | Database layer modularized into query objects |

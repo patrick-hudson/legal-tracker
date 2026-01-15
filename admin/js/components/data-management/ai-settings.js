@@ -3,7 +3,7 @@
  * API configuration, model selection, spice levels, and sample data generation
  */
 
-import api from '../../api.js';
+import api from '../../api/index.js';
 import { renderErrorBanner } from '../../display-utils.js';
 import { showConfirm, showCustomModal } from '../../modal.js';
 import {

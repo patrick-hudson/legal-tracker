@@ -3,7 +3,7 @@
  * Version info, environment settings, build information
  */
 
-import api from '../api.js';
+import api from '../api/index.js';
 import { renderErrorBanner, displayOrPlaceholder } from '../display-utils.js';
 
 export async function renderSystemInfo(container) {

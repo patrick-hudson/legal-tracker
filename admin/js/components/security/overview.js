@@ -3,7 +3,7 @@
  * Summary of security settings and quick navigation
  */
 
-import api from '../../api.js';
+import api from '../../api/index.js';
 
 export async function renderOverview(container) {
     container.innerHTML = '<div class="flex justify-center items-center h-64"><div class="spinner"></div></div>';

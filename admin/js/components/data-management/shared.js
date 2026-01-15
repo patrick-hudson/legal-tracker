@@ -2,7 +2,7 @@
  * Shared state, constants, and utilities for Data Management pages
  */
 
-import api from '../../api.js';
+import api from '../../api/index.js';
 
 // Track Claude API state
 export const state = {

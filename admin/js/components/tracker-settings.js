@@ -3,7 +3,7 @@
  * Drain settings and Display settings
  */
 
-import api from '../api.js';
+import api from '../api/index.js';
 import {
     formatDrainPreview,
     safeNumber,

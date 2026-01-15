@@ -3,7 +3,7 @@
  * Storage settings configuration and backup/restore functionality
  */
 
-import api from '../../api.js';
+import api from '../../api/index.js';
 import { renderErrorBanner } from '../../display-utils.js';
 import { showConfirm } from '../../modal.js';
 import {

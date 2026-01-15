@@ -3,7 +3,7 @@
  * Selective wipe, wipe customer data, and factory reset operations
  */
 
-import api from '../../api.js';
+import api from '../../api/index.js';
 import { renderErrorBanner } from '../../display-utils.js';
 import { showConfirm } from '../../modal.js';
 import {

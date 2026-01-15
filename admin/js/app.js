@@ -4,7 +4,7 @@
 
 import auth from './auth.js';
 import router from './router.js';
-import api from './api.js';
+import api from './api/index.js';
 import { showConfirm } from './modal.js';
 
 // Initialize the application

@@ -3,7 +3,7 @@
  * Displays system audit log entries with pagination, search, filtering, and export
  */
 
-import api from '../api.js';
+import api from '../api/index.js';
 import { formatDate, escapeHtml } from '../display-utils.js';
 
 let currentPage = 1;

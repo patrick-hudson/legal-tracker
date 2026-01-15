@@ -2,7 +2,7 @@
  * Authentication State Management
  */
 
-import api from './api.js';
+import api from './api/index.js';
 
 class AuthManager {
     constructor() {

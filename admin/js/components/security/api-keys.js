@@ -3,7 +3,7 @@
  * Create, list, and revoke API keys for external integrations
  */
 
-import api from '../../api.js';
+import api from '../../api/index.js';
 import { showConfirm } from '../../modal.js';
 import { formatDate, formatRelativeTime, escapeHtml, showToast } from './shared.js';
 

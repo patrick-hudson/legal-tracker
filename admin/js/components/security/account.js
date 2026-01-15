@@ -3,7 +3,7 @@
  * Change password and account preferences
  */
 
-import api from '../../api.js';
+import api from '../../api/index.js';
 import auth from '../../auth.js';
 import { showToast } from './shared.js';
 

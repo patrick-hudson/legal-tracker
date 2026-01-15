@@ -5,8 +5,8 @@
 
 import auth from './auth.js';
 import { renderDashboard } from './components/dashboard.js';
-import { renderMatters } from './components/matters.js';
-import { renderMatterDetail } from './components/matter-detail.js';
+import { renderMatters } from './components/matters/index.js';
+import { renderMatterDetail } from './components/matter-detail/index.js';
 import { renderAnalytics } from './components/analytics.js';
 import { renderSecurity } from './components/security/index.js';
 import { renderTrackerSettings } from './components/tracker-settings.js';

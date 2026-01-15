@@ -3,7 +3,7 @@
  * Dashboard with data summary, AI config preview, storage preview, and quick actions
  */
 
-import api from '../../api.js';
+import api from '../../api/index.js';
 import { renderErrorBanner } from '../../display-utils.js';
 import { state, loadState, loadBackupStats, loadStorageSettings, formatBytes, getSpiceLevelName } from './shared.js';
 

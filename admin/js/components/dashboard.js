@@ -2,7 +2,7 @@
  * Dashboard Component
  */
 
-import api from '../api.js';
+import api from '../api/index.js';
 import {
     formatCurrency,
     formatDate,
