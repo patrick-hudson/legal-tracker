@@ -22,6 +22,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Quick Actions (Create API Key, Change Password, View Audit Log)
   - Public API Access info explaining environment variable configuration
 
+- **Public frontend modularized**: Split frontend/app.js (1553 lines) into focused ES modules
+  - `frontend/utils.js` - DISPLAY formatting utilities (71 lines)
+  - `frontend/themes.js` - Theme definitions (10 themes, 131 lines)
+  - `frontend/state.js` - Application state management (147 lines)
+  - `frontend/api.js` - API fetch functions (203 lines)
+  - `frontend/handlers.js` - Event handlers (214 lines)
+  - `frontend/render/index.js` - Render orchestrator (41 lines)
+  - `frontend/render/shared.js` - Shared render helpers (104 lines)
+  - `frontend/render/crt.js` - CRT theme renderer (8 themes, 252 lines)
+  - `frontend/render/modern.js` - MINIMAL 2025 theme renderer (218 lines)
+  - `frontend/render/retro.js` - GEOCITIES 1996 theme renderer (232 lines)
+  - frontend/app.js reduced from 1553 lines to 60 lines (96% reduction)
+
 ### Removed
 
 - **Dead code cleanup**: Removed `generateApiKey()` from api.js (endpoint was removed in 0.16.0)
@@ -1359,7 +1372,7 @@ Initial development phase establishing core functionality.
 | Version | Date | Highlights |
 |---------|------|------------|
 | Unreleased | - | |
-| 0.16.5 | 2026-01-14 | Sidebar chevron rotation, Security Overview redesign |
+| 0.16.5 | 2026-01-14 | Sidebar chevrons, Security Overview redesign, Public frontend modularized (96% reduction) |
 | 0.16.4 | 2026-01-14 | Fix watchdog status showing undefined |
 | 0.16.3 | 2026-01-14 | Routes extraction from server.js (90% reduction) |
 | 0.16.2 | 2026-01-14 | Database layer modularized into query objects |
