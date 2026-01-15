@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+---
+
+## [0.16.7] - 2026-01-15
+
 ### Changed
 
 - **Admin API client modularized**: Split admin/js/api.js (677 lines, 75 methods) into domain modules
