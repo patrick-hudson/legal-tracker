@@ -6,6 +6,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **Analytics page now displays real data** (#16): All charts and statistics were showing hardcoded placeholder values
+  - "Matters by Year" chart now shows actual matters grouped by year from database
+  - "Monthly Spending" chart now shows actual spending aggregated by month (in cents, converted to dollars for display)
+  - "Matters by Month" chart now shows actual matter counts over time
+  - Summary statistics (Total Matters, Total Spent, Average Cost, Most Expensive, Average Days Between, Longest Streak) all calculated from real data
+  - Renamed "Matters Timeline" to "Matters by Year" and "Matter Frequency" to "Matters by Month" for clarity
+
+- **Dashboard charts now display real data** (#16): Both charts were showing hardcoded placeholder values
+  - "Matters Over Time" line chart now shows actual matters per month (last 6 months)
+  - "Cumulative Spending" line chart now shows running total of spending over time
+  - Charts gracefully handle empty data with "No data" label
+
+### Added
+
+- **Analytics API enhancements**: `/admin/api/analytics` endpoint now returns additional calculated fields
+  - `spending_by_month`: Object with monthly spending totals in cents
+  - `summary.avg_cost_cents`: Average cost per matter
+  - `summary.max_cost_cents`: Highest cost matter
+  - `summary.total_cost_cents`: Total of all matter costs
+  - `summary.avg_days_between`: Average days between matters
+
+- **Dashboard API enhancements**: `/admin/api/dashboard` endpoint now returns chart data
+  - `charts.by_month`: Matter counts by month for chart display
+  - `charts.spending_by_month`: Spending totals by month for chart display
+
+- **Analytics test suite**: New test file `test/analytics/analytics.test.js` with tests for:
+  - Analytics endpoint responses and calculations
+  - Dashboard endpoint responses and chart data
+  - Zero cost handling (ensures 0 is preserved, not treated as falsy)
+  - Summary statistics calculations
+
 ---
 
 ## [0.16.9] - 2026-01-19

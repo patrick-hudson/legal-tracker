@@ -322,6 +322,17 @@ export default async function authRoutes(fastify, opts) {
     const drainRateCents = parseFloat(settings.drain_rate_cents_per_second || '50');
     const baseSpent = parseFloat(settings.lifetime_spent || '0');
 
+    // Calculate chart data: matters by month and cumulative spending
+    const byMonth = {};
+    const spendingByMonth = {};
+
+    for (const matter of matters) {
+      const date = new Date(matter.matter_date);
+      const yearMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      byMonth[yearMonth] = (byMonth[yearMonth] || 0) + 1;
+      spendingByMonth[yearMonth] = (spendingByMonth[yearMonth] || 0) + (matter.cost || 0);
+    }
+
     return {
       days_since: daysSince,
       last_matter_date: settings.last_matter_date,
@@ -333,7 +344,11 @@ export default async function authRoutes(fastify, opts) {
         matters_this_year: stats.thisYear,
         max_streak: Math.max(stats.maxStreak, daysSince)
       },
-      recent_matters: matters.slice(0, 10)
+      recent_matters: matters.slice(0, 10),
+      charts: {
+        by_month: byMonth,
+        spending_by_month: spendingByMonth
+      }
     };
   });
 }

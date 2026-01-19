@@ -881,9 +881,10 @@ export default async function settingsRoutes(fastify, opts) {
     const matters = mattersDb.getAll();
     const stats = mattersDb.getStats();
 
-    // Group by month
+    // Group by month and year, also track spending
     const byMonth = {};
     const byYear = {};
+    const spendingByMonth = {};
 
     for (const matter of matters) {
       const date = new Date(matter.matter_date);
@@ -892,7 +893,20 @@ export default async function settingsRoutes(fastify, opts) {
 
       byMonth[yearMonth] = (byMonth[yearMonth] || 0) + 1;
       byYear[year] = (byYear[year] || 0) + 1;
+      spendingByMonth[yearMonth] = (spendingByMonth[yearMonth] || 0) + (matter.cost || 0);
     }
+
+    // Calculate summary statistics
+    const totalCost = matters.reduce((sum, m) => sum + (m.cost || 0), 0);
+    const avgCost = matters.length > 0 ? Math.round(totalCost / matters.length) : 0;
+    const maxCost = matters.length > 0 ? Math.max(...matters.map(m => m.cost || 0)) : 0;
+
+    // Average days between matters (excluding the first one which has no previous)
+    const mattersWithDaysSince = matters.filter(m => m.days_since != null && m.days_since > 0);
+    const totalDaysBetween = mattersWithDaysSince.reduce((sum, m) => sum + m.days_since, 0);
+    const avgDaysBetween = mattersWithDaysSince.length > 0
+      ? Math.round(totalDaysBetween / mattersWithDaysSince.length)
+      : 0;
 
     return {
       total: stats.total,
@@ -900,6 +914,13 @@ export default async function settingsRoutes(fastify, opts) {
       max_streak: stats.maxStreak,
       by_month: byMonth,
       by_year: byYear,
+      spending_by_month: spendingByMonth,
+      summary: {
+        avg_cost_cents: avgCost,
+        max_cost_cents: maxCost,
+        total_cost_cents: totalCost,
+        avg_days_between: avgDaysBetween
+      },
       matters
     };
   });

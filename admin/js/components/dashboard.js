@@ -173,20 +173,48 @@ function renderRecentMatters(matters) {
 }
 
 function renderCharts(data) {
-    // Simple placeholder charts (can be enhanced with actual data from analytics endpoint)
     const mattersCtx = document.getElementById('matters-chart');
     const spendingCtx = document.getElementById('spending-chart');
+
+    // Get chart data from API response
+    const charts = data.charts || {};
+    const byMonth = charts.by_month || {};
+    const spendingByMonth = charts.spending_by_month || {};
+
+    // Sort months and get last 6 months of data
+    const months = Object.keys(byMonth).sort();
+    const recentMonths = months.slice(-6);
+    const monthCounts = recentMonths.map(m => byMonth[m]);
+    const monthLabels = recentMonths.map(m => {
+        const [year, month] = m.split('-');
+        const date = new Date(year, parseInt(month) - 1);
+        return date.toLocaleDateString('en-US', { month: 'short' });
+    });
+
+    // Calculate cumulative spending over time
+    const spendingMonths = Object.keys(spendingByMonth).sort().slice(-6);
+    let cumulative = 0;
+    const cumulativeData = [];
+    const spendingLabels = [];
+    for (const m of spendingMonths) {
+        cumulative += (spendingByMonth[m] || 0) / 100; // Convert cents to dollars
+        cumulativeData.push(cumulative);
+        const [year, month] = m.split('-');
+        const date = new Date(year, parseInt(month) - 1);
+        spendingLabels.push(date.toLocaleDateString('en-US', { month: 'short' }));
+    }
 
     if (mattersCtx && window.Chart) {
         new Chart(mattersCtx, {
             type: 'line',
             data: {
-                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                labels: monthLabels.length > 0 ? monthLabels : ['No data'],
                 datasets: [{
                     label: 'Matters',
-                    data: [0, 1, 0, 2, 1, 0],
+                    data: monthLabels.length > 0 ? monthCounts : [0],
                     borderColor: 'rgb(59, 130, 246)',
                     backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: true,
                     tension: 0.3
                 }]
             },
@@ -195,6 +223,12 @@ function renderCharts(data) {
                 maintainAspectRatio: false,
                 plugins: {
                     legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { stepSize: 1 }
+                    }
                 }
             }
         });
@@ -204,10 +238,10 @@ function renderCharts(data) {
         new Chart(spendingCtx, {
             type: 'line',
             data: {
-                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                labels: spendingLabels.length > 0 ? spendingLabels : ['No data'],
                 datasets: [{
                     label: 'Cumulative Spending ($)',
-                    data: [0, 1200, 1200, 3500, 4800, 4800],
+                    data: spendingLabels.length > 0 ? cumulativeData : [0],
                     borderColor: 'rgb(34, 197, 94)',
                     backgroundColor: 'rgba(34, 197, 94, 0.1)',
                     fill: true,
@@ -219,6 +253,16 @@ function renderCharts(data) {
                 maintainAspectRatio: false,
                 plugins: {
                     legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return '$' + value.toLocaleString();
+                            }
+                        }
+                    }
                 }
             }
         });
