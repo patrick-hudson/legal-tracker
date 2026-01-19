@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+---
+
+## [0.16.10] - 2026-01-19
+
 ### Fixed
 
 - **Analytics page now displays real data** (#16): All charts and statistics were showing hardcoded placeholder values
