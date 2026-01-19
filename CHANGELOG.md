@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+---
+
+## [0.16.11] - 2026-01-19
+
 ### Added
 
 - **Favicon support**: Added favicon.png to both admin and frontend portals
