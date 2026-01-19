@@ -9,13 +9,18 @@ export async function renderOverview(container) {
     container.innerHTML = '<div class="flex justify-center items-center h-64"><div class="spinner"></div></div>';
 
     try {
-        // Load API keys count
+        // Load API keys count and usage
         let apiKeyCount = 0;
         let activeKeyCount = 0;
+        let revokedKeyCount = 0;
+        let totalRequests = 0;
         try {
             const keysResponse = await api.getApiKeys();
-            apiKeyCount = keysResponse.apiKeys?.length || 0;
-            activeKeyCount = keysResponse.apiKeys?.filter(k => !k.revoked_at && (!k.expires_at || new Date(k.expires_at) > new Date())).length || 0;
+            const keys = keysResponse.keys || [];
+            apiKeyCount = keys.length;
+            activeKeyCount = keys.filter(k => !k.revoked_at && (!k.expires_at || new Date(k.expires_at) > new Date())).length;
+            revokedKeyCount = keys.filter(k => k.revoked_at).length;
+            totalRequests = keys.reduce((sum, k) => sum + (k.usage?.total_requests || 0), 0);
         } catch (e) {
             // Ignore - might not have permission
         }
@@ -39,8 +44,8 @@ export async function renderOverview(container) {
                         API keys allow external applications to access the admin API with scoped permissions. Each key has its own audit trail.
                     </p>
                     <div class="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 mb-4">
-                        <span>Total keys: ${apiKeyCount}</span>
-                        <span>Active: ${activeKeyCount}</span>
+                        <span>Total: ${apiKeyCount}${revokedKeyCount > 0 ? ` (${revokedKeyCount} revoked)` : ''}</span>
+                        <span>${totalRequests.toLocaleString()} requests</span>
                     </div>
                     <a href="#/security/api-keys" class="inline-flex items-center text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium">
                         Manage API Keys

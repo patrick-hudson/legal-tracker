@@ -31,6 +31,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Changed
 
+- **App rename**: Renamed from "Legal Tracker" to "Legal Matters" throughout the codebase
+  - Updated all user-facing text (page titles, UI labels, documentation)
+  - Updated package.json name to `legal-matters-backend`
+  - Updated localStorage key to `legal-matters-theme`
+  - Updated default PASSWORD_SALT to `legal-matters-default-CHANGE-THIS`
+  - Updated console output and CLI tool banners
+  - Note: Project folder and GitHub repository name unchanged
+
 - **Edit Matter modal**: Changed note field from single-line input to resizable textarea
   - Modal size expands for long notes (>200 chars)
   - Character count display
@@ -42,6 +50,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - View-only modal for reading long notes without editing
 
 - **Dashboard recent matters**: Rows now clickable to navigate to matter detail page
+
+### Added
+
+- **API key usage tracking**: Track and display usage statistics for external API keys
+  - Usage stats derived from audit log entries (total requests, last 24h, 7d, 30d)
+  - New "Usage" column in API Keys table with hover tooltip showing breakdown
+  - "Last Used" column shows relative time with tooltip for exact timestamp
+  - "Never" changed to "Never used" for clarity on unused keys
+
+### Fixed
+
+- **Security Overview API key data**: Fixed incorrect data display
+  - Changed from `apiKeys` to `keys` to match actual API response format
+  - Removed redundant "Active" display (was shown in both badge and stats line)
+  - Stats line now shows total requests instead of duplicate active count
+  - Shows revoked count in parentheses when applicable
 
 ---
 

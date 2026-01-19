@@ -3,7 +3,7 @@
 /**
  * Create Admin User CLI Tool
  *
- * Interactive command-line tool to create admin users for the legal tracker admin portal.
+ * Interactive command-line tool to create admin users for the Legal Matters admin portal.
  * Usage: node create-admin.js
  */
 
@@ -15,14 +15,14 @@ import crypto from 'crypto';
 import 'dotenv/config';
 
 function clientSideHash(username, password) {
-  const PASSWORD_SALT = process.env.PASSWORD_SALT || 'legal-tracker-default-CHANGE-THIS';
+  const PASSWORD_SALT = process.env.PASSWORD_SALT || 'legal-matters-default-CHANGE-THIS';
   const message = username + ':' + password + ':' + PASSWORD_SALT;
   return crypto.createHash('sha256').update(message).digest('hex');
 }
 
 async function main() {
   console.log('\n==============================================');
-  console.log('   Legal Tracker - Create Admin User');
+  console.log('   Legal Matters - Create Admin User');
   console.log('==============================================\n');
 
   const rl = readline.createInterface({

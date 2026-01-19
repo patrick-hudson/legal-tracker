@@ -17,7 +17,8 @@ export default async function apiKeyRoutes(fastify, opts) {
   // List all API keys (for admin view - never returns full key or hash)
   fastify.get('/admin/api/api-keys', { preHandler: adminAuthMiddleware }, async () => {
     const keys = apiKeysDb.getAll();
-    // Parse scopes for each key and add display name
+    const usageStats = apiKeysDb.getUsageStats();
+    // Parse scopes for each key and add display name + usage stats
     const { getScopesDisplayName } = await import('../scopes.js');
     const keysWithDisplay = keys.map(key => {
       let scopes = ['admin:full'];
@@ -28,10 +29,12 @@ export default async function apiKeyRoutes(fastify, opts) {
       } catch {
         // Default to admin:full if parsing fails
       }
+      const keyStats = usageStats[key.id] || { total_requests: 0, last_24h: 0, last_7d: 0, last_30d: 0 };
       return {
         ...key,
         scopes,
-        scopes_display: getScopesDisplayName(scopes)
+        scopes_display: getScopesDisplayName(scopes),
+        usage: keyStats
       };
     });
     return { keys: keysWithDisplay };

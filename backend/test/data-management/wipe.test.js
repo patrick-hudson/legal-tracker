@@ -8,7 +8,7 @@ import { generateBootstrapToken, hashBootstrapToken, getBootstrapTokenExpiration
  */
 async function hashPasswordClientSide(username, password) {
   const crypto = await import('crypto');
-  const PASSWORD_SALT = process.env.PASSWORD_SALT || 'legal-tracker-default-CHANGE-THIS';
+  const PASSWORD_SALT = process.env.PASSWORD_SALT || 'legal-matters-default-CHANGE-THIS';
   const message = username + ':' + password + ':' + PASSWORD_SALT;
   return crypto.default.createHash('sha256').update(message).digest('hex');
 }

@@ -1,6 +1,6 @@
 # Testing & CI/CD Setup
 
-This document describes the testing infrastructure and CI/CD pipeline for the Legal Tracker project.
+This document describes the testing infrastructure and CI/CD pipeline for the Legal Matters project.
 
 ## Quick Start
 

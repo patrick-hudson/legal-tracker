@@ -376,7 +376,7 @@ function handleRequest(req, res) {
  */
 async function main() {
   console.log(`
-[watchdog] Legal Tracker Process Manager
+[watchdog] Legal Matters Process Manager
 [watchdog] ================================
 [watchdog] Watchdog API: http://${WATCHDOG_HOST}:${WATCHDOG_PORT}
 [watchdog] Server will run on port: ${SERVER_PORT}

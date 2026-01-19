@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Legal Tracker admin portal uses **client-side password hashing** to ensure plaintext passwords NEVER leave your browser or appear anywhere in the system.
+The Legal Matters admin portal uses **client-side password hashing** to ensure plaintext passwords NEVER leave your browser or appear anywhere in the system.
 
 ## How It Works
 

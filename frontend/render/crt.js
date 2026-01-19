@@ -235,7 +235,7 @@ export function renderCRT() {
 
       <!-- Terminal Prompt -->
       <div class="terminal-prompt">
-        <span class="terminal-user">user@legal-tracker:~$</span> status --watch<span id="cursor" class="terminal-cursor">▋</span>
+        <span class="terminal-user">user@legal-matters:~$</span> status --watch<span id="cursor" class="terminal-cursor">▋</span>
       </div>
 
       <!-- Footer -->

@@ -89,7 +89,7 @@ export const state = {
 };
 
 // Theme state - load from localStorage or use default
-export let currentThemeKey = localStorage.getItem('legal-tracker-theme') || DEFAULT_THEME;
+export let currentThemeKey = localStorage.getItem('legal-matters-theme') || DEFAULT_THEME;
 export let theme = THEMES[currentThemeKey] || THEMES[DEFAULT_THEME];
 
 // Update theme state
@@ -97,7 +97,7 @@ export function setThemeState(themeKey) {
   if (THEMES[themeKey]) {
     currentThemeKey = themeKey;
     theme = THEMES[themeKey];
-    localStorage.setItem('legal-tracker-theme', themeKey);
+    localStorage.setItem('legal-matters-theme', themeKey);
   }
 }
 
@@ -123,7 +123,7 @@ export const STATUS_MESSAGES = {
 export const RETRO_MESSAGES = {
   header: [
     '~*~UNDER CONSTRUCTION~*~ Since 1996',
-    '☆.·:*¨¨*:·. LEGAL TRACKER .·:*¨¨*:·.☆',
+    '☆.·:*¨¨*:·. LEGAL MATTERS .·:*¨¨*:·.☆',
     '<<< You are visitor #0000001 >>>',
     '✿◕ ‿ ◕✿ ATTORNEY FREE ZONE ✿◕ ‿ ◕✿',
     '░░▒▒▓▓ LAWYER COUNTER 2000 ▓▓▒▒░░'

@@ -206,7 +206,7 @@ Visit `http://localhost:3000/admin` — you'll be prompted to bootstrap your adm
 
 ```bash
 npm install -g pm2
-pm2 start server.js --name legal-tracker
+pm2 start server.js --name legal-matters
 pm2 save
 pm2 startup
 ```
@@ -259,7 +259,7 @@ The System Info page shows:
 <details>
 <summary><strong>Click to expand Nginx configuration</strong></summary>
 
-Create `/etc/nginx/sites-available/legal-tracker`:
+Create `/etc/nginx/sites-available/legal-matters`:
 
 ```nginx
 server {
@@ -286,11 +286,11 @@ Enable the site:
 
 ```bash
 # Debian/Ubuntu
-sudo ln -s /etc/nginx/sites-available/legal-tracker /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/legal-matters /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl restart nginx
 
 # RHEL/Rocky/Fedora
-sudo cp /etc/nginx/sites-available/legal-tracker /etc/nginx/conf.d/legal-tracker.conf
+sudo cp /etc/nginx/sites-available/legal-matters /etc/nginx/conf.d/legal-matters.conf
 sudo nginx -t && sudo systemctl restart nginx
 ```
 
@@ -2469,7 +2469,7 @@ The SQLite database lives at `backend/data/tracker.db`:
 cp backend/data/tracker.db ~/backups/tracker-$(date +%Y%m%d).db
 
 # Automated daily backup (crontab)
-0 2 * * * cp /path/to/legal-tracker/backend/data/tracker.db /path/to/backups/tracker-$(date +\%Y\%m\%d).db
+0 2 * * * cp /path/to/legal-matters/backend/data/tracker.db /path/to/backups/tracker-$(date +\%Y\%m\%d).db
 ```
 
 ### Attachments

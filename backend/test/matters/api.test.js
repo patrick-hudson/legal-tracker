@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { createServer } from '../../server.js';
 import { setupTestEnvironment, adminPut } from '../helpers/setup.js';
 
-describe('Legal Tracker API Integration Tests', () => {
+describe('Legal Matters API Integration Tests', () => {
   let server;
   let baseURL;
   let adminCookie;

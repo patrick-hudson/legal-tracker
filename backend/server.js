@@ -73,7 +73,7 @@ export async function createServer(options = {}) {
 
   // Configuration
   const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret-in-production-' + Math.random();
-  const PASSWORD_SALT = process.env.PASSWORD_SALT || 'legal-tracker-default-CHANGE-THIS';
+  const PASSWORD_SALT = process.env.PASSWORD_SALT || 'legal-matters-default-CHANGE-THIS';
   const COOKIE_SECURE = process.env.NODE_ENV === 'production' && process.env.COOKIE_SECURE !== 'false';
   const REQUIRE_AUTH = process.env.REQUIRE_AUTH === 'true';
 

@@ -11,7 +11,7 @@ import crypto from 'crypto';
 import 'dotenv/config';
 
 function clientSideHash(username, password) {
-  const PASSWORD_SALT = process.env.PASSWORD_SALT || 'legal-tracker-default-CHANGE-THIS';
+  const PASSWORD_SALT = process.env.PASSWORD_SALT || 'legal-matters-default-CHANGE-THIS';
   const message = username + ':' + password + ':' + PASSWORD_SALT;
   return crypto.createHash('sha256').update(message).digest('hex');
 }
@@ -25,7 +25,7 @@ async function main() {
   }
 
   console.log('\n==============================================');
-  console.log('   Legal Tracker - Create Admin User');
+  console.log('   Legal Matters - Create Admin User');
   console.log('==============================================\n');
 
   try {

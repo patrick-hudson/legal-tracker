@@ -1,6 +1,6 @@
 # Test Suite
 
-Organized test suite for the Legal Tracker backend.
+Organized test suite for the Legal Matters backend.
 
 ## Directory Structure
 

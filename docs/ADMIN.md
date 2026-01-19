@@ -1,8 +1,8 @@
-# Legal Tracker - Admin Portal Documentation
+# Legal Matters - Admin Portal Documentation
 
 ## Overview
 
-The Legal Tracker Admin Portal is a secure, feature-rich web interface for managing legal matters, viewing analytics, and configuring system settings. Built with Flowbite Admin Dashboard template and Tailwind CSS, it provides a modern, responsive UI with comprehensive admin functionality.
+The Legal Matters Admin Portal is a secure, feature-rich web interface for managing legal matters, viewing analytics, and configuring system settings. Built with Flowbite Admin Dashboard template and Tailwind CSS, it provides a modern, responsive UI with comprehensive admin functionality.
 
 ## Table of Contents
 
@@ -693,7 +693,7 @@ cp backend/data/tracker-backup-YYYYMMDD.db backend/data/tracker.db
 
 ## Upgrading
 
-When updating the Legal Tracker:
+When updating Legal Matters:
 
 1. Stop the server
 2. Backup the database

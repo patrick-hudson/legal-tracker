@@ -191,6 +191,16 @@ function renderScopesCheckboxes() {
     }).join('');
 }
 
+function formatUsageStats(usage) {
+    if (!usage || usage.total_requests === 0) {
+        return '<span class="text-gray-400 dark:text-gray-500">No requests</span>';
+    }
+    const { total_requests, last_24h, last_7d, last_30d } = usage;
+    // Use &#10; for newlines in title attribute
+    const tooltip = `Total: ${total_requests.toLocaleString()} requests&#10;Last 24h: ${last_24h.toLocaleString()}&#10;Last 7d: ${last_7d.toLocaleString()}&#10;Last 30d: ${last_30d.toLocaleString()}`;
+    return `<span class="cursor-help border-b border-dotted border-gray-400" title="${tooltip}">${total_requests.toLocaleString()} total</span>`;
+}
+
 function renderApiKeysTable(keys) {
     if (!keys || keys.length === 0) {
         return `
@@ -219,6 +229,16 @@ function renderApiKeysTable(keys) {
             ? `<span class="cursor-help border-b border-dotted border-gray-400" title="${escapeHtml(scopesTooltip)}">${escapeHtml(scopesDisplay)}</span>`
             : escapeHtml(scopesDisplay);
 
+        // Render last used with more context
+        let lastUsedHtml;
+        if (key.last_used_at) {
+            const lastUsedDate = new Date(key.last_used_at);
+            const lastUsedTooltip = `Last used: ${lastUsedDate.toLocaleString()}`;
+            lastUsedHtml = `<span class="cursor-help" title="${escapeHtml(lastUsedTooltip)}">${formatRelativeTime(key.last_used_at)}</span>`;
+        } else {
+            lastUsedHtml = '<span class="text-gray-400 dark:text-gray-500">Never used</span>';
+        }
+
         return `
             <tr class="border-b dark:border-gray-700 ${isRevoked ? 'opacity-50' : ''}">
                 <td class="px-4 py-3">
@@ -227,7 +247,8 @@ function renderApiKeysTable(keys) {
                 </td>
                 <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">${scopesHtml}</td>
                 <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">${formatDate(key.created_at)}</td>
-                <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">${key.last_used_at ? formatRelativeTime(key.last_used_at) : 'Never'}</td>
+                <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">${lastUsedHtml}</td>
+                <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">${formatUsageStats(key.usage)}</td>
                 <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">${key.expires_at ? formatDate(key.expires_at) : 'Never'}</td>
                 <td class="px-4 py-3">
                     <span class="px-2 py-1 text-xs font-medium rounded-full ${statusClass}">${statusText}</span>
@@ -248,6 +269,7 @@ function renderApiKeysTable(keys) {
                         <th class="px-4 py-3">Permissions</th>
                         <th class="px-4 py-3">Created</th>
                         <th class="px-4 py-3">Last Used</th>
+                        <th class="px-4 py-3">Usage</th>
                         <th class="px-4 py-3">Expires</th>
                         <th class="px-4 py-3">Status</th>
                         <th class="px-4 py-3">Actions</th>

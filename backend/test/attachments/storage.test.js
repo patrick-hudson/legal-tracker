@@ -181,7 +181,7 @@ describe('Attachments Tests', () => {
         it('should generate text to PDF', async () => {
             const content = `TEST DOCUMENT
 
-This is a test document for the legal tracker system.
+This is a test document for the Legal Matters system.
 
 SECTION 1
 
