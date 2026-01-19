@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Favicon support**: Added favicon.png to both admin and frontend portals
+  - Admin portal serves favicon via dedicated route with 1-day cache
+  - Frontend uses automatic static file serving
+  - Favicon link tags added to all HTML files (admin/index.html, admin/bootstrap.html, frontend/index.html)
+
+- **View Frontend link**: Added "View Frontend" link at bottom of admin sidebar
+  - Opens frontend in new tab for easy access
+  - Visually separated from main navigation with border
+
 ---
 
 ## [0.16.10] - 2026-01-19

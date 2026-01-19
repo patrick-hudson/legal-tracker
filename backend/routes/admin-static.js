@@ -57,6 +57,17 @@ export default async function adminStaticRoutes(fastify, opts) {
     return reply.type('text/html').send(html);
   });
 
+  // Serve favicon
+  fastify.get('/admin/favicon.png', async (_request, reply) => {
+    try {
+      const favicon = readFileSync(join(__dirname, '..', '..', 'admin', 'favicon.png'));
+      reply.header('Cache-Control', 'public, max-age=86400'); // Cache for 1 day
+      return reply.type('image/png').send(favicon);
+    } catch (error) {
+      return reply.code(404).send({ error: 'Favicon not found' });
+    }
+  });
+
   fastify.get('/admin/css/:file', async (request, reply) => {
     try {
       const css = serveStaticFile('css', request.params.file);
